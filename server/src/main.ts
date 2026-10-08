@@ -107,7 +107,8 @@ try {
     }
   };
   const localServer = createHttpServer(onRequest);
-  localServer.listen(config.port, '127.0.0.1');
+  const bindHost = process.env.CHATX_BIND === '0.0.0.0' ? '0.0.0.0' : '127.0.0.1';
+  localServer.listen(config.port, bindHost);
   const tlsServer = config.tlsCertPath && config.tlsKeyPath
     ? createHttpsServer({ cert: readFileSync(config.tlsCertPath), key: readFileSync(config.tlsKeyPath) }, onRequest)
     : null;

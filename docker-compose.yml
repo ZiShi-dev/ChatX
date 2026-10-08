@@ -16,9 +16,12 @@ services:
   api:
     build: ./server
     restart: unless-stopped
-    env_file: .env
     environment:
       DATABASE_URL: postgres://chatx:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}@db:5432/chatx
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+      CHATX_TRUST_PROXY: ${CHATX_TRUST_PROXY:-true}
+      CHATX_CORS_ORIGIN: ${CHATX_CORS_ORIGIN:-}
+      CHATX_BIND: 0.0.0.0
     ports:
       - "127.0.0.1:8787:8787"
     depends_on:
