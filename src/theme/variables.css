@@ -1,0 +1,59 @@
+:root {
+  --ion-color-primary: #3d9b84;
+  --ion-color-primary-rgb: 61, 155, 132;
+  --ion-color-primary-contrast: #f4fbf8;
+  --ion-color-primary-contrast-rgb: 244, 251, 248;
+  --ion-color-primary-shade: #368874;
+  --ion-color-primary-tint: #50a590;
+  --ion-background-color: #101614;
+  --ion-background-color-rgb: 16, 22, 20;
+  --ion-text-color: #e7eeea;
+  --ion-text-color-rgb: 231, 238, 234;
+  --ion-toolbar-background: #17211e;
+  --ion-toolbar-color: #e7eeea;
+  --ion-item-background: transparent;
+  --ion-card-background: #1b2622;
+  --ion-border-color: #2a3833;
+  --ion-color-step-50: #17211e;
+  --ion-color-step-100: #1d2925;
+  --ion-color-step-150: #24312c;
+  --ion-color-step-200: #2a3833;
+  --ion-color-step-250: #31403a;
+  --ion-color-step-300: #3a4a44;
+  --ion-color-step-350: #4b5c56;
+  --ion-color-step-400: #62746d;
+  --ion-color-step-450: #7b8c85;
+  --ion-color-step-500: #94a49d;
+  --ion-color-step-550: #a8b6b0;
+  --ion-color-step-600: #b7c3be;
+  --ion-color-step-650: #c6d0cc;
+  --ion-color-step-700: #d5ddd9;
+  --ion-color-step-750: #e3e9e6;
+  --ion-color-step-800: #eef3f0;
+  --ion-color-step-850: #f5f8f6;
+  --ion-color-step-900: #fbfcfb;
+  --ion-color-step-950: #ffffff;
+  --chatx-bg: #101614;
+  --chatx-surface: #1c2623;
+  --chatx-text: #e7eeea;
+  --chatx-muted: #8ea099;
+  --chatx-accent: #3d9b84;
+  --chatx-danger: #c4524a;
+  --chatx-border: #2a3833;
+  --ion-font-family: "Segoe UI", system-ui, sans-serif;
+  color-scheme: dark;
+}
+
+body {
+  background: #0c100f;
+}
+
+ion-content::part(scroll) {
+  scrollbar-width: none;
+}
+
+ion-content::part(scroll)::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}

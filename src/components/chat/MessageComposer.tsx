@@ -1,0 +1,741 @@
+import { useEffect, useRef, useState } from 'react';
+import { FilePicker } from '@capawesome/capacitor-file-picker';
+import { Camera } from '@capacitor/camera';
+import { Capacitor } from '@capacitor/core';
+import { IonIcon } from '@ionic/react';
+import { addOutline, cameraOutline, checkmark, closeOutline, documentOutline, folderOutline, happyOutline, imagesOutline, send } from 'ionicons/icons';
+import PermissionDialog from '../common/PermissionDialog';
+import EmojiPanel from './EmojiPanel';
+import Avatar from '../common/Avatar';
+import { membersOf } from '../../lib/conversation';
+import { activeMention, EVERYONE_HANDLE } from '../../lib/mention';
+import { clipFileName } from '../../lib/chatFile';
+import { fitChatImage } from '../../lib/chatImage';
+import { prepareMedia } from '../../lib/mediaPreparation';
+import { expectedImageSize, expectedVideoSize, formatBytes, messagePreview } from '../../lib/media';
+import { StorageAccess, type StorageFile } from '../../lib/storageAccess';
+import { useAuthStore } from '../../stores/authStore';
+import { useChatStore } from '../../stores/chatStore';
+import { useSettingsStore } from '../../stores/settingsStore';
+import { useUserStore } from '../../stores/userStore';
+import type { User } from '../../types/user';
+
+const EVERYONE: User = {
+  id: EVERYONE_HANDLE,
+  username: EVERYONE_HANDLE,
+  displayName: 'الجميع',
+  role: 'member',
+  status: 'online',
+  bio: '',
+  color: '#3d9b84',
+};
+
+type AccessKind = 'photos' | 'files' | 'folder' | 'camera';
+
+const ACCESS_COPY: Record<AccessKind, { title: string; body: string }> = {
+  photos: {
+    title: 'الصور والفيديو',
+    body: 'اسمح لأندرويد بالوصول إلى الصور والفيديو حتى ترسلها في المحادثة.',
+  },
+  files: {
+    title: 'الملفات',
+    body: 'اسمح لأندرويد بالوصول إلى الملفات حتى ترسلها في المحادثة.',
+  },
+  folder: {
+    title: 'المجلدات',
+    body: 'اسمح لأندرويد بالوصول إلى المجلدات حتى ترسل ملفاتها في المحادثة.',
+  },
+  camera: {
+    title: 'الكاميرا',
+    body: 'اسمح لأندرويد باستخدام الكاميرا حتى تلتقط صورة وترسلها في المحادثة.',
+  },
+};
+
+const accessKey = (kind: AccessKind) => `chatx-access-${kind}`;
+
+function accessGranted(kind: AccessKind) {
+  return localStorage.getItem(accessKey(kind)) === 'granted';
+}
+
+const drafts = new Map<string, string>();
+
+type MessageComposerProps = {
+  conversationId: string;
+};
+
+type Attachment = {
+  id: string;
+  kind: 'image' | 'video' | 'file';
+  name: string;
+  size: number;
+  previewUrl?: string;
+  displayUrl?: string;
+};
+
+type PickedLike = StorageFile & { blob?: Blob };
+
+function sourceUrl(file: PickedLike) {
+  if (file.webPath) return file.webPath;
+  if (file.blob) return URL.createObjectURL(file.blob);
+  if (file.path) return Capacitor.convertFileSrc(file.path);
+  return undefined;
+}
+
+function kindOf(name: string, mimeType = ''): Attachment['kind'] {
+  const lower = name.toLowerCase();
+  if (mimeType.startsWith('image/') || /\.(jpe?g|png|gif|webp|heic|heif)$/.test(lower)) return 'image';
+  if (mimeType.startsWith('video/') || /\.(mp4|webm|mov|mkv|3gp)$/.test(lower)) return 'video';
+  return 'file';
+}
+
+export default function MessageComposer({ conversationId }: MessageComposerProps) {
+  const sendMessage = useChatStore((state) => state.sendMessage);
+  const sendImage = useChatStore((state) => state.sendImage);
+  const sendVideo = useChatStore((state) => state.sendVideo);
+  const sendFile = useChatStore((state) => state.sendFile);
+  const editMessage = useChatStore((state) => state.editMessage);
+  const cancelEdit = useChatStore((state) => state.cancelEdit);
+  const cancelReply = useChatStore((state) => state.cancelReply);
+  const editingId = useChatStore((state) => state.editingId);
+  const replyingTo = useChatStore((state) => state.replyingTo);
+  const messages = useChatStore((state) => state.messages);
+  const users = useUserStore((state) => state.users);
+  const currentUser = useAuthStore((state) => state.currentUser);
+  const conversations = useChatStore((state) => state.conversations);
+  const conversation = conversations.find((item) => item.id === conversationId);
+  const editing = messages.find((message) => message.id === editingId && message.conversationId === conversationId);
+  const replying = replyingTo?.conversationId === conversationId
+    ? messages.find((message) => message.id === replyingTo.messageId)
+    : undefined;
+  const replyingAuthor = users.find((user) => user.id === replying?.senderId);
+  const imageQuality = useSettingsStore((state) => state.imageQuality);
+  const videoQuality = useSettingsStore((state) => state.videoQuality);
+  const setImageQuality = useSettingsStore((state) => state.setImageQuality);
+  const setVideoQuality = useSettingsStore((state) => state.setVideoQuality);
+  const [draft, setDraft] = useState('');
+  const [cursor, setCursor] = useState(0);
+  const [mentionIndex, setMentionIndex] = useState(0);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [emojiOpen, setEmojiOpen] = useState(false);
+  const [accessAsk, setAccessAsk] = useState<AccessKind | null>(null);
+  const [pickerError, setPickerError] = useState('');
+  const [attachments, setAttachments] = useState<Attachment[]>([]);
+  const [savingEdit, setSavingEdit] = useState(false);
+  const attachmentsRef = useRef(attachments);
+  const roomRef = useRef(conversationId);
+  attachmentsRef.current = attachments;
+  roomRef.current = conversationId;
+  const fieldRef = useRef<HTMLTextAreaElement>(null);
+  const draftRef = useRef(draft);
+  const editingRef = useRef(editing);
+  draftRef.current = draft;
+  editingRef.current = editing;
+  const mediaRef = useRef<HTMLInputElement>(null);
+  const fileRef = useRef<HTMLInputElement>(null);
+  const folderRef = useRef<HTMLInputElement>(null);
+
+  const members = conversation ? membersOf(conversation, users).filter((user) => user.id !== currentUser.id) : [];
+  const token = conversation && conversation.type !== 'private' ? activeMention(draft, cursor) : null;
+  const mentionQuery = token?.query.toLocaleLowerCase('en') ?? '';
+  const people = token
+    ? members.filter((user) => {
+      if (!mentionQuery) return true;
+      return user.username.toLocaleLowerCase('en').includes(mentionQuery)
+        || user.displayName.toLocaleLowerCase('en').includes(mentionQuery);
+    })
+    : [];
+  const showEveryone = Boolean(
+    token && (!mentionQuery || EVERYONE_HANDLE.includes(mentionQuery) || 'الجميع'.includes(mentionQuery)),
+  );
+  const matches = showEveryone ? [EVERYONE, ...people] : people;
+  const activeMatch = Math.min(mentionIndex, Math.max(matches.length - 1, 0));
+
+  const resizeField = () => {
+    const field = fieldRef.current;
+    if (!field) return;
+    field.style.height = 'auto';
+    const next = Math.min(Math.max(field.scrollHeight, 44), 120);
+    field.style.height = `${next}px`;
+  };
+
+  useEffect(() => {
+    const key = `${currentUser.id}:${conversationId}`;
+    setDraft(drafts.get(key) ?? '');
+    window.requestAnimationFrame(resizeField);
+    return () => {
+      attachmentsRef.current.forEach((item) => {
+        if (item.previewUrl?.startsWith('blob:')) URL.revokeObjectURL(item.previewUrl);
+      });
+      if (editingRef.current) return;
+      drafts.set(key, draftRef.current);
+    };
+  }, [conversationId, currentUser.id]);
+
+  useEffect(() => { setAttachments([]); setSavingEdit(false); }, [conversationId, currentUser.id]);
+
+  useEffect(() => {
+    if (!editing) return;
+    setDraft(editing.text ?? '');
+    attachmentsRef.current.forEach((item) => {
+      if (item.previewUrl?.startsWith('blob:')) URL.revokeObjectURL(item.previewUrl);
+    });
+    setAttachments([]);
+    setMenuOpen(false);
+    setEmojiOpen(false);
+    window.requestAnimationFrame(resizeField);
+  }, [editing?.id]);
+
+  useEffect(() => {
+    if (!replying) return;
+    setMenuOpen(false);
+    setEmojiOpen(false);
+    fieldRef.current?.focus();
+  }, [replying?.id]);
+
+  const openPicker = (input: HTMLInputElement | null) => {
+    if (!input) return;
+    input.value = '';
+    input.click();
+  };
+
+  const inputFor = (kind: AccessKind) => {
+    if (kind === 'photos') return mediaRef.current;
+    if (kind === 'folder') return folderRef.current;
+    return fileRef.current;
+  };
+
+  const cancelled = (error: unknown) => {
+    const message = error instanceof Error ? error.message : '';
+    return /cancel|abort/i.test(message);
+  };
+
+  const pickNative = async (kind: AccessKind) => {
+    const access = await StorageAccess.requestAccess();
+    if (!access.granted) {
+      localStorage.removeItem(accessKey(kind));
+      setPickerError('يلزم السماح بالوصول إلى الملفات من إعدادات الهاتف.');
+      setAccessAsk(kind);
+      return;
+    }
+    if (kind === 'photos') {
+      const result = await FilePicker.pickMedia({ limit: 10 });
+      addPicked(result.files);
+      return;
+    }
+    if (kind === 'files') {
+      const result = await FilePicker.pickFiles({ limit: 10 });
+      addPicked(result.files);
+      return;
+    }
+    const directory = await FilePicker.pickDirectory();
+    const listed = await StorageAccess.listDirectory({ path: directory.path });
+    if (!listed.files.length) {
+      setPickerError('هذا المجلد لا يحتوي على ملفات.');
+      return;
+    }
+    addPicked(listed.files);
+  };
+
+  const openSystemPicker = (kind: AccessKind) => {
+    setMenuOpen(false);
+    if (Capacitor.getPlatform() === 'android' || Capacitor.getPlatform() === 'ios') {
+      void pickNative(kind).catch((error: unknown) => {
+        if (cancelled(error)) return;
+        setPickerError('تعذر فتح الملفات.');
+      });
+      return;
+    }
+    openPicker(inputFor(kind));
+  };
+
+  const askAccess = (kind: AccessKind) => {
+    setPickerError('');
+    setMenuOpen(false);
+    if (accessGranted(kind)) {
+      openSystemPicker(kind);
+      return;
+    }
+    setAccessAsk(kind);
+  };
+
+  const allowAccess = () => {
+    if (!accessAsk) return;
+    const kind = accessAsk;
+    setAccessAsk(null);
+    if (kind === 'camera') {
+      void openCamera(true);
+      return;
+    }
+    localStorage.setItem(accessKey(kind), 'granted');
+    openSystemPicker(kind);
+  };
+
+  const addPicked = (files: PickedLike[]) => {
+    if (!files.length) return;
+    const accepted = acceptFiles(files, (file) => kindOf(file.name, file.mimeType));
+    const next = accepted.map((file) => {
+      const kind = kindOf(file.name, file.mimeType);
+      const previewUrl = sourceUrl(file);
+      return {
+        id: crypto.randomUUID(),
+        kind,
+        name: clipFileName(file.name || 'fichier'),
+        size: file.size > 0 ? file.size : 0,
+        previewUrl,
+      };
+    });
+    appendAttachments(next);
+    setMenuOpen(false);
+  };
+
+  function acceptFiles<T extends { size: number }>(files: T[], kindFor: (file: T) => Attachment['kind']): T[] {
+    const available = Math.max(0, 10 - attachmentsRef.current.length);
+    const accepted = files.filter((file) => {
+      const kind = kindFor(file);
+      const supported = kind !== 'video' || !/^[0-9a-f-]{36}$/i.test(conversationId);
+      return supported && file.size > 0 && file.size <= (kind === 'file' ? 262_144 : 20 * 1024 * 1024);
+    }).slice(0, available);
+    if (accepted.length !== files.length) setPickerError('يمكن اختيار 10 مرفقات كحد أقصى. الصور حتى 20 MB والملفات حتى 256 KB. إرسال الفيديو غير متاح في المحادثات الفعلية.');
+    return accepted;
+  }
+
+  function appendAttachments(next: Attachment[]) {
+    attachmentsRef.current = [...attachmentsRef.current, ...next];
+    setAttachments(attachmentsRef.current);
+    for (const item of next.filter((item) => item.kind === 'image')) {
+      void prepareMedia(async () => {
+        if (!attachmentsRef.current.some((attachment) => attachment.id === item.id)) return;
+        const thumbnail = item.previewUrl ? await fitChatImage(item.previewUrl, 'saver') : null;
+        if (!attachmentsRef.current.some((attachment) => attachment.id === item.id)) return;
+        if (!thumbnail) throw new Error('invalid_image');
+        setAttachments((current) => current.map((attachment) => attachment.id === item.id ? { ...attachment, displayUrl: thumbnail.url } : attachment));
+      }).catch(() => {
+        if (!attachmentsRef.current.some((attachment) => attachment.id === item.id)) return;
+        removeAttachment(item.id);
+        setPickerError('تعذر قراءة الصورة أو أنها كبيرة جدًا. اختر صورة أصغر.');
+      });
+    }
+  }
+
+  const openCamera = async (confirmed = false) => {
+    if (attachmentsRef.current.length >= 10) { setPickerError('يمكن اختيار 10 مرفقات كحد أقصى.'); return; }
+    setPickerError('');
+    setMenuOpen(false);
+    try {
+      if (Capacitor.isNativePlatform()) {
+        const current = await Camera.checkPermissions();
+        if (!confirmed && current.camera !== 'granted' && current.camera !== 'limited') {
+          setAccessAsk('camera');
+          return;
+        }
+        if (current.camera !== 'granted' && current.camera !== 'limited') {
+          const asked = await Camera.requestPermissions({ permissions: ['camera'] });
+          if (asked.camera !== 'granted' && asked.camera !== 'limited') {
+            setPickerError('يلزم السماح باستخدام الكاميرا من إعدادات الهاتف.');
+            setMenuOpen(true);
+            return;
+          }
+        }
+      }
+      const quality = imageQuality === 'original' ? 90 : imageQuality === 'medium' ? 70 : 45;
+      const photo = await Camera.takePhoto({
+        quality,
+        targetWidth: imageQuality === 'saver' ? 640 : 960,
+        targetHeight: imageQuality === 'saver' ? 640 : 960,
+        saveToGallery: false,
+        correctOrientation: true,
+      });
+      const previewUrl = photo.webPath || (photo.thumbnail ? `data:image/jpeg;base64,${photo.thumbnail}` : undefined);
+      if (!previewUrl) return;
+      let size = 0;
+      try {
+        size = (await fetch(previewUrl).then((response) => response.blob())).size;
+      } catch {
+        size = 0;
+      }
+      appendAttachments([
+        {
+          id: crypto.randomUUID(),
+          kind: 'image',
+          name: `camera-${Date.now()}.jpg`,
+          size,
+          previewUrl,
+        },
+      ]);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : '';
+      if (/cancel/i.test(message)) return;
+      setPickerError('تعذر فتح الكاميرا.');
+      setMenuOpen(true);
+    }
+  };
+
+  const addFiles = (list: FileList | null) => {
+    if (!list?.length) return;
+    const next = acceptFiles([...list], (file) => kindOf(file.name, file.type)).map((file) => {
+      const kind = kindOf(file.name, file.type);
+      const relative = (file as File & { webkitRelativePath?: string }).webkitRelativePath;
+      return {
+        id: crypto.randomUUID(),
+        kind,
+        name: clipFileName(relative || file.name),
+        size: file.size,
+        previewUrl: URL.createObjectURL(file),
+      };
+    });
+    appendAttachments(next);
+    setMenuOpen(false);
+  };
+
+  const removeAttachment = (id: string) => {
+    setAttachments((current) => {
+      const target = current.find((item) => item.id === id);
+      if (target?.previewUrl) URL.revokeObjectURL(target.previewUrl);
+      return current.filter((item) => item.id !== id);
+    });
+  };
+
+  const insertMention = (user: User) => {
+    const field = fieldRef.current;
+    const end = cursor;
+    const current = activeMention(draft, end);
+    if (!current) return;
+    const next = `${draft.slice(0, current.start)}@${user.username} ${draft.slice(end)}`;
+    const place = current.start + user.username.length + 2;
+    setDraft(next);
+    setCursor(place);
+    setMentionIndex(0);
+    window.requestAnimationFrame(() => {
+      field?.focus();
+      field?.setSelectionRange(place, place);
+      resizeField();
+    });
+  };
+
+  const insertEmoji = (emoji: string) => {
+    const field = fieldRef.current;
+    const start = field?.selectionStart ?? cursor;
+    const end = field?.selectionEnd ?? start;
+    const next = `${draft.slice(0, start)}${emoji}${draft.slice(end)}`;
+    const place = start + emoji.length;
+    setDraft(next);
+    setCursor(place);
+    window.requestAnimationFrame(() => {
+      field?.focus();
+      field?.setSelectionRange(place, place);
+      resizeField();
+    });
+  };
+
+  const submit = async () => {
+    if (savingEdit) return;
+    if (matches.length > 0) {
+      insertMention(matches[activeMatch]);
+      return;
+    }
+    const text = draft.trim();
+    if (/^[0-9a-f-]{36}$/i.test(conversationId) && attachments.some((item) => item.kind === 'video')) {
+      setPickerError('إرسال الفيديو غير متاح حاليًا. أزل الفيديو لإرسال بقية الرسالة.');
+      return;
+    }
+    if (editing) {
+      if (!text) return;
+      setSavingEdit(true);
+      const saved = await editMessage(editing.id, text);
+      setSavingEdit(false);
+      if (!saved || roomRef.current !== conversationId || useAuthStore.getState().currentUser.id !== currentUser.id) return;
+      drafts.delete(`${currentUser.id}:${conversationId}`);
+      setDraft('');
+      setEmojiOpen(false);
+      if (fieldRef.current) fieldRef.current.style.height = 'auto';
+      return;
+    }
+    if (!text && attachments.length === 0) return;
+    if (text) sendMessage(conversationId, text);
+    for (const item of attachments) {
+      const payload = { fileName: item.name, fileSize: item.size, previewUrl: item.previewUrl };
+      if (item.kind === 'image') sendImage(conversationId, imageQuality, payload);
+      else if (item.kind === 'video') sendVideo(conversationId, videoQuality, payload);
+      else sendFile(conversationId, payload);
+    }
+    // Ownership of these sources moves to the outbox; unmount must not revoke them.
+    attachmentsRef.current = [];
+    setDraft('');
+    setAttachments([]);
+    setEmojiOpen(false);
+    if (fieldRef.current) fieldRef.current.style.height = 'auto';
+  };
+
+  const canSend = !savingEdit && Boolean(draft.trim() || (!editing && attachments.length));
+
+  return (
+    <>
+      <form
+        className="composer"
+        onSubmit={(event) => {
+          event.preventDefault();
+          void submit();
+        }}
+      >
+        {replying && !editing && (
+          <div className="edit-banner">
+            <div className="edit-quote">
+              <strong>الرد على {replyingAuthor?.displayName ?? 'عضو'}</strong>
+              <p>{messagePreview(replying, replying.senderId === 'me')}</p>
+            </div>
+            <button type="button" className="edit-close" aria-label="إلغاء الرد" onClick={() => cancelReply()}>
+              <IonIcon icon={closeOutline} />
+            </button>
+          </div>
+        )}
+        {editing && (
+          <div className="edit-banner">
+            <div className="edit-quote">
+              <strong>تعديل الرسالة</strong>
+              <p>{editing.text}</p>
+            </div>
+            <button
+              type="button"
+              className="edit-close"
+              aria-label="إلغاء التعديل"
+              onClick={() => {
+                cancelEdit();
+                setDraft('');
+                if (fieldRef.current) fieldRef.current.style.height = 'auto';
+              }}
+            >
+              <IonIcon icon={closeOutline} />
+            </button>
+          </div>
+        )}
+        {menuOpen && !editing && (
+          <div className="attach-tray" role="menu">
+            <button type="button" className="attach-tile" onClick={() => askAccess('photos')}>
+              <span className="attach-glyph photos"><IonIcon icon={imagesOutline} /></span>
+              الصور
+            </button>
+            <button type="button" className="attach-tile" onClick={() => void openCamera()}>
+              <span className="attach-glyph camera"><IonIcon icon={cameraOutline} /></span>
+              الكاميرا
+            </button>
+            <button type="button" className="attach-tile" onClick={() => askAccess('files')}>
+              <span className="attach-glyph file"><IonIcon icon={documentOutline} /></span>
+              ملف
+            </button>
+            <button type="button" className="attach-tile" onClick={() => askAccess('folder')}>
+              <span className="attach-glyph folder"><IonIcon icon={folderOutline} /></span>
+              مجلد
+            </button>
+          </div>
+        )}
+        {pickerError && <p className="attach-error">{pickerError}</p>}
+        {attachments.some((item) => item.kind === 'image' || item.kind === 'video') && (
+          <div className="quality-card">
+            {attachments.some((item) => item.kind === 'image') && (
+              <QualityChoices
+                label="جودة الصورة"
+                original={attachments.find((item) => item.kind === 'image')?.size ?? 0}
+                expected={expectedImageSize(imageQuality)}
+                value={imageQuality}
+                options={[
+                  { id: 'saver', label: 'توفير البيانات' },
+                  { id: 'medium', label: 'متوسطة' },
+                  { id: 'original', label: 'أصلية' },
+                ]}
+                onChange={setImageQuality}
+              />
+            )}
+            {attachments.some((item) => item.kind === 'video') && (
+              <QualityChoices
+                label="جودة الفيديو"
+                original={attachments.find((item) => item.kind === 'video')?.size ?? 0}
+                expected={expectedVideoSize(videoQuality)}
+                value={videoQuality}
+                options={[
+                  { id: '480', label: '480p' },
+                  { id: '720', label: '720p' },
+                  { id: 'original', label: 'الأصلية' },
+                ]}
+                onChange={setVideoQuality}
+              />
+            )}
+          </div>
+        )}
+        {attachments.length > 0 && (
+          <div className="attach-strip">
+            {attachments.map((item) => (
+              <div key={item.id} className="attach-thumb">
+                {item.displayUrl && item.kind === 'image' ? (
+                  <img src={item.displayUrl} alt="" loading="lazy" decoding="async" />
+                ) : item.previewUrl && item.kind === 'video' ? (
+                  <video src={item.previewUrl} muted playsInline preload="metadata" />
+                ) : (
+                  <span className="attach-file">
+                    <IonIcon icon={documentOutline} />
+                    <em>{item.name}</em>
+                  </span>
+                )}
+                <button type="button" className="attach-remove" aria-label="إزالة" onClick={() => removeAttachment(item.id)}>
+                  <IonIcon icon={closeOutline} />
+                </button>
+                <span className="attach-size">{formatBytes(item.size)}</span>
+              </div>
+            ))}
+          </div>
+        )}
+        {matches.length > 0 && (
+          <div className="mention-list" role="listbox">
+            {matches.map((user, index) => (
+              <button
+                key={user.id}
+                type="button"
+                className={index === activeMatch ? 'is-on' : undefined}
+                onMouseDown={(event) => event.preventDefault()}
+                onClick={() => insertMention(user)}
+              >
+                <Avatar name={user.displayName} color={user.color} size={32} src={user.avatarUrl} />
+                <span>
+                  <strong dir="auto">@{user.username}</strong>
+                  <em>{user.id === EVERYONE_HANDLE ? 'إشعار للجميع' : user.displayName}</em>
+                </span>
+              </button>
+            ))}
+          </div>
+        )}
+        {emojiOpen && <EmojiPanel onPick={insertEmoji} />}
+        <div className="composer-field">
+          <button
+            type="button"
+            className={menuOpen ? 'composer-icon open' : 'composer-icon'}
+            aria-label={menuOpen ? 'إغلاق' : 'مرفق'}
+            aria-expanded={menuOpen}
+            disabled={Boolean(editing)}
+            onClick={() => {
+              setEmojiOpen(false);
+              setMenuOpen((open) => !open);
+            }}
+          >
+            <IonIcon icon={addOutline} />
+          </button>
+          <button
+            type="button"
+            className={emojiOpen ? 'composer-icon is-on' : 'composer-icon'}
+            aria-label="إيموجي"
+            aria-expanded={emojiOpen}
+            onClick={() => {
+              setMenuOpen(false);
+              setEmojiOpen((open) => !open);
+            }}
+          >
+            <IonIcon icon={happyOutline} />
+          </button>
+          <textarea
+            ref={fieldRef}
+            className="composer-input"
+            rows={1}
+            dir="auto"
+            value={draft}
+            placeholder="اكتب رسالة"
+            enterKeyHint="send"
+            onChange={(event) => {
+              setDraft(event.target.value);
+              setCursor(event.target.selectionStart ?? event.target.value.length);
+              setMentionIndex(0);
+              resizeField();
+            }}
+            onSelect={(event) => setCursor(event.currentTarget.selectionStart ?? 0)}
+            onKeyDown={(event) => {
+              if (matches.length > 0 && event.key === 'ArrowDown') {
+                event.preventDefault();
+                setMentionIndex((index) => (index + 1) % matches.length);
+                return;
+              }
+              if (matches.length > 0 && event.key === 'ArrowUp') {
+                event.preventDefault();
+                setMentionIndex((index) => (index - 1 + matches.length) % matches.length);
+                return;
+              }
+              if (event.key === 'Enter' && !event.shiftKey) {
+                event.preventDefault();
+                void submit();
+              }
+            }}
+          />
+          <button type="submit" className={editing ? 'composer-send is-edit' : 'composer-send'} disabled={!canSend} aria-label={editing ? 'حفظ' : 'إرسال'}>
+            <IonIcon icon={editing ? checkmark : send} />
+          </button>
+        </div>
+      </form>
+      {accessAsk && (
+        <PermissionDialog
+          title={ACCESS_COPY[accessAsk].title}
+          body={ACCESS_COPY[accessAsk].body}
+          allowLabel="السماح"
+          onAllow={allowAccess}
+          onLater={() => setAccessAsk(null)}
+        />
+      )}
+      <input
+        ref={mediaRef}
+        className="picker-input"
+        type="file"
+        accept="image/*,video/*"
+        multiple
+        onChange={(event) => addFiles(event.target.files)}
+      />
+      <input
+        ref={fileRef}
+        className="picker-input"
+        type="file"
+        multiple
+        onChange={(event) => addFiles(event.target.files)}
+      />
+      <input
+        ref={folderRef}
+        className="picker-input"
+        type="file"
+        multiple
+        {...{ webkitdirectory: '', directory: '' }}
+        onChange={(event) => addFiles(event.target.files)}
+      />
+    </>
+  );
+}
+
+function QualityChoices<T extends string>({
+  label,
+  original,
+  expected,
+  value,
+  options,
+  onChange,
+}: {
+  label: string;
+  original: number;
+  expected: number;
+  value: T;
+  options: Array<{ id: T; label: string }>;
+  onChange: (value: T) => void;
+}) {
+  return (
+    <div className="quality-block">
+      <strong>{label}</strong>
+      <p>الحجم الأصلي: {formatBytes(original)}</p>
+      <p>بعد الضغط: حوالي {formatBytes(expected)}</p>
+      <div className="setting-choices" role="radiogroup" aria-label={label}>
+        {options.map((option) => (
+          <button
+            key={option.id}
+            type="button"
+            role="radio"
+            aria-checked={value === option.id}
+            className={value === option.id ? 'is-on' : undefined}
+            onClick={() => onChange(option.id)}
+          >
+            {option.label}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}

@@ -1,0 +1,54 @@
+---
+description: Règles permanentes de ChatX — projet existant, pas de réécriture ni de sur-ingénierie
+alwaysApply: true
+---
+
+# ChatX
+
+Projet existant (Ionic React, Vite, TypeScript strict, Capacitor Android, Zustand). Environ 5 utilisateurs. Frontend et mocks. Ne pas recréer l’app, ne pas réécrire `android/`, ne pas changer `appId` `app.chatx.mobile` ni le nom `ChatX`.
+
+Priorité : stabilité, performance, réseau faible, maintenance, sécurité, UX, puis extensibilité et apparence. Une feature qui casse ces priorités se redessine.
+
+## Avant de modifier
+
+Lire le code concerné. Garder ce qui marche. Pas de refactor large, pas de nouvelle librairie, couche, store, hook ou composant sans un besoin réel. Interdit sans besoin prouvé : repository, factory, manager, adapter, provider, event bus, injection de dépendances.
+
+Découper une page qui mélange UI, métier, réseau, stockage, parsing, média, navigation et formatage. Ne pas éclater un fichier stable et clair juste pour le nombre de lignes. Pas de God component, pas de JSX noyé sous des conditions.
+
+## Interdit maintenant
+
+Pas de Supabase, Firebase, Socket.io, WebSocket réel, API server ni base réelle tant que la tâche est frontend. Le futur backend remplace les mocks de `src/data` et les actions de `src/stores` en gardant les mêmes types. L’UI ne connaît pas l’API.
+
+## État et rendu
+
+Texte en cours, menus et feuilles : état local. Utilisateur, réglages, réseau, messages : stores existants. Pas de store géant. Sélecteurs précis (`useChatStore((s) => s.messages)`), jamais le store entier. `memo` / `useMemo` / `useCallback` seulement s’ils évitent un rendu réel (bulles, liste, compositeur, conversations, notifications, membres).
+
+## Appareils et réseau faibles
+
+Cible : 2–3 Go de RAM, Android ancien, WebView moyenne, 3G/4G instable. Pas de blur lourd, backdrop-filter, ombres énormes, animations continues, gros DOM, gros SVG, preload ou autoplay vidéo. Listes paginées (`MESSAGE_PAGE_SIZE` / `NOTIFICATIONS_PAGE_SIZE` = 30). Écrans secondaires déjà en `lazy` : ne pas compliquer davantage.
+
+`useDataSaver()` est la seule source. S’il est actif : pas d’image originale, pas de vidéo, pas d’autoplay, pas de preview lourde ; taille visible, miniature, pas de re-téléchargement local. Écrire reste possible hors ligne. Statuts : `pending`, `sending`, `sent`, `delivered`, `read`, `failed`. Échec visible, avec retry et annulation si besoin. Pas d’erreur silencieuse.
+
+Accusés : curseur `lastReadMessageId` par personne et conversation (`src/data/readCursors.ts`). Pas de liste `seen` sur chaque message. Délais dans `src/constants/chat.ts`, pas un envoi par pixel de scroll.
+
+## Produit à préserver
+
+- Conversation principale ChatX : toujours là, en tête de l’accueil, badge « رئيسية », tout le monde, impossible à supprimer ou quitter, membres et discussion privée ouvrables.
+- Accueil : pas de barre de recherche fixe. En-tête, onglets, ChatX, puis la liste.
+- Compte : profil, réglages, admin. L’onglet et la route admin sont réservés aux admins.
+- `avatarUrl` et `coverUrl` séparés. Couverture : changer, retirer, repli en dégradé.
+- Présence : une seule source (`online` | `offline` | `away` et `connectionLabel`).
+- Notifications : compteur unique, lu / tout lu, types mention reply everyone message signal, muet visible mais moins prioritaire, le rendu ne marque pas lu, lien vers le message. Ouverture : conversation, message centré, surbrillance temporaire. Message absent : charger la page puis y aller. Message supprimé : repli, navigation intacte.
+- Retour Android : historique réel (`navigate(-1)`), pas un saut vers l’accueil.
+
+## Interface
+
+RTL obligatoire. `start` / `end` plutôt que `left` / `right`. `dir="auto"` pour le texte mixte, URLs, nombres, mentions. Boutons réels, libellés, cibles proches de 44 px, contraste, pas la couleur seule. Clavier du chat : ne couvre pas le compositeur, le défilement tient, le textarea a une limite. Animations courtes (`transform` / `opacity`) et `prefers-reduced-motion`. Zones sûres (barre d’état, encoche, gestes). Largeurs fluides. Variables `--chatx-*` existantes ; pas de nouvelles couleurs en dur sans raison. Polices système. Icônes Ionic déjà en place.
+
+## Sécurité et debug
+
+Texte utilisateur rendu comme texte. Pas de `dangerouslySetInnerHTML`. Liens : seulement `isSafeExternalUrl()` (`http` / `https`). Pas de secrets, clés privées ni jetons dans le client. `DebugDock` reste derrière `import.meta.env.DEV`. Pas de `console.log` de données personnelles. `AppErrorBoundary` : pas d’écran blanc. Nettoyer timers, observers, abonnements et listeners au démontage. Logique native Capacitor hors du JSX ; pas de nouvelle couche si un module `src/lib` suffit.
+
+## Vérifier
+
+Après un changement de code : tests concernés puis `npm run build`. `npx cap sync android` seulement si le natif change. Ne pas committer sans demande.

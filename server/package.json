@@ -1,0 +1,18 @@
+{
+  "name": "chatx-server",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "node --env-file=../.env src/main.ts",
+    "test": "node --test test/auth.test.ts test/google.test.ts test/profile.test.ts test/presence.test.ts test/home.test.ts test/inbox.test.ts test/rooms.test.ts test/images.test.ts test/files.test.ts test/groupTurn.test.ts test/reliability.test.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "pg": "^8.16.3"
+  },
+  "devDependencies": {
+    "@types/node": "^24.6.2",
+    "@types/pg": "^8.15.5",
+    "typescript": "~5.9.0"
+  }
+}

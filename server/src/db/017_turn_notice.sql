@@ -1,0 +1,1 @@
+ALTER TABLE rooms ADD COLUMN IF NOT EXISTS turn_notice_for uuid REFERENCES users (id) ON DELETE SET NULL;

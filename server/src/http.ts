@@ -1,0 +1,340 @@
+import {
+  acceptGoogle,
+  endSession,
+  previewGoogle,
+  readOwnProfile,
+  readPresence,
+  reportPresence,
+  updateOwnProfile,
+  type Deps,
+} from './authService.ts';
+import { openRoom, postRoomMessage, readHome, readRoomFile, readRoomImage, readRoomMessages, setRoomReaction, markRoomSeen, changeMessage, updateRoomProfile } from './home.ts';
+import { keepMessage, readSaved } from './saved.ts';
+import { clearInbox, markInboxRead, readInbox } from './inbox.ts';
+import { clearSessionCookie, readCookie, sessionCookie } from './session.ts';
+
+const PROFILE_BODY_LIMIT = 280_000;
+const MESSAGE_BODY_LIMIT = 400_000;
+
+const NATIVE_APP_ORIGIN = 'https://localhost';
+const DEV_HTTP_ORIGIN = /^http:\/\/(localhost|127\.0\.0\.1|10(?:\.\d{1,3}){3}|192\.168(?:\.\d{1,3}){2}|172\.(?:1[6-9]|2\d|3[0-1])(?:\.\d{1,3}){2})(:\d{1,5})?$/;
+
+function trustedOrigin(origin: string, deps: Deps) {
+  if (origin === NATIVE_APP_ORIGIN || origin === deps.config.corsOrigin) return true;
+  return DEV_HTTP_ORIGIN.test(origin);
+}
+
+function statusFor(error: string) {
+  if (error === 'rate_limited') return 429;
+  if (error === 'forbidden') return 403;
+  if (error === 'not_found') return 404;
+  if (error === 'username_taken') return 409;
+  if (error === 'unavailable') return 503;
+  return 401;
+}
+
+function requestBodyLimit(path: string) {
+  if (path === '/api/profile') return PROFILE_BODY_LIMIT;
+  if (/^\/api\/rooms\/[0-9a-f-]{36}$/i.test(path)) return PROFILE_BODY_LIMIT;
+  if (/^\/api\/rooms\/[0-9a-f-]{36}\/messages\/[0-9a-f-]{36}$/i.test(path)) return 24_000;
+  if (/^\/api\/rooms\/[0-9a-f-]{36}\/messages$/i.test(path)) return MESSAGE_BODY_LIMIT;
+  return 4096;
+}
+
+function bytesBody(bytes: Uint8Array) {
+  const body = new ArrayBuffer(bytes.byteLength);
+  new Uint8Array(body).set(bytes);
+  return body;
+}
+
+function attachmentName(name: string) {
+  const ascii = name.replace(/[^\w.\- ]+/g, '_').slice(0, 80) || 'file';
+  return `attachment; filename="${ascii}"; filename*=UTF-8''${encodeURIComponent(name)}`;
+}
+
+function jpeg(bytes: Uint8Array) {
+  const headers = new Headers();
+  securityHeaders(headers);
+  headers.set('content-type', 'image/jpeg');
+  headers.set('cache-control', 'private, max-age=86400');
+  return new Response(bytesBody(bytes), { status: 200, headers });
+}
+
+function download(name: string, bytes: Uint8Array) {
+  const headers = new Headers();
+  securityHeaders(headers);
+  headers.set('content-type', 'application/octet-stream');
+  headers.set('content-disposition', attachmentName(name));
+  headers.set('cache-control', 'private, max-age=86400');
+  return new Response(bytesBody(bytes), { status: 200, headers });
+}
+
+function json(body: unknown, status = 200, extra?: { retryAfter?: number }) {
+  const headers = new Headers();
+  securityHeaders(headers);
+  headers.set('content-type', 'application/json; charset=utf-8');
+  headers.set('cache-control', 'no-store');
+  if (extra?.retryAfter) headers.set('retry-after', String(extra.retryAfter));
+  return new Response(JSON.stringify(body), { status, headers });
+}
+
+function securityHeaders(headers: Headers) {
+  headers.set('content-security-policy', "default-src 'none'; frame-ancestors 'none'");
+  headers.set('x-frame-options', 'DENY');
+  headers.set('x-content-type-options', 'nosniff');
+  headers.set('referrer-policy', 'no-referrer');
+  headers.set('permissions-policy', 'microphone=(), geolocation=(), payment=()');
+}
+
+function clientIp(request: Request) {
+  return request.headers.get('x-chatx-client')?.slice(0, 64) || 'local';
+}
+
+function secureRequest(request: Request) {
+  return request.headers.get('x-chatx-secure') === '1';
+}
+
+async function readBody(request: Request, limit: number) {
+  if (request.method === 'GET' || request.method === 'HEAD') return {};
+  const text = await request.text();
+  if (text.length > limit) return null;
+  if (!text) return {};
+  try {
+    const data: unknown = JSON.parse(text);
+    if (!data || typeof data !== 'object' || Array.isArray(data)) return null;
+    return data as Record<string, unknown>;
+  } catch {
+    return null;
+  }
+}
+
+function failure(deps: Deps, error: string) {
+  return json({ error }, statusFor(error), error === 'rate_limited' ? { retryAfter: Math.ceil(deps.config.authCooldownMs / 1000) } : undefined);
+}
+
+function allowedOrigin(origin: string | null, deps: Deps) {
+  if (!origin || !trustedOrigin(origin, deps)) return null;
+  return origin;
+}
+
+function withCors(request: Request, response: Response, origin: string | null) {
+  if (!origin || request.headers.get('origin') !== origin) return response;
+  const headers = new Headers(response.headers);
+  headers.set('access-control-allow-origin', origin);
+  headers.set('access-control-allow-credentials', 'true');
+  headers.set('vary', 'Origin');
+  if (request.headers.get('access-control-request-private-network') === 'true') {
+    headers.set('access-control-allow-private-network', 'true');
+  }
+  return new Response(response.body, { status: response.status, headers });
+}
+
+async function route(deps: Deps, request: Request) {
+  const path = new URL(request.url).pathname;
+  if (request.method === 'OPTIONS') {
+    const headers = new Headers({
+      'access-control-allow-methods': 'GET, POST, PATCH, DELETE, OPTIONS',
+      'access-control-allow-headers': 'content-type, x-chatx-request',
+    });
+    securityHeaders(headers);
+    return new Response(null, { status: 204, headers });
+  }
+  if (request.method === 'GET' && path === '/api/health') return json({ ok: true });
+
+  const body = await readBody(request, requestBodyLimit(path));
+  if (!body) return failure(deps, 'invalid_credentials');
+  const mutating = request.method === 'POST' || request.method === 'PATCH' || request.method === 'DELETE';
+  const origin = request.headers.get('origin');
+  if (mutating && (request.headers.get('x-chatx-request') !== '1' || (origin !== null && !trustedOrigin(origin, deps)))) {
+    return failure(deps, 'forbidden');
+  }
+  const ip = clientIp(request);
+
+  if (request.method === 'POST' && path === '/api/auth/google') {
+    const result = await previewGoogle(deps, { credential: body.credential, ip });
+    if (!result.ok) return failure(deps, result.error);
+    if (result.step === 'ready') {
+      const response = json({ step: result.step, user: result.user });
+      response.headers.append('set-cookie', sessionCookie(result.sessionToken, secureRequest(request)));
+      return response;
+    }
+    return json({ step: result.step, name: result.name, picture: result.picture });
+  }
+  if (request.method === 'POST' && path === '/api/auth/google/profile') {
+    const result = await acceptGoogle(deps, { credential: body.credential, displayName: body.displayName, ip });
+    if (!result.ok) return failure(deps, result.error);
+    const response = json({ step: result.step, user: result.user });
+    response.headers.append('set-cookie', sessionCookie(result.sessionToken, secureRequest(request)));
+    return response;
+  }
+  if (request.method === 'GET' && path === '/api/presence') {
+    const result = await readPresence(deps, readCookie(request.headers.get('cookie'), 'chatx_session'));
+    if (!result.ok) return failure(deps, result.error);
+    return json({ users: result.users });
+  }
+  if (request.method === 'POST' && path === '/api/presence') {
+    const result = await reportPresence(deps, {
+      token: readCookie(request.headers.get('cookie'), 'chatx_session'),
+      status: body.status,
+    });
+    if (!result.ok) return failure(deps, result.error);
+    return json({ ok: true });
+  }
+  const roomMessages = path.match(/^\/api\/rooms\/([0-9a-f-]{36})\/messages$/i);
+  const roomRead = path.match(/^\/api\/rooms\/([0-9a-f-]{36})\/read$/i);
+  if (roomRead && request.method === 'POST') {
+    const result = await markRoomSeen(deps, { token: readCookie(request.headers.get('cookie'), 'chatx_session'), roomId: roomRead[1], messageId: body.messageId });
+    return result.ok ? json({ ok: true }) : failure(deps, result.error);
+  }
+  const messageChange = path.match(/^\/api\/rooms\/([0-9a-f-]{36})\/messages\/([0-9a-f-]{36})$/i);
+  if (messageChange && (request.method === 'PATCH' || request.method === 'DELETE')) {
+    const result = await changeMessage(deps, { token: readCookie(request.headers.get('cookie'), 'chatx_session'), roomId: messageChange[1], messageId: messageChange[2], text: body.text, deleting: request.method === 'DELETE' });
+    return result.ok ? json({ ok: true }) : failure(deps, result.error);
+  }
+  const roomChange = path.match(/^\/api\/rooms\/([0-9a-f-]{36})$/i);
+  if (roomChange && request.method === 'PATCH') {
+    const result = await updateRoomProfile(deps, { token: readCookie(request.headers.get('cookie'), 'chatx_session'), roomId: roomChange[1], patch: body });
+    return result.ok ? json({ conversation: result.conversation }) : failure(deps, result.error);
+  }
+  if (roomMessages && request.method === 'GET') {
+    const result = await readRoomMessages(deps, {
+      token: readCookie(request.headers.get('cookie'), 'chatx_session'),
+      roomId: roomMessages[1] ?? '',
+      beforeId: new URL(request.url).searchParams.get('beforeId'),
+      aroundId: new URL(request.url).searchParams.get('aroundId'),
+    });
+    if (!result.ok) return failure(deps, result.error);
+    return json({ messages: result.messages, readers: result.readers, hasMore: result.hasMore });
+  }
+  const roomFile = path.match(/^\/api\/rooms\/([0-9a-f-]{36})\/messages\/([0-9a-f-]{36})\/file$/i);
+  if (roomFile && request.method === 'GET') {
+    const result = await readRoomFile(deps, {
+      token: readCookie(request.headers.get('cookie'), 'chatx_session'),
+      roomId: roomFile[1] ?? '',
+      messageId: roomFile[2] ?? '',
+    });
+    if (!result.ok) return failure(deps, result.error);
+    return download(result.file.name, result.file.bytes);
+  }
+  const roomImage = path.match(/^\/api\/rooms\/([0-9a-f-]{36})\/messages\/([0-9a-f-]{36})\/image$/i);
+  if (roomImage && request.method === 'GET') {
+    const result = await readRoomImage(deps, {
+      token: readCookie(request.headers.get('cookie'), 'chatx_session'),
+      roomId: roomImage[1] ?? '',
+      messageId: roomImage[2] ?? '',
+    });
+    if (!result.ok) return failure(deps, result.error);
+    return jpeg(result.bytes);
+  }
+  const reaction = path.match(/^\/api\/rooms\/([0-9a-f-]{36})\/messages\/([0-9a-f-]{36})\/reaction$/i);
+  if (reaction && request.method === 'POST') {
+    const result = await setRoomReaction(deps, {
+      token: readCookie(request.headers.get('cookie'), 'chatx_session'),
+      roomId: reaction[1] ?? '',
+      messageId: reaction[2] ?? '',
+      emoji: body.emoji,
+    });
+    if (!result.ok) return failure(deps, result.error);
+    return json({ ok: true });
+  }
+  if (roomMessages && request.method === 'POST') {
+    const result = await postRoomMessage(deps, {
+      token: readCookie(request.headers.get('cookie'), 'chatx_session'),
+      roomId: roomMessages[1] ?? '',
+      id: body.id,
+      text: body.text,
+      replyToId: body.replyToId,
+      image: body.image,
+      file: body.file,
+    });
+    if (!result.ok) return failure(deps, result.error);
+    return json({ message: result.message });
+  }
+  if (request.method === 'GET' && path === '/api/notifications') {
+    const url = new URL(request.url);
+    const result = await readInbox(deps, {
+      token: readCookie(request.headers.get('cookie'), 'chatx_session'),
+      before: url.searchParams.get('before'),
+      beforeId: url.searchParams.get('beforeId'),
+    });
+    if (!result.ok) return failure(deps, result.error);
+    return json({ notifications: result.notifications, unreadCount: result.unreadCount });
+  }
+  if (request.method === 'POST' && path === '/api/notifications/read') {
+    const result = await markInboxRead(deps, {
+      token: readCookie(request.headers.get('cookie'), 'chatx_session'),
+      ids: body.ids,
+      all: body.all,
+    });
+    if (!result.ok) return failure(deps, result.error);
+    return json({ ok: true });
+  }
+  if (request.method === 'POST' && path === '/api/notifications/clear') {
+    const result = await clearInbox(deps, readCookie(request.headers.get('cookie'), 'chatx_session'));
+    if (!result.ok) return failure(deps, result.error);
+    return json({ ok: true });
+  }
+  if (request.method === 'POST' && path === '/api/rooms') {
+    const result = await openRoom(deps, {
+      token: readCookie(request.headers.get('cookie'), 'chatx_session'),
+      kind: body.kind,
+      userId: body.userId,
+      name: body.name,
+      memberIds: body.memberIds,
+    });
+    if (!result.ok) return failure(deps, result.error);
+    return json({ conversation: result.conversation, users: result.users });
+  }
+  if (request.method === 'GET' && path === '/api/saved') {
+    const result = await readSaved(deps, readCookie(request.headers.get('cookie'), 'chatx_session'), new URL(request.url).searchParams.get('beforeId') ?? undefined);
+    if (!result.ok) return failure(deps, result.error);
+    return json({ saved: result.saved, hasMore: result.hasMore });
+  }
+  if (request.method === 'POST' && path === '/api/saved') {
+    const result = await keepMessage(deps, {
+      token: readCookie(request.headers.get('cookie'), 'chatx_session'),
+      messageId: body.messageId,
+      saved: body.saved,
+    });
+    if (!result.ok) return failure(deps, result.error);
+    return json({ ok: true });
+  }
+  if (request.method === 'GET' && path === '/api/home') {
+    const result = await readHome(deps, readCookie(request.headers.get('cookie'), 'chatx_session'));
+    if (!result.ok) return failure(deps, result.error);
+    return json({ conversations: result.conversations, users: result.users });
+  }
+  if (request.method === 'GET' && path === '/api/profile') {
+    const result = await readOwnProfile(deps, readCookie(request.headers.get('cookie'), 'chatx_session'));
+    if (!result.ok) return failure(deps, result.error);
+    return json({ user: result.user });
+  }
+  if (request.method === 'PATCH' && path === '/api/profile') {
+    const result = await updateOwnProfile(deps, {
+      token: readCookie(request.headers.get('cookie'), 'chatx_session'),
+      displayName: body.displayName,
+      bio: body.bio,
+      banner: body.banner,
+      avatar: body.avatar,
+      hasDisplayName: Object.prototype.hasOwnProperty.call(body, 'displayName'),
+      hasBio: Object.prototype.hasOwnProperty.call(body, 'bio'),
+      hasBanner: Object.prototype.hasOwnProperty.call(body, 'banner'),
+      hasAvatar: Object.prototype.hasOwnProperty.call(body, 'avatar'),
+      ip,
+    });
+    if (!result.ok) return failure(deps, result.error);
+    return json({ user: result.user });
+  }
+  if (request.method === 'POST' && path === '/api/auth/logout') {
+    await endSession(deps, readCookie(request.headers.get('cookie'), 'chatx_session'));
+    const response = json({ ok: true });
+    response.headers.append('set-cookie', clearSessionCookie(secureRequest(request)));
+    return response;
+  }
+
+  return json({ error: 'not_found' }, 404);
+}
+
+export function createApi(deps: Deps) {
+  return async (request: Request) => withCors(request, await route(deps, request), allowedOrigin(request.headers.get('origin'), deps));
+}

@@ -1,0 +1,141 @@
+import assert from 'node:assert/strict';
+import { describe, it } from 'node:test';
+import { createLimiter, resumeMember, type Deps } from '../src/authService.ts';
+import { loadConfig } from '../src/config.ts';
+import { createApi } from '../src/http.ts';
+import { createMemoryRepository } from '../src/memory.ts';
+import { cleanBanner, cleanBio } from '../src/profile.ts';
+import { hashSession } from '../src/session.ts';
+import type { AuthUser } from '../src/types.ts';
+
+const jpeg = 'data:image/jpeg;base64,/9j/AAAA';
+
+function testDeps(): Deps {
+  return {
+    repo: createMemoryRepository(),
+    config: loadConfig({ DATABASE_URL: 'postgres://unused', GOOGLE_CLIENT_ID: '' }),
+    now: () => Date.parse('2026-10-08T12:00:00.000Z'),
+    rateLimit: createLimiter(loadConfig({ DATABASE_URL: 'postgres://unused' }), () => Date.parse('2026-10-08T12:00:00.000Z')),
+  };
+}
+
+const member: AuthUser = {
+  id: '11111111-1111-4111-8111-111111111111',
+  email: 'nora@example.com',
+  displayName: 'نورة',
+  username: 'نورة',
+  role: 'member',
+  bio: '',
+  bannerUrl: null,
+  avatarUrl: null,
+};
+
+describe('known account', () => {
+  it('opens the existing member and leaves a new address on the profile step', async () => {
+    const deps = testDeps();
+    await deps.repo.insertUser(member);
+    const known = await resumeMember(deps, 'Nora@example.com');
+    assert.equal(known.ok && known.step, 'ready');
+    if (known.ok && known.step === 'ready') assert.equal(known.user.displayName, 'نورة');
+    const fresh = await resumeMember(deps, 'new@example.com');
+    assert.equal(fresh.ok && fresh.step, 'profile');
+  });
+});
+
+describe('profile', () => {
+  it('keeps a short bio and a jpeg banner', () => {
+    assert.equal(cleanBio('  مرحبا\u0000 '), 'مرحبا');
+    assert.equal(cleanBio('ا'.repeat(161)), null);
+    assert.equal(cleanBanner(jpeg).ok, true);
+    const removed = cleanBanner(null);
+    assert.equal(removed.ok && removed.value, null);
+    assert.equal(cleanBanner('data:image/png;base64,/9j/AAAA').ok, false);
+    assert.equal(cleanBanner('data:image/jpeg;base64,AAAA').ok, false);
+  });
+
+  it('stores the bio and banner only for the signed-in account', async () => {
+    const deps = testDeps();
+    await deps.repo.insertUser(member);
+    const token = 'session-token';
+    await deps.repo.createSession(hashSession(token), member.id, new Date('2026-11-08T12:00:00.000Z'));
+    const handle = createApi(deps);
+    const denied = await handle(new Request('http://127.0.0.1/api/profile', {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json', 'x-chatx-request': '1' },
+      body: JSON.stringify({ bio: 'نبذة' }),
+    }));
+    assert.equal(denied.status, 401);
+
+    const saved = await handle(new Request('http://127.0.0.1/api/profile', {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json', 'x-chatx-request': '1', cookie: `chatx_session=${token}` },
+      body: JSON.stringify({ bio: 'نبذة قصيرة', banner: jpeg }),
+    }));
+    assert.equal(saved.status, 200);
+    const body = await saved.json() as { user: { bio: string; bannerUrl: string } };
+    assert.equal(body.user.bio, 'نبذة قصيرة');
+    assert.equal(body.user.bannerUrl, jpeg);
+
+    const renamed = await handle(new Request('http://127.0.0.1/api/profile', {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json', 'x-chatx-request': '1', cookie: `chatx_session=${token}` },
+      body: JSON.stringify({ displayName: 'نورة الجديدة', avatar: jpeg }),
+    }));
+    assert.equal(renamed.status, 200);
+    const named = await renamed.json() as { user: { displayName: string; username: string; avatarUrl: string } };
+    assert.equal(named.user.displayName, 'نورة الجديدة');
+    assert.equal(named.user.username, 'نورة الجديدة');
+    assert.equal(named.user.avatarUrl, jpeg);
+
+    const loaded = await handle(new Request('http://127.0.0.1/api/profile', {
+      headers: { cookie: `chatx_session=${token}` },
+    }));
+    assert.equal(loaded.status, 200);
+    const account = await loaded.json() as { user: { displayName: string; bio: string } };
+    assert.equal(account.user.displayName, 'نورة الجديدة');
+    assert.equal(account.user.bio, 'نبذة قصيرة');
+
+    await deps.repo.insertUser({
+      ...member,
+      id: '22222222-2222-4222-8222-222222222222',
+      email: 'layla@example.com',
+      displayName: 'ليلى',
+      username: 'ليلى',
+    });
+    const taken = await handle(new Request('http://127.0.0.1/api/profile', {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json', 'x-chatx-request': '1', cookie: `chatx_session=${token}` },
+      body: JSON.stringify({ displayName: 'ليلى' }),
+    }));
+    assert.equal(taken.status, 409);
+
+    const cleared = await handle(new Request('http://127.0.0.1/api/profile', {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json', 'x-chatx-request': '1', cookie: `chatx_session=${token}` },
+      body: JSON.stringify({ banner: null }),
+    }));
+    assert.equal(cleared.status, 200);
+    const after = await cleared.json() as { user: { bannerUrl?: string; bio: string } };
+    assert.equal(after.user.bannerUrl, undefined);
+    assert.equal(after.user.bio, 'نبذة قصيرة');
+
+    const rejected = await handle(new Request('http://127.0.0.1/api/profile', {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json', 'x-chatx-request': '1', cookie: `chatx_session=${token}` },
+      body: JSON.stringify({ banner: 'data:image/svg+xml;base64,PHN2Zy8+' }),
+    }));
+    assert.equal(rejected.status, 401);
+
+    await handle(new Request('http://127.0.0.1/api/auth/logout', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', 'x-chatx-request': '1', cookie: `chatx_session=${token}` },
+      body: '{}',
+    }));
+    const closed = await handle(new Request('http://127.0.0.1/api/profile', {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json', 'x-chatx-request': '1', cookie: `chatx_session=${token}` },
+      body: JSON.stringify({ bio: 'بعد الخروج' }),
+    }));
+    assert.equal(closed.status, 401);
+  });
+});

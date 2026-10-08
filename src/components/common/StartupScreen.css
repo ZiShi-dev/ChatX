@@ -1,0 +1,53 @@
+.startup-content { display: contents; }
+
+.startup-screen {
+  position: fixed;
+  inset: 0;
+  z-index: 10000;
+  display: grid;
+  place-items: center;
+  background: #101614;
+  padding: env(safe-area-inset-top) 24px env(safe-area-inset-bottom);
+  animation: startup-exit 200ms ease-out 900ms both;
+}
+
+.startup-brand {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+}
+
+.startup-logo {
+  display: block;
+  width: 128px;
+  height: 128px;
+  border-radius: 30px;
+  animation: startup-logo-in 650ms cubic-bezier(.2, .8, .2, 1) both;
+}
+
+.startup-name {
+  color: #e7eeea;
+  font: 700 28px/1.2 var(--ion-font-family, system-ui, sans-serif);
+  letter-spacing: 1px;
+  animation: startup-name-in 400ms ease-out 180ms both;
+}
+
+@keyframes startup-logo-in {
+  from { opacity: 0; transform: translateY(12px) scale(.88); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@keyframes startup-name-in {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes startup-exit {
+  from { opacity: 1; }
+  to { opacity: 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .startup-screen, .startup-logo, .startup-name { animation: none; }
+}

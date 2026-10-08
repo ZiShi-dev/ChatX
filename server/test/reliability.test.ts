@@ -1,0 +1,95 @@
+import assert from 'node:assert/strict';
+import { randomUUID } from 'node:crypto';
+import { it } from 'node:test';
+import pg from 'pg';
+import { createMemoryRepository } from '../src/memory.ts';
+import { createPostgresRepository } from '../src/postgres.ts';
+import { migrate } from '../src/migrate.ts';
+import { GLOBAL_ROOM_ID, readRoomMessages, changeMessage, markRoomSeen } from '../src/home.ts';
+import { createLimiter, type Deps } from '../src/authService.ts';
+import { loadConfig } from '../src/config.ts';
+import { hashSession } from '../src/session.ts';
+import type { AuthRepository, AuthUser, RoomMessage } from '../src/types.ts';
+
+const now = new Date('2026-10-09T12:00:00Z');
+const user = (id: string): AuthUser => ({ id, email: `${id}@example.invalid`, displayName: id, username: id, role: 'member', bio: '', avatarUrl: null, bannerUrl: null });
+async function verify(repo: AuthRepository) {
+  const alice = user(randomUUID()); const bob = user(randomUUID()); const outsider = user(randomUUID());
+  for (const person of [alice, bob, outsider]) await repo.insertUser(person);
+  const roomId = randomUUID();
+  assert.equal(await repo.createRoom({ id: roomId, kind: 'private', creatorId: alice.id, memberIds: [bob.id], at: now, name: null }), roomId);
+  const paired = await Promise.all([randomUUID(), randomUUID()].map((id) => repo.createRoom({ id, kind: 'private', creatorId: bob.id, memberIds: [outsider.id], at: now, name: null })));
+  assert.equal(paired[0], paired[1]);
+  const ids = Array.from({ length: 65 }, (_, index) => `aaaaaaaa-aaaa-4aaa-8aaa-${String(index + 1).padStart(12, '0')}`);
+  for (const id of ids) await repo.addRoomMessage({ id, roomId, senderId: alice.id, text: id, createdAt: now, deleted: false });
+  const newest = await repo.listRoomMessages(roomId, bob.id, 30);
+  assert.ok(newest);
+  assert.deepEqual(newest.map((item) => item.id), ids.slice(-30));
+  const older = await repo.listRoomMessages(roomId, bob.id, 30, { beforeId: newest[0].id });
+  assert.ok(older);
+  assert.deepEqual(older.map((item) => item.id), ids.slice(5, 35));
+  assert.equal(await repo.listRoomMessages(roomId, outsider.id, 30), null);
+  const context = await repo.listRoomMessages(roomId, bob.id, 30, { aroundId: ids[10] });
+  assert.ok(context);
+  assert.equal(context.at(-1)?.id, ids[10]);
+  assert.equal(await repo.changeRoomMessage(roomId, bob.id, ids[0], 'forbidden', now), false);
+  assert.equal(await repo.changeRoomMessage(roomId, alice.id, ids[0], 'edited', now), true);
+  assert.equal(await repo.markRoomRead(roomId, bob.id, now, ids[10]), true);
+  assert.equal((await repo.listHome(bob.id)).find((item) => item.id === roomId)?.unreadCount, 54);
+  await repo.markRoomRead(roomId, bob.id, now, ids[0]);
+  assert.equal((await repo.listReaders(roomId)).find((item) => item.userId === bob.id)?.messageId, ids[10]);
+  assert.equal(await repo.changeRoomMessage(roomId, alice.id, ids[0], null, now), true);
+  assert.equal(await repo.changeRoomMessage(roomId, alice.id, ids[0], 'resurrect', now), false);
+  for (const id of ids) await repo.setSaved(bob.id, id, true, now);
+  const saved = await repo.listSaved(bob.id, 30);
+  const savedOlder = await repo.listSaved(bob.id, 30, saved.at(-1)?.messageId);
+  assert.equal(saved.length, 30); assert.equal(savedOlder.length, 30);
+  assert.equal(savedOlder.some((item) => saved.some((entry) => entry.messageId === item.messageId)), false);
+  await repo.createSession(hashSession('bob'), bob.id, new Date(now.getTime() + 60_000));
+  const config = loadConfig({ DATABASE_URL: 'postgres://unused' });
+  const deps: Deps = { repo, config, now: () => now.getTime(), rateLimit: createLimiter(config, () => now.getTime()) };
+  const page = await readRoomMessages(deps, { token: 'bob', roomId });
+  assert.equal(page.ok, true);
+  assert.equal((await repo.listReaders(roomId)).find((item) => item.userId === bob.id)?.messageId, ids[10]);
+  assert.equal((await markRoomSeen(deps, { token: 'bob', roomId, messageId: randomUUID() })).ok, false);
+  assert.equal((await changeMessage(deps, { token: 'bob', roomId, messageId: ids[1], text: 'forbidden', deleting: false })).ok, false);
+  assert.equal(await repo.updateRoom(GLOBAL_ROOM_ID, alice.id, { name: 'forbidden' }, now), false);
+  return { alice, bob, roomId };
+}
+
+it('keeps stable pagination, scoped access, monotonic reads and immutable deletion', async () => { await verify(createMemoryRepository()); });
+
+const database = process.env.CHATX_TEST_DATABASE_URL;
+it('verifies PostgreSQL migrations, cursor SQL and transaction rollback', { skip: !database }, async () => {
+  const address = new URL(database!);
+  assert.ok(['127.0.0.1', 'localhost'].includes(address.hostname), 'Tests require a dedicated localhost database');
+  const schema = `chatx_test_${randomUUID().replaceAll('-', '')}`;
+  const admin = new pg.Pool({ connectionString: database });
+  await admin.query(`CREATE SCHEMA ${schema}`);
+  const pool = new pg.Pool({ connectionString: database, options: `-c search_path=${schema}` });
+  try {
+    await migrate(pool);
+    const repo = createPostgresRepository(pool);
+    const { alice, bob, roomId } = await verify(repo);
+    const message: RoomMessage = { id: randomUUID(), roomId, senderId: alice.id, text: '', createdAt: now, deleted: false };
+    await pool.query(`CREATE FUNCTION fail_image() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'test failure'; END $$`);
+    await pool.query('CREATE TRIGGER fail_image BEFORE INSERT ON message_images FOR EACH ROW EXECUTE FUNCTION fail_image()');
+    await assert.rejects(repo.addRoomMessage(message, new Uint8Array([255,216,255,0])));
+    assert.equal((await pool.query('SELECT id FROM room_messages WHERE id=$1', [message.id])).rowCount, 0);
+    await pool.query('DROP TRIGGER fail_image ON message_images');
+    await repo.addRoomMessage(message, new Uint8Array([255,216,255,0]));
+    await repo.changeRoomMessage(roomId, alice.id, message.id, null, now);
+    await repo.addRoomMessage(message, new Uint8Array([255,216,255,0]));
+    assert.equal(await repo.readMessageImage(roomId, bob.id, message.id), null);
+    assert.equal((await pool.query('SELECT message_id FROM message_images WHERE message_id=$1', [message.id])).rowCount, 0);
+    const third = user(randomUUID()); await repo.insertUser(third);
+    const group = randomUUID();
+    await pool.query(`CREATE FUNCTION fail_member() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'test failure'; END $$`);
+    await pool.query('CREATE TRIGGER fail_member BEFORE INSERT ON room_members FOR EACH ROW EXECUTE FUNCTION fail_member()');
+    await assert.rejects(repo.createRoom({ id: group, kind: 'group', creatorId: alice.id, memberIds: [bob.id, third.id], name: 'test', at: now }));
+    assert.equal((await pool.query('SELECT id FROM rooms WHERE id=$1', [group])).rowCount, 0);
+  } finally {
+    await pool.end();
+    await admin.query(`DROP SCHEMA ${schema} CASCADE`); await admin.end();
+  }
+});
