@@ -28,7 +28,7 @@ try {
   });
   await page.goto(`http://127.0.0.1:4186/chat/${roomId}`);
   await page.getByPlaceholder('اكتب رسالة').waitFor();
-  const png = await page.evaluate(() => { const canvas = document.createElement('canvas'); canvas.width = 800; canvas.height = 600; const ctx = canvas.getContext('2d'); ctx.fillStyle = '#123456'; ctx.fillRect(0, 0, 800, 600); return canvas.toDataURL('image/png').split(',')[1]; });
+  const png = await page.evaluate(() => { const canvas = document.createElement('canvas'); canvas.width = 400; canvas.height = 1200; const ctx = canvas.getContext('2d'); ctx.fillStyle = '#123456'; ctx.fillRect(0, 0, 400, 1200); return canvas.toDataURL('image/png').split(',')[1]; });
   await page.locator('input[type=file][accept*="image"]').first().setInputFiles({ name: 'photo.png', mimeType: 'image/png', buffer: Buffer.from(png, 'base64') });
   await page.getByRole('button', { name: 'إرسال', exact: true }).click();
   let messages = [];
@@ -45,5 +45,22 @@ try {
   const download = page.getByRole('button', { name: 'تحميل', exact: true });
   if (await download.count()) await download.first().click();
   await page.waitForFunction(() => [...document.querySelectorAll('.bubble img')].some(img => img.complete && img.naturalWidth > 0));
-  console.log('PASS real JPEG preparation, resumable image upload, authenticated download and display after reload');
+  for (const width of [360, 1280]) {
+    await page.setViewportSize({ width, height: 780 });
+    const geometry = await page.locator('.bubble.has-media').last().evaluate(bubble => {
+      const image = bubble.querySelector('img'); const time = bubble.querySelector('.bubble-time');
+      const box = bubble.getBoundingClientRect(), picture = image.getBoundingClientRect(), stamp = time.getBoundingClientRect();
+      return { ratio: picture.width / picture.height, natural: image.naturalWidth / image.naturalHeight, border: box.width - picture.width, timeBelow: stamp.top >= picture.bottom, time: time.innerText };
+    });
+    assert.ok(Math.abs(geometry.ratio - geometry.natural) < 0.01, JSON.stringify(geometry));
+    assert.ok(geometry.border <= 9, JSON.stringify(geometry));
+    assert.ok(geometry.timeBelow && geometry.time.trim(), JSON.stringify(geometry));
+  }
+  await page.locator('.bubble.has-media .media-open[aria-label="عرض"]').last().waitFor();
+  await page.locator('.startup-screen').waitFor({ state: 'detached' });
+  // Separate the download tap from the open tap; a double tap intentionally reacts.
+  await page.waitForTimeout(350);
+  await page.locator('.bubble.has-media .media-open').last().click();
+  await page.locator('.media-viewer').waitFor();
+  console.log('PASS portrait image proportions and timestamp at mobile/desktop widths, resumable upload/reload, and viewer click');
 } finally { await browser.close(); }

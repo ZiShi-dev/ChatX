@@ -1,4 +1,5 @@
 import MediaViewer from './MediaViewer';
+import './MessageMedia.css';
 import { memo, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { IonButton, IonIcon, IonModal } from '@ionic/react';
@@ -603,6 +604,7 @@ function MessageBubble({ message, mine, showAuthor, group = false, direct = fals
         const progress = rtl ? -dx : dx;
         if (!drag.current.locked) {
           if (Math.abs(dy) > 12 && Math.abs(dy) > Math.abs(dx)) {
+            clearHold();
             drag.current.active = false;
             return;
           }
