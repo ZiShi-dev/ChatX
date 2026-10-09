@@ -1,13 +1,24 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { startPolling } from './poll';
 import { useSettingsStore } from '../stores/settingsStore';
+import { useNetworkStore } from '../stores/networkStore';
 
 describe('network polling', () => {
   let stop: (() => void) | undefined;
   beforeEach(() => {
+    useNetworkStore.getState().setNetwork('online');
     vi.useFakeTimers();
     vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(true);
     vi.spyOn(document, 'visibilityState', 'get').mockReturnValue('visible');
+  });
+  it('refreshes immediately after measured recovery even without a browser online event', async () => {
+    const task = vi.fn(async () => undefined);
+    stop = startPolling(task);
+    await vi.advanceTimersByTimeAsync(0);
+    useNetworkStore.getState().setNetwork('offline');
+    useNetworkStore.getState().setNetwork('online');
+    await vi.advanceTimersByTimeAsync(0);
+    expect(task).toHaveBeenCalledTimes(2);
   });
   afterEach(() => {
     stop?.();

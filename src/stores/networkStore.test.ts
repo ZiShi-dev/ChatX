@@ -1,7 +1,26 @@
 import { afterEach, expect, it, vi } from 'vitest';
-import { observeNetwork, useNetworkStore } from './networkStore';
+import { observeNetwork, reportNetworkFailure, reportNetworkSuccess, useNetworkStore } from './networkStore';
 
-afterEach(() => { vi.unstubAllGlobals(); useNetworkStore.getState().setNetwork('online'); });
+afterEach(() => { vi.useRealTimers(); vi.unstubAllGlobals(); reportNetworkSuccess(0); });
+
+it('recovers while the phone still claims to be online, without reopening the app', async () => {
+  vi.useFakeTimers();
+  vi.stubGlobal('navigator', { onLine: true });
+  const request = vi.fn().mockRejectedValueOnce(new Error('network lost')).mockResolvedValueOnce({ ok: true });
+  vi.stubGlobal('fetch', request);
+  const stop = observeNetwork();
+  try {
+    reportNetworkFailure();
+    expect(useNetworkStore.getState().network).toBe('offline');
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(request).toHaveBeenCalledTimes(1);
+    await vi.advanceTimersByTimeAsync(5000);
+    expect(request).toHaveBeenCalledTimes(2);
+    expect(useNetworkStore.getState().network).toBe('online');
+    await vi.advanceTimersByTimeAsync(60_000);
+    expect(request).toHaveBeenCalledTimes(2);
+  } finally { stop(); }
+});
 
 it('uses browser connectivity, resumes online and removes its listeners', () => {
   let online = true;

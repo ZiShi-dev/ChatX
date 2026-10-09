@@ -8,6 +8,16 @@ afterEach(() => {
 });
 
 describe('API reliability', () => {
+  it('cancels a request immediately on a phone disconnection', async () => {
+    vi.useFakeTimers();
+    vi.stubGlobal('fetch', vi.fn((_url: string, init: RequestInit) => new Promise<Response>((_resolve, reject) => {
+      init.signal?.addEventListener('abort', () => reject(new Error('disconnected')));
+    })));
+    const result = adminFetch('/api/home').catch((error: unknown) => error);
+    window.dispatchEvent(new Event('offline'));
+    expect(await result).toMatchObject({ code: 'offline' });
+    expect(vi.getTimerCount()).toBe(0);
+  });
   it('reuses validated JSON without downloading it twice or sharing mutable objects', async () => {
     const fetchMock = vi.fn()
       .mockResolvedValueOnce(new Response('{"users":[{"name":"Alice"}]}', { headers: { etag: '"v1"' } }))

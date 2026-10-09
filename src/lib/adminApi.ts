@@ -1,4 +1,5 @@
 import { Capacitor } from '@capacitor/core';
+import { reportNetworkFailure, reportNetworkSuccess } from '../stores/networkStore';
 
 const HTTPS_ORIGIN = /^https:\/\/[A-Za-z0-9.-]+(?::[0-9]{1,5})?$/;
 let sessionVersion = 0;
@@ -50,6 +51,10 @@ export async function adminFetch(path: string, init?: { method?: string; body?: 
   const controller = new AbortController();
   const version = sessionVersion;
   activeRequests.add(controller);
+  const started = Date.now();
+  const slowTimer = window.setTimeout(() => reportNetworkFailure(true), 5000);
+  const onOffline = () => { reportNetworkFailure(); controller.abort(); };
+  window.addEventListener('offline', onOffline);
   const timer = window.setTimeout(() => controller.abort(), 30_000);
   try {
     const method = (init?.method ?? 'GET').toUpperCase();
@@ -67,10 +72,11 @@ export async function adminFetch(path: string, init?: { method?: string; body?: 
     });
     if (controller.signal.aborted) throw new AdminApiError('offline', 0);
     if (version !== sessionVersion) throw new AdminApiError('account_changed', 0);
-    if (response.status === 304 && cached) return JSON.parse(cached.body) as unknown;
+    if (response.status === 304 && cached) { reportNetworkSuccess(Date.now() - started); return JSON.parse(cached.body) as unknown; }
     const body = await response.text();
     let data: unknown = null;
     try { data = JSON.parse(body); } catch { /* Invalid JSON remains unavailable to callers. */ }
+    reportNetworkSuccess(Date.now() - started);
     if (!response.ok) {
       const code = data && typeof data === 'object' && 'error' in data && typeof data.error === 'string' ? data.error : 'unavailable';
       throw new AdminApiError(code, response.status);
@@ -80,9 +86,12 @@ export async function adminFetch(path: string, init?: { method?: string; body?: 
     if (method === 'GET' && data !== null) rememberResponse(path, response.headers.get('etag'), body);
     return data;
   } catch (error) {
+    if (version === sessionVersion && (!(error instanceof AdminApiError) || error.code === 'offline')) reportNetworkFailure();
     if (error instanceof AdminApiError) throw error;
     throw new AdminApiError('offline', 0);
   } finally {
+    window.clearTimeout(slowTimer);
+    window.removeEventListener('offline', onOffline);
     window.clearTimeout(timer);
     activeRequests.delete(controller);
   }

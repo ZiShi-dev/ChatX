@@ -6,6 +6,7 @@ import { useNetworkStore } from '../stores/networkStore';
 export function startPolling(task: () => Promise<unknown>, options: { active?: () => boolean; background?: boolean; immediate?: boolean; economy?: boolean } = {}) {
   let stopped = false;
   let running = false;
+  let recoveredWhileRunning = false;
   let timer: number | undefined;
   const delay = () => document.visibilityState === 'hidden' ? 60_000
     : options.economy && (useSettingsStore.getState().dataSaver || useNetworkStore.getState().network === 'slow') ? 40_000 : PRESENCE_BEAT_MS;
@@ -21,12 +22,21 @@ export function startPolling(task: () => Promise<unknown>, options: { active?: (
       // The caller owns error UI; the next scheduled refresh can recover.
     } finally {
       running = false;
-      if (!stopped) timer = window.setTimeout(() => void tick(), delay());
+      if (!stopped) {
+        timer = window.setTimeout(() => void tick(), recoveredWhileRunning ? 0 : delay());
+        recoveredWhileRunning = false;
+      }
     }
   };
   const wake = () => { void tick(); };
   document.addEventListener('visibilitychange', wake);
   window.addEventListener('online', wake);
+  const unsubscribe = useNetworkStore.subscribe((state, previous) => {
+    if ((state.network === 'online' && previous.network !== 'online') || (previous.network === 'offline' && state.network === 'slow')) {
+      if (running) recoveredWhileRunning = true;
+      else wake();
+    }
+  });
   if (options.immediate !== false) void tick();
   else timer = window.setTimeout(wake, delay());
   return () => {
@@ -34,5 +44,6 @@ export function startPolling(task: () => Promise<unknown>, options: { active?: (
     window.clearTimeout(timer);
     document.removeEventListener('visibilitychange', wake);
     window.removeEventListener('online', wake);
+    unsubscribe();
   };
 }
