@@ -2,7 +2,8 @@ import { randomInt, randomUUID } from 'node:crypto';
 import { GLOBAL_ROOM_ID } from './home.ts';
 import { resolveGroupTurn } from './groupTurn.ts';
 import { messageKind } from './inbox.ts';
-import type { AuthRepository, Upload, AuthUser, HomeRoom, InboxNotice, ProfilePatch, RoomMessage, RoomReader, SavedItem, StoredReaction } from './types.ts';
+import type { AuthRepository, Upload, AuthUser, EraseChoices, HomeRoom, InboxNotice, OwnerAudit, ProfilePatch, RoomMessage, RoomReader, SavedItem, StoredReaction } from './types.ts';
+import { auditDetail, ERASE_OPERATOR_EMAIL, resolveEraseChoices, resolveGroupChoices } from './eraseMember.ts';
 
 function copyUser(user: AuthUser): AuthUser {
   return { ...user, bio: user.bio ?? '', bannerUrl: user.bannerUrl ?? null, avatarUrl: user.avatarUrl ?? null };
@@ -22,6 +23,11 @@ export function createMemoryRepository(): AuthRepository {
   const files = new Map<string, { name: string; bytes: Uint8Array }>();
   const reactions = new Map<string, StoredReaction & { createdAt: number }>();
   const notices: Array<Omit<InboxNotice, 'conversationName' | 'deleted'> & { userId: string }> = [];
+  const audits: OwnerAudit[] = [];
+  const ownerBound = (actorId: string) => {
+    const actor = users.get(actorId);
+    return Boolean(actor && actor.email.toLowerCase() === ERASE_OPERATOR_EMAIL && actor.googleSub);
+  };
   const clearedAt = new Map<string, number>();
   const memberKey = (roomId: string, userId: string) => `${roomId}:${userId}`;
   const syncTurn = (roomId: string, at: number) => {
@@ -92,6 +98,130 @@ export function createMemoryRepository(): AuthRepository {
     },
     async listUsers() {
       return [...users.values()].map(copyUser);
+    },
+    async eraseMember(actorId, targetId, input: EraseChoices) {
+      if (!ownerBound(actorId) || actorId === targetId) return 'forbidden';
+      const target = users.get(targetId);
+      const choices = resolveEraseChoices(input);
+      if (!target || !choices) return 'missing';
+      if (target.email.toLowerCase() === ERASE_OPERATOR_EMAIL) return 'forbidden';
+      const dropRooms = new Set<string>();
+      if (choices.privateChats) {
+        for (const member of members.values()) {
+          if (member.userId === targetId && rooms.get(member.roomId)?.kind === 'private') dropRooms.add(member.roomId);
+        }
+      }
+      const dropMessages = new Set<string>();
+      for (const message of messages) {
+        if (dropRooms.has(message.roomId)) {
+          dropMessages.add(message.id);
+          continue;
+        }
+        if (message.senderId !== targetId) continue;
+        const hasImage = images.has(message.id);
+        const hasFile = files.has(message.id);
+        if (choices.account || (choices.images && hasImage) || (choices.files && hasFile) || (choices.messages && !hasImage && !hasFile)) dropMessages.add(message.id);
+      }
+      for (let index = messages.length - 1; index >= 0; index -= 1) {
+        if (dropMessages.has(messages[index]!.id)) messages.splice(index, 1);
+      }
+      for (const id of dropMessages) {
+        images.delete(id);
+        files.delete(id);
+      }
+      for (const [key, reaction] of reactions) {
+        if (dropMessages.has(reaction.messageId) || ((choices.reactions || choices.account) && reaction.userId === targetId)) reactions.delete(key);
+      }
+      for (let index = notices.length - 1; index >= 0; index -= 1) {
+        const notice = notices[index];
+        if (notice && (dropMessages.has(notice.messageId) || (choices.account && notice.userId === targetId))) notices.splice(index, 1);
+      }
+      for (const key of saved.keys()) {
+        const [ownerId, messageId] = key.split(':');
+        if ((messageId && dropMessages.has(messageId)) || (choices.account && ownerId === targetId)) saved.delete(key);
+      }
+      for (const roomId of dropRooms) {
+        rooms.delete(roomId);
+        for (const [key, member] of members) if (member.roomId === roomId) members.delete(key);
+      }
+      if (choices.membership || choices.account) {
+        for (const [key, member] of members) {
+          if (member.userId !== targetId) continue;
+          if (choices.account || rooms.get(member.roomId)?.kind === 'group') members.delete(key);
+        }
+      }
+      if (choices.profile && !choices.account) {
+        target.avatarUrl = null;
+        target.bannerUrl = null;
+      }
+      if (choices.account) {
+        for (const room of rooms.values()) {
+          if (room.adminId === targetId) {
+            const keeps = [...members.values()].some((member) => member.roomId === room.id && member.userId === actorId);
+            room.adminId = keeps ? actorId : undefined;
+          }
+          if (room.turnUserId === targetId) {
+            room.turnUserId = undefined;
+            room.turnOpensAt = undefined;
+          }
+        }
+        for (const [key, session] of sessions) if (session.userId === targetId) sessions.delete(key);
+        for (const [id, upload] of uploads) if (upload.ownerId === targetId) uploads.delete(id);
+        users.delete(targetId);
+      }
+      audits.push({ actorId, action: 'member', targetId, detail: auditDetail(choices) });
+      return 'ok';
+    },
+    async listOwnerGroups() {
+      return [...rooms.values()]
+        .filter((room) => room.kind === 'group')
+        .sort((a, b) => a.createdAt - b.createdAt || a.id.localeCompare(b.id))
+        .map((room) => ({ id: room.id, name: room.name || 'مجموعة' }));
+    },
+    async eraseGroup(actorId, roomId, input) {
+      if (!ownerBound(actorId)) return 'forbidden';
+      const choices = resolveGroupChoices(input);
+      const room = rooms.get(roomId);
+      if (!choices || !room) return 'missing';
+      if (room.kind !== 'group' || roomId === GLOBAL_ROOM_ID) return 'forbidden';
+      const dropMessages = new Set<string>();
+      for (const message of messages) {
+        if (message.roomId !== roomId) continue;
+        const hasImage = images.has(message.id);
+        const hasFile = files.has(message.id);
+        if (choices.group || (choices.images && hasImage) || (choices.files && hasFile) || (choices.messages && !hasImage && !hasFile)) dropMessages.add(message.id);
+      }
+      for (let index = messages.length - 1; index >= 0; index -= 1) {
+        if (dropMessages.has(messages[index]!.id)) messages.splice(index, 1);
+      }
+      for (const id of dropMessages) {
+        images.delete(id);
+        files.delete(id);
+      }
+      for (const [key, reaction] of reactions) {
+        const message = messages.find((item) => item.id === reaction.messageId);
+        if (dropMessages.has(reaction.messageId) || ((choices.reactions || choices.group) && message?.roomId === roomId)) reactions.delete(key);
+      }
+      for (let index = notices.length - 1; index >= 0; index -= 1) {
+        const notice = notices[index];
+        if (notice && (dropMessages.has(notice.messageId) || (choices.group && notice.roomId === roomId))) notices.splice(index, 1);
+      }
+      for (const key of saved.keys()) {
+        const messageId = key.split(':')[1];
+        if (messageId && dropMessages.has(messageId)) saved.delete(key);
+      }
+      if (choices.group) {
+        rooms.delete(roomId);
+        journals.delete(roomId);
+        for (const [key, member] of members) if (member.roomId === roomId) members.delete(key);
+        for (const key of passed.keys()) if (key.startsWith(`${roomId}:`)) passed.delete(key);
+        for (const [id, upload] of uploads) if (upload.roomId === roomId) uploads.delete(id);
+      }
+      audits.push({ actorId, action: 'group', targetId: roomId, detail: auditDetail(choices) });
+      return 'ok';
+    },
+    async listOwnerAudit() {
+      return audits.map((row) => ({ ...row }));
     },
     async insertUser(user) {
       users.set(user.id, copyUser(user));

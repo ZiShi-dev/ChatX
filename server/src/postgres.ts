@@ -1,6 +1,7 @@
 import { createLowBandwidthRepository } from './lowBandwidth.ts';
 import { randomInt } from 'node:crypto';
 import pg from 'pg';
+import { eraseGroupSelection, eraseSelection } from './eraseMember.ts';
 import { GLOBAL_ROOM_ID } from './home.ts';
 import { GROUP_TURN_MS, resolveGroupTurn } from './groupTurn.ts';
 import { messageKind } from './inbox.ts';
@@ -114,6 +115,43 @@ export function createPostgresRepository(pool: pg.Pool): AuthRepository {
         `SELECT ${USER_COLUMNS} FROM users ORDER BY created_at ASC`,
       );
       return result.rows.map(mapUser);
+    },
+    async eraseMember(actorId, targetId, choices) {
+      const client = await pool.connect();
+      try {
+        const result = await eraseSelection({
+          query: (sql, params) => client.query(sql, params),
+        }, actorId, targetId, choices);
+        if (result.ok) return 'ok';
+        return result.error === 'forbidden' ? 'forbidden' : 'missing';
+      } finally {
+        client.release();
+      }
+    },
+    async listOwnerGroups() {
+      const result = await pool.query<{ id: string; name: string }>(
+        `SELECT id, COALESCE(NULLIF(name, ''), 'مجموعة') AS name
+         FROM rooms WHERE kind = 'group' ORDER BY created_at ASC, id ASC`,
+      );
+      return result.rows;
+    },
+    async eraseGroup(actorId, roomId, choices) {
+      const client = await pool.connect();
+      try {
+        const result = await eraseGroupSelection({
+          query: (sql, params) => client.query(sql, params),
+        }, actorId, roomId, choices);
+        if (result.ok) return 'ok';
+        return result.error === 'forbidden' ? 'forbidden' : 'missing';
+      } finally {
+        client.release();
+      }
+    },
+    async listOwnerAudit() {
+      const result = await pool.query<{ actor_id: string; action: 'member' | 'group'; target_id: string; detail: string }>(
+        `SELECT actor_id, action, target_id, detail FROM owner_audit ORDER BY created_at ASC, id ASC`,
+      );
+      return result.rows.map((row) => ({ actorId: row.actor_id, action: row.action, targetId: row.target_id, detail: row.detail }));
     },
     async insertUser(user) {
       await pool.query(

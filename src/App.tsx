@@ -22,6 +22,7 @@ const NotificationsPage = lazy(() => import('./pages/NotificationsPage'));
 const SavedPage = lazy(() => import('./pages/SavedPage'));
 const ProfilePage = lazy(() => import('./pages/ProfilePage'));
 const SettingsPage = lazy(() => import('./pages/SettingsPage'));
+const PeopleAdminPage = lazy(() => import('./pages/PeopleAdminPage'));
 import { useInboxAlerts } from './hooks/useInboxAlerts';
 import { usePresenceSync } from './hooks/usePresenceSync';
 import { InboxWatch } from './lib/inboxWatch';
@@ -108,7 +109,7 @@ function AppRoutes() {
         <Route path="/account" element={page(<AccountPage />, 'account')} />
         <Route path="/profile" element={page(<ProfilePage />, 'profile')} />
         <Route path="/settings" element={page(<SettingsPage />, 'settings')} />
-        <Route path="/admin/*" element={<Navigate to={activated ? '/home' : '/activation'} replace />} />
+        <Route path="/admin" element={page(<PeopleAdminPage />, 'people')} />
         <Route path="/" element={<Navigate to={activated ? '/home' : '/activation'} replace />} />
         <Route path="*" element={<Navigate to={activated ? '/home' : '/activation'} replace />} />
         </Routes>

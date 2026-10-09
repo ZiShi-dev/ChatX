@@ -103,7 +103,7 @@ type ChatState = {
   resetMediaCache: () => void;
   loadHome: () => Promise<'ok' | 'local' | 'offline' | 'invalid'>;
   loadGroupTurn: (conversationId: string) => Promise<'ok' | 'local' | 'offline' | 'invalid'>;
-  loadRoom: (conversationId: string, page?: { beforeId?: string; aroundId?: string }) => Promise<boolean>;
+  loadRoom: (conversationId: string, page?: { beforeId?: string; aroundId?: string; wait?: boolean; signal?: AbortSignal }) => Promise<boolean>;
   editingId: string | null;
   replyingTo: { conversationId: string; messageId: string } | null;
   beginReply: (messageId: string) => void;
@@ -475,15 +475,18 @@ async function prepareAndSend(message: Message) {
   }
 }
 
-async function syncRoom(conversationId: string): Promise<boolean> {
-  const existing = roomSyncPending.get(conversationId); if (existing) return existing;
+async function syncRoom(conversationId: string, wait = false, signal?: AbortSignal): Promise<boolean> {
+  const existing = roomSyncPending.get(conversationId); if (existing && !wait) return existing;
   const owner = useAuthStore.getState().currentUser.id;
   const promise = (async () => {
     try {
       // Bound one foreground drain; further pages continue on the next refresh.
       for (let page = 0; page < 10; page++) {
         const cursor = roomSyncCursors.get(conversationId);
-        const payload = await adminFetch(`/api/rooms/${conversationId}/sync${cursor ? '?cursor='+encodeURIComponent(cursor) : ''}`);
+        const params = new URLSearchParams();
+        if (cursor) params.set('cursor', cursor);
+        if (wait && page === 0) params.set('wait', '1');
+        const payload = await adminFetch(`/api/rooms/${conversationId}/sync${params.size ? `?${params}` : ''}`, wait ? { hold: true, signal } : undefined);
         if (owner !== useAuthStore.getState().currentUser.id || !useAuthStore.getState().activated) return false;
         const delta = readRoomSync(payload, conversationId); if (!delta) return false;
         const state = useChatStore.getState();
@@ -513,7 +516,8 @@ async function syncRoom(conversationId: string): Promise<boolean> {
       return true;
     } catch { return false; }
   })().finally(() => { if (roomSyncPending.get(conversationId) === promise) roomSyncPending.delete(conversationId); });
-  roomSyncPending.set(conversationId, promise); return promise;
+  if (!wait) roomSyncPending.set(conversationId, promise);
+  return promise;
 }
 
 function accountRoom(conversationId: string) {
@@ -1078,7 +1082,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
   },
   loadRoom: async (conversationId, page) => {
     if (!isServerId(conversationId)) return true;
-    if (!page) return syncRoom(conversationId);
+    if (!page?.beforeId && !page?.aroundId) return syncRoom(conversationId, page?.wait === true, page?.signal);
     const owner = useAuthStore.getState().currentUser.id;
     try {
       const params = new URLSearchParams();

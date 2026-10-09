@@ -5,6 +5,7 @@ import { visiblePresence } from './presence.ts';
 import { cleanAvatar, cleanBanner, cleanBio } from './profile.ts';
 import { createRateLimiter, type RateLimiter, type ThrottleState } from './rateLimit.ts';
 import { hashSession, newSessionToken } from './session.ts';
+import { ERASE_OPERATOR_EMAIL, resolveEraseChoices, resolveGroupChoices } from './eraseMember.ts';
 import type { AuthRepository, AuthUser } from './types.ts';
 
 const SESSION_MS = 30 * 24 * 60 * 60 * 1000;
@@ -215,6 +216,56 @@ export async function updateOwnProfile(deps: Deps, input: {
   if (!fresh) return reject(deps, input.ip);
   deps.rateLimit.succeed(input.ip);
   return { ok: true as const, user: publicUser(fresh) };
+}
+
+function ownerEmail(email: string) {
+  return email.toLowerCase() === ERASE_OPERATOR_EMAIL;
+}
+
+function ownerAccount(user: { email: string; googleSub?: string | null }) {
+  return ownerEmail(user.email) && typeof user.googleSub === 'string' && user.googleSub.length > 0 && user.googleSub.length <= 255;
+}
+
+export async function listOwnerMembers(deps: Deps, token: string) {
+  const user = await sessionUser(deps, token);
+  if (!user) return { ok: false as const, error: 'invalid_credentials' as const };
+  if (!ownerAccount(user)) return { ok: false as const, error: 'forbidden' as const };
+  const users = await deps.repo.listUsers();
+  return {
+    ok: true as const,
+    users: users
+      .filter((item) => item.id !== user.id && !ownerEmail(item.email))
+      .map(publicUser),
+    groups: await deps.repo.listOwnerGroups(),
+  };
+}
+
+export async function eraseOwnerMember(deps: Deps, input: { token: string; userId: unknown; choices: unknown }) {
+  const user = await sessionUser(deps, input.token);
+  if (!user) return { ok: false as const, error: 'invalid_credentials' as const };
+  if (!ownerAccount(user)) return { ok: false as const, error: 'forbidden' as const };
+  const choices = resolveEraseChoices(input.choices);
+  if (typeof input.userId !== 'string' || !choices) {
+    return { ok: false as const, error: 'invalid_credentials' as const };
+  }
+  const result = await deps.repo.eraseMember(user.id, input.userId, choices);
+  if (result === 'ok') return { ok: true as const };
+  if (result === 'forbidden') return { ok: false as const, error: 'forbidden' as const };
+  return { ok: false as const, error: 'not_found' as const };
+}
+
+export async function eraseOwnerGroup(deps: Deps, input: { token: string; roomId: unknown; choices: unknown }) {
+  const user = await sessionUser(deps, input.token);
+  if (!user) return { ok: false as const, error: 'invalid_credentials' as const };
+  if (!ownerAccount(user)) return { ok: false as const, error: 'forbidden' as const };
+  const choices = resolveGroupChoices(input.choices);
+  if (typeof input.roomId !== 'string' || !choices) {
+    return { ok: false as const, error: 'invalid_credentials' as const };
+  }
+  const result = await deps.repo.eraseGroup(user.id, input.roomId, choices);
+  if (result === 'ok') return { ok: true as const };
+  if (result === 'forbidden') return { ok: false as const, error: 'forbidden' as const };
+  return { ok: false as const, error: 'not_found' as const };
 }
 
 export async function endSession(deps: Deps, token: string) {

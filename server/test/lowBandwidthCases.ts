@@ -26,6 +26,13 @@ export async function verifyLowBandwidth(repo: AuthRepository) {
   assert.equal(first.reset, true); assert.equal(first.messages.length, 30); assert.equal(first.historyHasMore, true);
   const unchanged = await (await request(`/sync?cursor=${first.cursor}`)).json();
   assert.deepEqual(unchanged.messages, []); assert.deepEqual(unchanged.readers, []); assert.equal(unchanged.reset, false);
+  const liveId = randomUUID();
+  const held = request(`/sync?cursor=${unchanged.cursor}&wait=1`);
+  const posted = await request('/messages', 'POST', { id: liveId, text: 'arrived live' });
+  assert.equal(posted.status, 200);
+  const live = await (await held).json();
+  assert.equal(live.reset, false);
+  assert.equal(live.messages.some((message: { id: string; text: string }) => message.id === liveId && message.text === 'arrived live'), true);
   await repo.changeRoomMessage(roomId, alice.id, ids[0]!, 'old message edited', new Date(now));
   await repo.changeRoomMessage(roomId, alice.id, ids[1]!, null, new Date(now));
   await repo.setReaction({ roomId, userId: bob.id, messageId: ids[2]!, emoji: '👍', at: new Date(now) });

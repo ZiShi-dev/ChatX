@@ -2754,6 +2754,15 @@ ion-header:has(.message-search) {
   justify-content: center;
   min-height: 44px;
   margin-top: 16px;
+  background: transparent;
+  box-shadow: none;
+}
+
+.google-slot > div,
+.google-slot iframe {
+  background: transparent;
+  border: 0;
+  box-shadow: none;
 }
 
 .account-setup {
@@ -5085,6 +5094,61 @@ ion-toolbar.network-toolbar.slow {
 
 .admin-confirm .account-actions button {
   min-height: 44px;
+}
+
+.people-admin .settings-lead {
+  margin: 16px 16px 8px;
+}
+
+.people-admin h2 {
+  margin: 18px 16px 8px;
+  color: var(--chatx-muted);
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.owner-group {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 56px;
+  margin: 0 16px;
+  color: var(--chatx-text);
+}
+
+.owner-group strong {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 16px;
+}
+
+.owner-group .account-delete {
+  width: 44px;
+  height: 44px;
+}
+
+.owner-choices {
+  display: grid;
+  gap: 4px;
+  margin: 12px 0;
+}
+
+.owner-choices label {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 44px;
+  color: var(--chatx-text);
+  font-weight: 700;
+}
+
+.owner-choices input {
+  width: 22px;
+  height: 22px;
+  margin: 0;
 }
 
 ion-toggle {

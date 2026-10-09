@@ -88,12 +88,20 @@ try {
       const headers = clientRequestHeaders(req.headers);
       headers.set('x-chatx-client', proxyClientAddress(req, config.trustProxy));
       headers.set('x-chatx-secure', externalHttps(req, config.trustProxy) ? '1' : '0');
+      const closed = new AbortController();
+      const stop = () => closed.abort();
+      res.on('close', stop);
       const request = new Request(`http://127.0.0.1${req.url ?? '/'}`, {
         method: req.method,
         headers,
         body: !body.length || req.method === 'GET' || req.method === 'HEAD' ? undefined : new Uint8Array(body).buffer,
+        signal: closed.signal,
       });
-      await writeResponse(res, await handle(request), externalHttps(req,config.trustProxy));
+      try {
+        await writeResponse(res, await handle(request), externalHttps(req,config.trustProxy));
+      } finally {
+        res.off('close', stop);
+      }
     } catch {
       if (res.headersSent) return;
       const headers = new Headers();

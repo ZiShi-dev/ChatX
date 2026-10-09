@@ -4,6 +4,7 @@ import type { Deps } from './authService.ts';
 import { hashSession } from './session.ts';
 import type { AuthUser, HomeRoom, RoomMessage, StoredReaction } from './types.ts';
 import { GROUP_TURN_MS, groupTurnNotice } from './groupTurn.ts';
+import { wakeRoom } from './roomLive.ts';
 import { cleanBio, cleanAvatar, cleanBanner } from './profile.ts';
 
 export const GLOBAL_ROOM_ID = '00000000-0000-4000-8000-000000000001';
@@ -175,6 +176,7 @@ async function publishTurnNotices(deps: Deps, userId: string) {
     if (saved === 'missing' || saved === 'invalid') continue;
     posted = true;
     await deps.repo.notifyTurnMembers(saved);
+    wakeRoom(room.id);
   }
   return posted ? deps.repo.listHome(userId, at) : rooms;
 }
@@ -191,7 +193,10 @@ export async function readGroupTurn(deps: Deps, token: string, roomId: string) {
   if (turn.members.length > 1 && await deps.repo.claimTurnNotice(roomId, turn.holderId)) {
     const notice = await deps.repo.addRoomMessage({ id: randomUUID(), roomId, senderId: turn.holderId,
       text: groupTurnNotice(holder.displayName, turn.opensAt, at.getTime()), createdAt: at, deleted: false, event: true });
-    if (notice !== 'missing' && notice !== 'invalid') await deps.repo.notifyTurnMembers(notice);
+    if (notice !== 'missing' && notice !== 'invalid') {
+      await deps.repo.notifyTurnMembers(notice);
+      wakeRoom(roomId);
+    }
   }
   return { ok: true as const, roomId, turnUserId: turn.holderId, turnOpensAt: new Date(turn.opensAt).toISOString(),
     turnExpiresAt: new Date(turn.opensAt + GROUP_TURN_MS).toISOString(), serverTime: at.toISOString(),
@@ -244,6 +249,7 @@ export async function markRoomSeen(deps: Deps, input: { token: string; roomId: s
   if (!ROOM_ID.test(input.roomId) || typeof input.messageId !== 'string' || !ROOM_ID.test(input.messageId)) return { ok: false as const, error: 'not_found' as const };
   const ok = await deps.repo.markRoomRead(input.roomId, user.id, new Date(deps.now()), input.messageId);
   if (!ok) return { ok: false as const, error: 'not_found' as const };
+  wakeRoom(input.roomId);
   const [rooms, unreadNotifications] = await Promise.all([deps.repo.listHome(user.id, new Date(deps.now())), deps.repo.countUnreadNotifications(user.id)]);
   return { ok: true as const, unreadCount: rooms.find((room) => room.id === input.roomId)?.unreadCount ?? 0, unreadNotifications };
 }
@@ -254,7 +260,9 @@ export async function changeMessage(deps: Deps, input: { token: string; roomId: 
   const text = input.deleting ? null : cleanRoomText(input.text);
   if ((!input.deleting && !text) || !ROOM_ID.test(input.roomId) || !ROOM_ID.test(input.messageId)) return { ok: false as const, error: 'invalid_credentials' as const };
   const ok = await deps.repo.changeRoomMessage(input.roomId, user.id, input.messageId, text, new Date(deps.now()));
-  return ok ? { ok: true as const } : { ok: false as const, error: 'not_found' as const };
+  if (!ok) return { ok: false as const, error: 'not_found' as const };
+  wakeRoom(input.roomId);
+  return { ok: true as const };
 }
 
 export async function updateRoomProfile(deps: Deps, input: { token: string; roomId: string; patch: Record<string, unknown> }) {
@@ -299,7 +307,10 @@ export async function updateRoomProfile(deps: Deps, input: { token: string; room
       deleted: false,
       event: true,
     });
-    if (saved !== 'missing' && saved !== 'invalid') await deps.repo.notifyRoomMessage(saved);
+    if (saved !== 'missing' && saved !== 'invalid') {
+      await deps.repo.notifyRoomMessage(saved);
+      wakeRoom(input.roomId);
+    }
   }
   const rooms = await publishTurnNotices(deps, user.id);
   const room = rooms.find((item) => item.id === input.roomId);
@@ -321,6 +332,7 @@ export async function setRoomReaction(deps: Deps, input: { token: string; roomId
     at: new Date(deps.now()),
   });
   if (saved === 'missing') return { ok: false as const, error: 'not_found' as const };
+  wakeRoom(input.roomId);
   return { ok: true as const };
 }
 
@@ -411,6 +423,7 @@ export async function postRoomMessage(deps: Deps, input: { token: string; roomId
   }, image, file);
   if (saved === 'missing') return { ok: false as const, error: 'not_found' as const };
   if (saved === 'invalid') return { ok: false as const, error: 'invalid_credentials' as const };
+  wakeRoom(input.roomId);
   if (!saved.deleted) await deps.repo.notifyRoomMessage(saved);
   return { ok: true as const, message: messageView(saved) };
 }

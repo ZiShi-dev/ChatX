@@ -51,7 +51,7 @@ export class AdminApiError extends Error {
   }
 }
 
-type RequestOptions = { method?: string; body?: unknown; binary?: Uint8Array };
+type RequestOptions = { method?: string; body?: unknown; binary?: Uint8Array; hold?: boolean; signal?: AbortSignal };
 const inFlightReads = new Map<string, Promise<unknown>>();
 export async function adminFetch(path: string, init?: RequestOptions) {
   if ((init?.method ?? 'GET').toUpperCase() !== 'GET') return performFetch(path, init);
@@ -68,10 +68,13 @@ async function performFetch(path: string, init?: RequestOptions) {
   const version = sessionVersion;
   activeRequests.add(controller);
   const started = Date.now();
-  const slowTimer = window.setTimeout(() => reportNetworkFailure(true), 5000);
+  const slowTimer = init?.hold ? undefined : window.setTimeout(() => reportNetworkFailure(true), 5000);
   const onOffline = () => { reportNetworkFailure(); controller.abort(); };
+  const onCallerAbort = () => controller.abort();
+  init?.signal?.addEventListener('abort', onCallerAbort);
+  if (init?.signal?.aborted) controller.abort();
   window.addEventListener('offline', onOffline);
-  const timer = window.setTimeout(() => controller.abort(), 30_000);
+  const timer = window.setTimeout(() => controller.abort(), init?.hold ? 20_000 : 30_000);
   try {
     const method = (init?.method ?? 'GET').toUpperCase();
     const headers = new Headers();
@@ -90,11 +93,11 @@ async function performFetch(path: string, init?: RequestOptions) {
     if (controller.signal.aborted) throw new AdminApiError('offline', 0);
     if (version !== sessionVersion) throw new AdminApiError('account_changed', 0);
     syncServerClock(response.headers.get('date'));
-    if (response.status === 304 && cached) { reportNetworkSuccess(Date.now() - started); return JSON.parse(cached.body) as unknown; }
+    if (response.status === 304 && cached) { reportNetworkSuccess(Date.now() - started, !init?.hold); return JSON.parse(cached.body) as unknown; }
     const body = await response.text();
     let data: unknown = null;
     try { data = JSON.parse(body); } catch { /* Invalid JSON remains unavailable to callers. */ }
-    reportNetworkSuccess(Date.now() - started);
+    reportNetworkSuccess(Date.now() - started, !init?.hold);
     if (!response.ok) {
       const code = data && typeof data === 'object' && 'error' in data && typeof data.error === 'string' ? data.error : 'unavailable';
       throw new AdminApiError(code, response.status, retryAfterMs(response.headers.get('retry-after')));
@@ -104,11 +107,12 @@ async function performFetch(path: string, init?: RequestOptions) {
     if (method === 'GET' && data !== null) rememberResponse(path, response.headers.get('etag'), body);
     return data;
   } catch (error) {
-    if (version === sessionVersion && (!(error instanceof AdminApiError) || error.code === 'offline')) reportNetworkFailure();
+    if (!init?.signal?.aborted && version === sessionVersion && (!(error instanceof AdminApiError) || error.code === 'offline')) reportNetworkFailure();
     if (error instanceof AdminApiError) throw error;
     throw new AdminApiError('offline', 0);
   } finally {
     window.clearTimeout(slowTimer);
+    init?.signal?.removeEventListener('abort', onCallerAbort);
     window.removeEventListener('offline', onOffline);
     window.clearTimeout(timer);
     activeRequests.delete(controller);

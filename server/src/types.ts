@@ -19,6 +19,32 @@ export type ProfilePatch = {
   avatar?: string | null;
 };
 
+export type EraseChoices = {
+  messages: boolean;
+  images: boolean;
+  files: boolean;
+  reactions: boolean;
+  privateChats: boolean;
+  profile: boolean;
+  membership: boolean;
+  account: boolean;
+};
+
+export type GroupEraseChoices = {
+  messages: boolean;
+  images: boolean;
+  files: boolean;
+  reactions: boolean;
+  group: boolean;
+};
+
+export type OwnerAudit = {
+  actorId: string;
+  action: 'member' | 'group';
+  targetId: string;
+  detail: string;
+};
+
 export interface AuthRepository {
   findUserByGoogleSub(sub:string):Promise<AuthUser | null>;
   bindGoogleSub(id:string,sub:string):Promise<boolean>;
@@ -29,6 +55,10 @@ export interface AuthRepository {
   deleteUpload(roomId: string, ownerId: string, id: string): Promise<void>;
   findUserById(id: string): Promise<AuthUser | null>;
   listUsers(): Promise<AuthUser[]>;
+  eraseMember(actorId: string, targetId: string, choices: EraseChoices): Promise<'ok' | 'missing' | 'forbidden'>;
+  listOwnerGroups(): Promise<Array<{ id: string; name: string }>>;
+  eraseGroup(actorId: string, roomId: string, choices: GroupEraseChoices): Promise<'ok' | 'missing' | 'forbidden'>;
+  listOwnerAudit(): Promise<OwnerAudit[]>;
   insertUser(user: AuthUser): Promise<void>;
   renameMember(id: string, displayName: string): Promise<'ok' | 'taken' | 'missing'>;
   updateMemberProfile(id: string, patch: ProfilePatch): Promise<'ok' | 'missing' | 'taken'>;

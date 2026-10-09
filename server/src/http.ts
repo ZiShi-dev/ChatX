@@ -5,6 +5,9 @@ import { createHash } from 'node:crypto';
 import {
   acceptGoogle,
   endSession,
+  eraseOwnerGroup,
+  eraseOwnerMember,
+  listOwnerMembers,
   previewGoogle,
   readOwnProfile,
   readPresence,
@@ -16,6 +19,7 @@ import { messageView, openRoom, postRoomMessage, readHome, readGroupTurn, readRo
 import { keepMessage, readSaved } from './saved.ts';
 import { clearInbox, markInboxRead, readInbox } from './inbox.ts';
 import { clearSessionCookie, hashSession, readCookie, sessionCookie } from './session.ts';
+import { armRoomWatch, LIVE_HOLD_MS } from './roomLive.ts';
 
 const PROFILE_BODY_LIMIT = 280_000;
 const MESSAGE_BODY_LIMIT = 400_000;
@@ -169,7 +173,15 @@ async function route(deps: Deps, request: Request) {
     if (!user || user.role !== 'member') return failure(deps, 'invalid_credentials');
     const cursor = new URL(request.url).searchParams.get('cursor');
     if (cursor && cursor.length > 80) return json({error:'invalid_cursor'}, 400);
-    const result = await deps.repo.readRoomSync(sync[1]!, user.id, cursor);
+    const roomId = sync[1]!;
+    const watch = new URL(request.url).searchParams.get('wait') === '1' ? armRoomWatch(roomId) : null;
+    let result = await deps.repo.readRoomSync(roomId, user.id, cursor);
+    if (!result) { watch?.cancel(); return failure(deps, 'not_found'); }
+    const idle = !result.reset && !result.hasMore && result.messages.length === 0 && result.readers.length === 0 && result.removedIds.length === 0;
+    if (watch && idle) {
+      await watch.wait(LIVE_HOLD_MS, request.signal);
+      if (!request.signal.aborted) result = await deps.repo.readRoomSync(roomId, user.id, cursor) ?? result;
+    } else watch?.cancel();
     if (!result) return failure(deps, 'not_found');
     return json({ ...result, messages: result.messages.map((message) => messageView(message, result.reactions)), reactions: undefined,
       readers: result.readers.map((reader) => ({ ...reader, readAt: reader.readAt.toISOString() })) });
@@ -362,6 +374,29 @@ async function route(deps: Deps, request: Request) {
     });
     if (!result.ok) return failure(deps, result.error);
     return json({ user: result.user });
+  }
+  if (request.method === 'GET' && path === '/api/owner/members') {
+    const result = await listOwnerMembers(deps, readCookie(request.headers.get('cookie'), 'chatx_session'));
+    if (!result.ok) return failure(deps, result.error);
+    return json({ users: result.users, groups: result.groups });
+  }
+  if (request.method === 'POST' && path === '/api/owner/groups/erase') {
+    const result = await eraseOwnerGroup(deps, {
+      token: readCookie(request.headers.get('cookie'), 'chatx_session'),
+      roomId: body.roomId,
+      choices: body,
+    });
+    if (!result.ok) return failure(deps, result.error);
+    return json({ ok: true });
+  }
+  if (request.method === 'POST' && path === '/api/owner/erase') {
+    const result = await eraseOwnerMember(deps, {
+      token: readCookie(request.headers.get('cookie'), 'chatx_session'),
+      userId: body.userId,
+      choices: body,
+    });
+    if (!result.ok) return failure(deps, result.error);
+    return json({ ok: true });
   }
   if (request.method === 'POST' && path === '/api/auth/logout') {
     await endSession(deps, readCookie(request.headers.get('cookie'), 'chatx_session'));

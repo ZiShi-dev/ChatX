@@ -85,7 +85,7 @@ export default function ActivationPage() {
       });
       googleRef.current.replaceChildren();
       window.google.accounts.id.renderButton(googleRef.current, {
-        theme: 'outline',
+        theme: 'filled_black',
         size: 'large',
         shape: 'pill',
         text: 'continue_with',

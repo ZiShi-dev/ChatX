@@ -15,7 +15,6 @@ import GroupHeader from '../components/groups/GroupHeader';
 import UserProfileModal from '../components/users/UserProfileModal';
 import type { User } from '../types/user';
 import { MESSAGE_HIGHLIGHT_DURATION, MESSAGE_PAGE_SIZE, SKELETON_DELAY_MS } from '../constants/chat';
-import { startPolling } from '../lib/poll';
 import { GLOBAL_CHAT_ID } from '../data/conversations';
 import { isServerId, SERVER_GLOBAL_ROOM_ID } from '../lib/home';
 import { catchUpLabel, membersOf, otherParticipant, unreadAbove } from '../lib/conversation';
@@ -23,6 +22,7 @@ import { resolveMessageFocus } from '../lib/inbox';
 import { matchingMessages } from '../lib/messageSearch';
 import { connectionLabel, getUserPresence } from '../lib/presence';
 import { useAuthStore } from '../stores/authStore';
+import { useNetworkStore } from '../stores/networkStore';
 import { useChatStore } from '../stores/chatStore';
 import { useSavedStore } from '../stores/savedStore';
 import { useUserStore } from '../stores/userStore';
@@ -145,20 +145,30 @@ export default function ChatPage() {
 
   useEffect(() => {
     if (!isServerId(id)) return;
-    let alive = true;
-    const stop = startPolling(async () => {
-      const loaded = await useChatStore.getState().loadRoom(id, focusId && isServerId(focusId) ? { aroundId: focusId } : undefined);
-      if (!alive) return;
-      if (loaded || useChatStore.getState().messages.some((message) => message.conversationId === id)) setNotice('');
-    }, {
-      immediate: false,
-      active: () => window.location.pathname === `/chat/${id}` && (Boolean(focusId) || (useChatStore.getState().historyLimit[id] ?? MESSAGE_PAGE_SIZE) <= MESSAGE_PAGE_SIZE),
-    });
-    return () => {
-      alive = false;
-      stop();
+    const control = new AbortController();
+    let stopped = false;
+    let failures = 0;
+    const wait = (ms: number) => new Promise((resolve) => { window.setTimeout(resolve, ms); });
+    const run = async () => {
+      while (!stopped) {
+        const quiet = document.visibilityState === 'hidden' || window.location.pathname !== `/chat/${id}` || useNetworkStore.getState().network === 'offline';
+        if (quiet) {
+          await wait(1_000);
+          continue;
+        }
+        const loaded = await useChatStore.getState().loadRoom(id, { wait: true, signal: control.signal });
+        if (stopped) return;
+        if (loaded || useChatStore.getState().messages.some((message) => message.conversationId === id)) setNotice('');
+        failures = loaded ? 0 : failures + 1;
+        if (failures) await wait(Math.min(8_000, 400 * 2 ** Math.min(failures, 4)));
+      }
     };
-  }, [id, focusId]);
+    void run();
+    return () => {
+      stopped = true;
+      control.abort();
+    };
+  }, [id]);
 
   useEffect(() => {
     cancelEdit();
