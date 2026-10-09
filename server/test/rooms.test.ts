@@ -92,7 +92,7 @@ describe('rooms', () => {
     const kept = await handle(new Request('http://127.0.0.1/api/saved', {
       method: 'POST',
       headers: { ...laylaCookie, 'content-type': 'application/json', 'x-chatx-request': '1' },
-      body: JSON.stringify({ messageId, saved: true }),
+      body: JSON.stringify({ messageId, saved: true, userId: nora.id }),
     }));
     assert.equal(kept.status, 200);
     const saved = await handle(new Request('http://127.0.0.1/api/saved', { headers: laylaCookie }));
@@ -105,6 +105,14 @@ describe('rooms', () => {
     const noraSaved = await handle(new Request('http://127.0.0.1/api/saved', { headers: { cookie: `chatx_session=${noraToken}` } }));
     const noraSavedBody = await noraSaved.json() as { saved: unknown[] };
     assert.equal(noraSavedBody.saved.length, 0);
+    const roomAfterSave = await handle(new Request(`http://127.0.0.1/api/rooms/${opened.conversation.id}/messages`, { headers: noraHeaders }));
+    assert.equal(roomAfterSave.status, 200);
+    const visibleMessages = await roomAfterSave.json() as { messages: Array<Record<string, unknown>> };
+    const visibleMessage = visibleMessages.messages.find((message) => message.id === messageId);
+    assert.ok(visibleMessage);
+    assert.equal('saved' in visibleMessage, false);
+    assert.equal('savedBy' in visibleMessage, false);
+    assert.equal('savedAt' in visibleMessage, false);
     assert.equal(JSON.stringify(savedBody).includes('example'), false);
 
     const dropped = await handle(new Request('http://127.0.0.1/api/saved', {
