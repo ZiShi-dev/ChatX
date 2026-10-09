@@ -33,6 +33,8 @@ import { useAuthStore } from './authStore';
 import { useNetworkStore } from './networkStore';
 import { useSettingsStore } from './settingsStore';
 import { useUserStore } from './userStore';
+import { preserveCurrentTurn, readGroupTurnPayload } from '../lib/groupTurn';
+import { syncServerClock } from '../lib/serverClock';
 
 const PAGE_SIZE = MESSAGE_PAGE_SIZE;
 const readTimers = new Map<string, number[]>();
@@ -78,6 +80,7 @@ type ChatState = {
   flushOutgoing: () => void;
   resetMediaCache: () => void;
   loadHome: () => Promise<'ok' | 'local' | 'offline' | 'invalid'>;
+  loadGroupTurn: (conversationId: string) => Promise<'ok' | 'local' | 'offline' | 'invalid'>;
   loadRoom: (conversationId: string, page?: { beforeId?: string; aroundId?: string }) => Promise<boolean>;
   editingId: string | null;
   replyingTo: { conversationId: string; messageId: string } | null;
@@ -963,6 +966,25 @@ export const useChatStore = create<ChatState>((set, get) => ({
       return offline ? 'offline' : 'invalid';
     }
   },
+  loadGroupTurn: async (conversationId) => {
+    const me = useAuthStore.getState().currentUser.id;
+    if (!isServerId(me) || !isServerId(conversationId)) return 'local';
+    try {
+      if (!get().conversations.some((room) => room.id === conversationId)) await get().loadHome();
+      const turn = readGroupTurnPayload(await adminFetch(`/api/rooms/${conversationId}/turn`), conversationId);
+      if (!turn || me !== useAuthStore.getState().currentUser.id || !useAuthStore.getState().activated) return 'invalid';
+      syncServerClock(turn.serverTime, true);
+      const users = useUserStore.getState();
+      if (users.users.some((user) => user.id === turn.holder.id)) users.updateUser(turn.holder.id, turn.holder);
+      else users.addUser(turn.holder);
+      set((state) => ({ conversations: state.conversations.map((room) => room.id === conversationId
+        ? { ...room, turnUserId: turn.turnUserId, turnOpensAt: turn.turnOpensAt, participantIds: turn.participantIds } : room) }));
+      return 'ok';
+    } catch (error) {
+      const offline = !(error instanceof AdminApiError) || error.code === 'offline' || error.code === 'unavailable';
+      return offline ? 'offline' : 'invalid';
+    }
+  },
   loadHome: async () => {
     const me = useAuthStore.getState().currentUser.id;
     if (!isServerId(me)) return 'local';
@@ -978,7 +1000,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
         } else users.addUser(user);
       }
       set((state) => ({
-        conversations: home.conversations,
+        conversations: home.conversations.map((room) => preserveCurrentTurn(room, state.conversations.find((current) => current.id === room.id))),
         messages: mergeHomeMessages(
           state.messages,
           home.messages,

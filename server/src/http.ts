@@ -9,7 +9,7 @@ import {
   updateOwnProfile,
   type Deps,
 } from './authService.ts';
-import { openRoom, postRoomMessage, readHome, readRoomFile, readRoomImage, readRoomMessages, setRoomReaction, markRoomSeen, changeMessage, updateRoomProfile } from './home.ts';
+import { openRoom, postRoomMessage, readHome, readGroupTurn, readRoomFile, readRoomImage, readRoomMessages, setRoomReaction, markRoomSeen, changeMessage, updateRoomProfile } from './home.ts';
 import { keepMessage, readSaved } from './saved.ts';
 import { clearInbox, markInboxRead, readInbox } from './inbox.ts';
 import { clearSessionCookie, readCookie, sessionCookie } from './session.ts';
@@ -144,7 +144,13 @@ async function route(deps: Deps, request: Request) {
     securityHeaders(headers);
     return new Response(null, { status: 204, headers });
   }
-  if (request.method === 'GET' && path === '/api/health') return json({ ok: true, groupTurnPolicy: 'weekly-v2' });
+  if (request.method === 'GET' && path === '/api/health') return json({ ok: true, groupTurnPolicy: 'weekly-v3-direct' });
+  const groupTurn = path.match(/^\/api\/rooms\/([0-9a-f-]{36})\/turn$/i);
+  if (groupTurn && request.method === 'GET') {
+    const result = await readGroupTurn(deps, readCookie(request.headers.get('cookie'), 'chatx_session'), groupTurn[1]!);
+    if (!result.ok) return failure(deps, result.error);
+    return json(result);
+  }
 
   const body = await readBody(request, requestBodyLimit(path));
   if (!body) return failure(deps, 'invalid_credentials');

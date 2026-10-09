@@ -35,6 +35,10 @@ async function verifyGroupRotation(repo: AuthRepository) {
       assert.equal(await repo.updateRoom(roomId, holder, { name: 'last edit', avatar: null }, new Date(starts + week - 1)), true);
       assert.equal((await read(new Date(starts + week - 1))).turnUserId, holder);
       const concurrent = await Promise.all([read(new Date(starts + week)), read(new Date(starts + week))]);
+      const direct = await Promise.all([repo.readGroupTurn(roomId, people[0].id, new Date(starts + week)), repo.readGroupTurn(roomId, people[0].id, new Date(starts + week))]);
+      assert.equal(direct[0]?.holderId, concurrent[0].turnUserId);
+      assert.equal(direct[1]?.holderId, direct[0]?.holderId);
+      assert.equal(direct[0]?.opensAt, starts + week);
       assert.equal(await repo.updateRoom(roomId, holder, { name: 'expired' }, new Date(starts + week)), false);
       assert.equal(concurrent[0].turnUserId, concurrent[1].turnUserId);
       assert.equal(concurrent[0].turnOpensAt!.getTime(), starts + week);
@@ -43,6 +47,7 @@ async function verifyGroupRotation(repo: AuthRepository) {
     }
     assert.equal(seen.size, people.length);
   }
+  assert.equal(await repo.readGroupTurn(roomId, randomUUID(), now), null);
 }
 async function verify(repo: AuthRepository) {
   const alice = user(randomUUID()); const bob = user(randomUUID()); const outsider = user(randomUUID());

@@ -21,19 +21,22 @@ try {
   page.on('pageerror', (error) => errors.push(error.message));
   await page.route('**/api/**', async (route) => {
     const path = new URL(route.request().url()).pathname;
-    if (path === '/api/home' && mode === 'offline') return route.abort();
+    if (path.endsWith('/turn') && mode === 'offline') return route.abort();
     const room = { id, type: 'global', name: 'ChatX', participantIds: [alice.id, bob.id], unreadCount: 0,
       createdAt: '2026-09-01T12:00:00Z', turnUserId: bob.id,
-      turnOpensAt: mode === 'fresh' ? '2026-10-08T12:00:00Z' : '2026-09-20T12:00:00Z' };
+      turnOpensAt: '2026-09-20T12:00:00Z' };
     let body = { ok: true };
     if (path === '/api/home') body = { conversations: [room], users: [alice, bob] };
+    if (path.endsWith('/turn')) body = { roomId: id, participantIds: [alice.id, bob.id], holder: bob, turnUserId: bob.id,
+      turnOpensAt: mode === 'fresh' ? '2026-10-08T12:00:00Z' : '2026-09-20T12:00:00Z',
+      turnExpiresAt: mode === 'fresh' ? '2026-10-15T12:00:00Z' : '2026-09-27T12:00:00Z', serverTime: '2026-10-09T12:00:00Z' };
     if (path === '/api/profile') body = { user: alice };
     if (path === '/api/notifications') body = { notifications: [], hasMore: false };
     if (path.endsWith('/messages')) body = { messages: [], readers: [], hasMore: false };
     await route.fulfill({ json: body, headers: { date: 'Fri, 09 Oct 2026 12:00:00 GMT' } });
   });
   await page.goto(`${base}/group/${id}/`);
-  await page.getByText('انتهى الدور — لم تصل بيانات الدور الجديد من الخادم', { exact: true }).waitFor();
+  await page.getByText('انتهى الدور — تعذر تحميل بيانات الدور التالي', { exact: true }).waitFor();
   assert.equal(await page.getByText('انتهى الدور — جارٍ تحديث الدور التالي', { exact: true }).count(), 0);
   mode = 'offline';
   await page.getByRole('button', { name: 'إعادة المحاولة', exact: true }).click();

@@ -109,6 +109,11 @@ export function createMemoryRepository(): AuthRepository {
         members.set(memberKey(GLOBAL_ROOM_ID, userId), { roomId: GLOBAL_ROOM_ID, userId, lastReadAt: null, lastReadMessageId: null });
       }
     },
+    async readGroupTurn(roomId, userId, at) {
+      if (!members.has(memberKey(roomId, userId))) return null;
+      const turn = syncTurn(roomId, at.getTime());
+      return turn ? { ...turn, members: [...members.values()].filter((item) => item.roomId === roomId).map((item) => item.userId) } : null;
+    },
     async listHome(userId, at) {
       const mine = [...members.values()].filter((member) => member.userId === userId);
       const home: HomeRoom[] = [];

@@ -206,6 +206,16 @@ describe('group turn', () => {
     clock += GROUP_TURN_MS - 1;
     assert.equal((await patch(holderToken, { name: 'آخر تعديل' })).status, 200);
     clock += 1;
+    const endpoint = `http://127.0.0.1/api/rooms/${group.conversation.id}/turn`;
+    assert.equal((await handle(new Request(endpoint))).status, 401);
+    const direct = await handle(new Request(endpoint, { headers: headers(holderToken) }));
+    assert.equal(direct.status, 200);
+    const directBody = await direct.json() as { turnUserId: string; turnOpensAt: string; turnExpiresAt: string; serverTime: string; holder: { id: string } };
+    assert.notEqual(directBody.turnUserId, holder);
+    assert.equal(directBody.holder.id, directBody.turnUserId);
+    assert.equal(Date.parse(directBody.turnOpensAt), clock);
+    assert.equal(Date.parse(directBody.turnExpiresAt), clock + GROUP_TURN_MS);
+    assert.equal(Date.parse(directBody.serverTime), clock);
     assert.equal((await patch(holderToken, { name: 'انتهى الدور' })).status, 403);
     const refreshed = await handle(new Request('http://127.0.0.1/api/home', { headers: headers(holderToken) }));
     const refreshedBody = await refreshed.json() as { conversations: Array<{ id: string; turnUserId: string }> };

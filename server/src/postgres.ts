@@ -200,6 +200,19 @@ export function createPostgresRepository(pool: pg.Pool): AuthRepository {
         [GLOBAL_ROOM_ID, userId],
       );
     },
+    async readGroupTurn(roomId, userId, at) {
+      const client = await pool.connect();
+      try {
+        await client.query('BEGIN');
+        const membership = await client.query('SELECT 1 FROM room_members WHERE room_id = $1 AND user_id = $2', [roomId, userId]);
+        if (!membership.rowCount) { await client.query('ROLLBACK'); return null; }
+        const turn = await syncTurn(client, roomId, at);
+        const people = await client.query<{ user_id: string }>('SELECT user_id FROM room_members WHERE room_id = $1', [roomId]);
+        await client.query('COMMIT');
+        return turn ? { ...turn, members: people.rows.map((row) => row.user_id) } : null;
+      } catch (error) { await client.query('ROLLBACK'); throw error; }
+      finally { client.release(); }
+    },
     async listHome(userId, at = new Date()) {
       const result = await pool.query<{
         id: string;

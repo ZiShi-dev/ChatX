@@ -19,3 +19,9 @@ L’écran affichait « mise à jour du prochain tour » dès que la date locale
 Le calcul utilise l’en-tête HTTP `Date` du serveur et une horloge monotone du client, y compris lors d’une réponse `304`. L’API expose cet en-tête pour Android. La santé publique annonce `groupTurnPolicy: weekly-v2` pour vérifier le déploiement du système hebdomadaire.
 
 Les tests de navigateur reproduisent une réponse périmée, une coupure puis un rétablissement, avec une horloge de téléphone avancée de plusieurs semaines et une URL terminée par `/`.
+
+## Lecture directe du tour
+
+La page utilise désormais `GET /api/rooms/:id/turn` au lieu de dépendre du rechargement de toutes les conversations. Cette route vérifie l’appartenance au groupe, résout les semaines écoulées sous verrou PostgreSQL et renvoie le titulaire, la fin du tour et le temps utilisé par le serveur. L’annonce du titulaire reste publiée une seule fois.
+
+Une réponse retardée de `/api/home` ne peut plus remplacer un tour plus récent. Le temps explicite de cette route a priorité sur l’en-tête HTTP `Date`, qui peut être fourni par un proxy. Le test de navigateur laisse volontairement `/api/home` périmé et vérifie que la page récupère quand même le nouveau titulaire depuis la route directe. L’indicateur de déploiement est `weekly-v3-direct`.

@@ -31,6 +31,7 @@ export interface AuthRepository {
   listPresence(now: Date): Promise<Array<{ id: string; presence: 'online' | 'away' | null; lastSeenAt: Date | null }>>;
   ensureHome(userId: string): Promise<void>;
   listHome(userId: string, at?: Date): Promise<HomeRoom[]>;
+  readGroupTurn(roomId: string, userId: string, at: Date): Promise<{ holderId: string; opensAt: number; members: string[] } | null>;
   listRoomMessages(roomId: string, userId: string, limit: number, page?: { beforeId?: string; aroundId?: string }): Promise<RoomMessage[] | null>;
   changeRoomMessage(roomId: string, userId: string, messageId: string, text: string | null, at: Date): Promise<boolean>;
   updateRoom(roomId: string, userId: string, patch: { name?: string; bio?: string; avatar?: string | null; banner?: string | null }, at: Date): Promise<boolean>;

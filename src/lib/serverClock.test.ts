@@ -17,3 +17,8 @@ it('ignores missing and invalid server dates', () => {
   syncServerClock(null); syncServerClock('invalid');
   expect(Math.abs(serverNow() - Date.now())).toBeLessThan(100);
 });
+it('does not let a proxy HTTP date override a recent authoritative turn timestamp', () => {
+  syncServerClock('2026-10-09T12:00:00Z', true);
+  syncServerClock('Sun, 01 Nov 2026 12:00:00 GMT');
+  expect(Math.abs(serverNow() - Date.parse('2026-10-09T12:00:00Z'))).toBeLessThan(1000);
+});

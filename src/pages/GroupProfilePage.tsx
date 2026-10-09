@@ -53,9 +53,9 @@ export default function GroupProfilePage() {
   const [tab, setTab] = useState<GroupTab>('members');
   const [now, setNow] = useState(serverNow);
   const [turnRefresh, setTurnRefresh] = useState<TurnRefresh>('loading');
-  const pendingTurn = useRef<ReturnType<ReturnType<typeof useChatStore.getState>['loadHome']> | undefined>(undefined);
+  const pendingTurn = useRef<ReturnType<ReturnType<typeof useChatStore.getState>['loadGroupTurn']> | undefined>(undefined);
   const loadTurn = () => {
-    if (!pendingTurn.current) pendingTurn.current = useChatStore.getState().loadHome().finally(() => { pendingTurn.current = undefined; });
+    if (!pendingTurn.current) pendingTurn.current = useChatStore.getState().loadGroupTurn(id).finally(() => { pendingTurn.current = undefined; });
     return pendingTurn.current;
   };
   const refreshTurn = async () => {

@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 import type { Deps } from './authService.ts';
 import { hashSession } from './session.ts';
 import type { AuthUser, HomeRoom, RoomMessage, StoredReaction } from './types.ts';
-import { groupTurnNotice } from './groupTurn.ts';
+import { GROUP_TURN_MS, groupTurnNotice } from './groupTurn.ts';
 import { cleanBio, cleanAvatar, cleanBanner } from './profile.ts';
 
 export const GLOBAL_ROOM_ID = '00000000-0000-4000-8000-000000000001';
@@ -176,6 +176,25 @@ async function publishTurnNotices(deps: Deps, userId: string) {
     await deps.repo.notifyTurnHolder(saved);
   }
   return posted ? deps.repo.listHome(userId, at) : rooms;
+}
+
+export async function readGroupTurn(deps: Deps, token: string, roomId: string) {
+  const user = await sessionUser(deps, token);
+  if (!user || user.role !== 'member') return { ok: false as const, error: 'invalid_credentials' as const };
+  if (!ROOM_ID.test(roomId)) return { ok: false as const, error: 'not_found' as const };
+  const at = new Date(deps.now());
+  const turn = await deps.repo.readGroupTurn(roomId, user.id, at);
+  if (!turn) return { ok: false as const, error: 'not_found' as const };
+  const holder = await deps.repo.findUserById(turn.holderId);
+  if (!holder) return { ok: false as const, error: 'unavailable' as const };
+  if (turn.members.length > 1 && await deps.repo.claimTurnNotice(roomId, turn.holderId)) {
+    const notice = await deps.repo.addRoomMessage({ id: randomUUID(), roomId, senderId: turn.holderId,
+      text: groupTurnNotice(holder.displayName, turn.opensAt, at.getTime()), createdAt: at, deleted: false, event: true });
+    if (notice !== 'missing' && notice !== 'invalid') await deps.repo.notifyTurnHolder(notice);
+  }
+  return { ok: true as const, roomId, turnUserId: turn.holderId, turnOpensAt: new Date(turn.opensAt).toISOString(),
+    turnExpiresAt: new Date(turn.opensAt + GROUP_TURN_MS).toISOString(), serverTime: at.toISOString(),
+    participantIds: turn.members, holder: memberView(holder) };
 }
 
 export async function readHome(deps: Deps, token: string) {

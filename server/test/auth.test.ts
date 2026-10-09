@@ -25,7 +25,7 @@ describe('API without administration', () => {
     const handle = createApi(testDeps());
     const health = await handle(new Request('http://127.0.0.1/api/health'));
     assert.equal(health.status, 200);
-    assert.equal((await health.json() as { groupTurnPolicy: string }).groupTurnPolicy, 'weekly-v2');
+    assert.equal((await health.json() as { groupTurnPolicy: string }).groupTurnPolicy, 'weekly-v3-direct');
     for (const path of ['/api/admin/auth/login', '/api/admin/users', '/api/admin/invites', '/api/invites/lookup', '/api/invites/login']) {
       const response = await handle(new Request(`http://127.0.0.1${path}`, {
         method: 'POST',
