@@ -5,6 +5,7 @@ import type { TLSSocket } from 'node:tls';
 import { createLimiter } from './authService.ts';
 import { loadConfig } from './config.ts';
 import { createApi } from './http.ts';
+import { clientRequestHeaders } from './requestHeaders.ts';
 import { migrate } from './migrate.ts';
 import { createPool, createPostgresRepository } from './postgres.ts';
 import { loadThrottle, saveThrottle } from './throttle.ts';
@@ -92,14 +93,7 @@ try {
         res.end('{"error":"invalid_credentials"}');
         return;
       }
-      const headers = new Headers();
-      if (req.headers.cookie) headers.set('cookie', req.headers.cookie);
-      if (typeof req.headers.origin === 'string') headers.set('origin', req.headers.origin);
-      const privateNetwork = req.headers['access-control-request-private-network'];
-      if (privateNetwork === 'true') headers.set('access-control-request-private-network', 'true');
-      const contentType = req.headers['content-type'];
-      if (typeof contentType === 'string') headers.set('content-type', contentType);
-      if (req.headers['x-chatx-request'] === '1') headers.set('x-chatx-request', '1');
+      const headers = clientRequestHeaders(req.headers);
       headers.set('x-chatx-client', clientAddress(req, config.trustProxy));
       headers.set('x-chatx-secure', externalHttps(req, config.trustProxy) ? '1' : '0');
       const request = new Request(`http://127.0.0.1${req.url ?? '/'}`, {
