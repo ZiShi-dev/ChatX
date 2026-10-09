@@ -4,6 +4,7 @@ import {
   canLeaveConversation,
   recentConversations,
   catchUpLabel,
+  resumeMessageId,
   unreadAbove,
   unreadDividerLabel,
   unreadOnScreen,
@@ -117,5 +118,12 @@ describe('unread', () => {
     expect(unreadAbove(200, 50, 30)).toBe(20);
     expect(unreadAbove(10, 50, 30)).toBe(0);
     expect(catchUpLabel(200)).toBe('200 رسالة جديدة');
+  });
+
+  it('reopens on the last read message when newer ones follow it', () => {
+    expect(resumeMessageId(['a', 'b', 'c'], 'b', 1)).toBe('b');
+    expect(resumeMessageId(['a', 'b', 'c'], 'c', 0)).toBe('');
+    expect(resumeMessageId(['a', 'b', 'c'], 'c', 1)).toBe('');
+    expect(resumeMessageId(['a', 'b', 'c'], '', 2)).toBe('');
   });
 });

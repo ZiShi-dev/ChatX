@@ -2,7 +2,7 @@ import MediaViewer from './MediaViewer';
 import './MessageMedia.css';
 import { memo, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { IonButton, IonIcon, IonModal } from '@ionic/react';
+import { IonIcon, IonModal } from '@ionic/react';
 import { alertCircleOutline, arrowUndoOutline, arrowUpOutline, atOutline, banOutline, bookmark, bookmarkOutline, checkmarkDoneOutline, checkmarkOutline, closeOutline, copyOutline, createOutline, documentOutline, downloadOutline, informationCircleOutline, peopleOutline, play, timeOutline, trashOutline } from 'ionicons/icons';
 import Avatar from '../common/Avatar';
 import EmojiText from '../common/EmojiText';
@@ -73,12 +73,13 @@ function StatusMark({ message, seen }: { message: Message; seen?: boolean }) {
   );
 }
 
-function LoadRing({ progress, label }: { progress: number; label: string }) {
+function LoadRing({ progress }: { progress: number }) {
+  const shown = Math.min(100, Math.max(0, Math.round(progress)));
   const radius = 20;
   const length = 2 * Math.PI * radius;
-  const offset = length * (1 - Math.min(100, Math.max(0, progress)) / 100);
+  const offset = length * (1 - shown / 100);
   return (
-    <span className="media-ring" aria-label={`بقي ${label}`}>
+    <span className="media-ring" aria-label={`${shown}%`}>
       <svg viewBox="0 0 52 52" aria-hidden="true">
         <circle className="track" cx="26" cy="26" r={radius} />
         <circle
@@ -90,8 +91,7 @@ function LoadRing({ progress, label }: { progress: number; label: string }) {
           strokeDashoffset={offset}
         />
       </svg>
-      <strong>{label}</strong>
-      <small>بقي</small>
+      <strong dir="ltr">{shown}%</strong>
     </span>
   );
 }
@@ -128,18 +128,21 @@ function MediaBlock({ message }: { message: Message }) {
           onClick={() => (ready ? setOpen(true) : downloadMedia(message.id))}
         >
           {playable ? <video className="media-preview" src={poster} muted playsInline preload="metadata" style={ratio ? { aspectRatio: ratio } : undefined} /> : poster ? (
-            <img className={ready ? 'media-preview' : 'media-preview is-held'} src={poster} alt="" style={ratio ? { aspectRatio: ratio } : undefined} />
+            <img className={ready ? 'media-preview' : 'media-preview is-held'} src={poster} alt="" decoding="async" loading="lazy" style={ratio ? { aspectRatio: ratio } : undefined} />
           ) : (
             <span className="media-placeholder" style={ratio ? { aspectRatio: ratio } : undefined} />
           )}
           {(!ready || busy) && (
             <span className="media-fetch">
               {busy ? (
-                <LoadRing progress={progress ?? 0} label={formatBytes(Math.max(0, media.fileSize * (1 - (progress ?? 0) / 100)))} />
+                <LoadRing progress={progress ?? 0} />
               ) : (
                 <IonIcon icon={downloadOutline} />
               )}
-              {!busy && <small>{formatBytes(media.fileSize)}</small>}
+              {!busy && <small dir="ltr">{formatBytes(media.fileSize)}</small>}
+              {busy && media.fileSize > 0 && (progress ?? 0) < 100 && (
+                <small className="media-left" dir="ltr">{formatBytes(Math.max(0, media.fileSize * (1 - (progress ?? 0) / 100)))}</small>
+              )}
             </span>
           )}
           {message.type === 'video' && ready && !busy && (
@@ -159,8 +162,10 @@ function MediaBlock({ message }: { message: Message }) {
   );
 }
 
+const NO_DIRECTORY: User[] = [];
+
 function MessageText({ text, username, onOpenProfile }: { text: string; username: string; onOpenProfile?: (user: User) => void }) {
-  const users = useUserStore((state) => state.users);
+  const users = useUserStore((state) => (text.includes('@') ? state.users : NO_DIRECTORY));
   return (
     <p className="bubble-text">
       {textParts(text).map((part, index) => {
@@ -270,11 +275,18 @@ function AimMark({ tone }: { tone: 'reply' | 'direct' | 'everyone' }) {
 }
 
 function ReplyQuote({ messageId }: { messageId: string }) {
-  const target = useChatStore((state) => state.messages.find((item) => item.id === messageId));
-  const users = useUserStore((state) => state.users);
-  const author = users.find((user) => user.id === target?.senderId);
-  const raw = !target || target.deletedForEveryone ? 'تم حذف هذه الرسالة' : messagePreview(target);
-  const preview = raw.replace(/\s+/g, ' ').trim();
+  const quote = useChatStore((state) => {
+    const target = state.messages.find((item) => item.id === messageId);
+    if (!target) return '';
+    const raw = target.deletedForEveryone ? 'تم حذف هذه الرسالة' : messagePreview(target);
+    return `${target.senderId}\n${raw.replace(/\s+/g, ' ').trim()}`;
+  });
+  const split = quote.indexOf('\n');
+  const senderId = split < 0 ? '' : quote.slice(0, split);
+  const preview = split < 0 ? 'تم حذف هذه الرسالة' : quote.slice(split + 1);
+  const authorName = useUserStore((state) => (
+    senderId ? state.users.find((user) => user.id === senderId)?.displayName ?? 'عضو' : 'عضو'
+  ));
   const [missing, setMissing] = useState(false);
 
   const jump = () => {
@@ -292,7 +304,7 @@ function ReplyQuote({ messageId }: { messageId: string }) {
   return (
     <span className="reply-wrap">
       <button type="button" className="reply-ref" onClick={jump} onPointerDown={(event) => event.stopPropagation()}>
-        <strong>{author?.displayName ?? 'عضو'}</strong>
+        <strong>{authorName}</strong>
         <em><EmojiText text={preview} /></em>
       </button>
       {missing && <span className="reply-missing" role="status">الرسالة الأصلية أقدم من الرسائل المحملة</span>}
@@ -337,12 +349,13 @@ function PersonName({ user, onOpen }: { user: User; onOpen?: (user: User) => voi
 }
 
 function MessageBubble({ message, mine, showAuthor, group = false, direct = false, directSeen = false, seenHere = NO_SEEN_USERS, receiptRows = NO_RECEIPTS, author, spotlight = false, onOpenProfile }: MessageBubbleProps) {
-  const currentUser = useAuthStore((state) => state.currentUser);
-  const username = currentUser.username;
-  const replyParent = useChatStore((state) =>
-    message.replyToId ? state.messages.find((item) => item.id === message.replyToId) : undefined,
-  );
-  const replyToMe = Boolean(replyParent && replyParent.senderId === currentUser.id && message.senderId !== currentUser.id);
+  const currentUserId = useAuthStore((state) => state.currentUser.id);
+  const username = useAuthStore((state) => state.currentUser.username);
+  const replyToMe = useChatStore((state) => {
+    if (!message.replyToId || message.senderId === currentUserId) return false;
+    const parent = state.messages.find((item) => item.id === message.replyToId);
+    return Boolean(parent && parent.senderId === currentUserId);
+  });
   const tone = replyToMe ? 'reply' : message.text ? mentionTone(message.text, username) : null;
   const downloadMedia = useChatStore((state) => state.downloadMedia);
   const retryMessage = useChatStore((state) => state.retryMessage);
@@ -351,14 +364,13 @@ function MessageBubble({ message, mine, showAuthor, group = false, direct = fals
   const beginReply = useChatStore((state) => state.beginReply);
   const deleteForEveryone = useChatStore((state) => state.deleteForEveryone);
   const toggleReaction = useChatStore((state) => state.toggleReaction);
-  const users = useUserStore((state) => state.users);
-  const conversation = useChatStore((state) => state.conversations.find((item) => item.id === message.conversationId));
-  const saved = useSavedStore((state) => state.entries.some((item) => item.userId === currentUser.id && item.messageId === message.id));
-  const toggleSaved = useSavedStore((state) => state.toggle);
-  const mediaSending = (message.type === 'image' || message.type === 'video' || message.type === 'file') && (message.status === 'sending' || message.status === 'pending');
   const [menuOpen, setMenuOpen] = useState(false);
   const [moreOpen, setMoreOpen] = useState(false);
   const [reactionsOpen, setReactionsOpen] = useState(false);
+  const users = useUserStore((state) => (reactionsOpen ? state.users : NO_DIRECTORY));
+  const saved = useSavedStore((state) => state.entries.some((item) => item.userId === currentUserId && item.messageId === message.id));
+  const toggleSaved = useSavedStore((state) => state.toggle);
+  const mediaSending = (message.type === 'image' || message.type === 'video' || message.type === 'file') && (message.status === 'sending' || message.status === 'pending');
   const [infoOpen, setInfoOpen] = useState(false);
   const [seenOpen, setSeenOpen] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -408,7 +420,7 @@ function MessageBubble({ message, mine, showAuthor, group = false, direct = fals
     setMoreOpen(false);
   };
 
-  const mineEmoji = message.reactions?.find((item) => item.userId === currentUser.id)?.emoji;
+  const mineEmoji = message.reactions?.find((item) => item.userId === currentUserId)?.emoji;
   const reactionGroups = groupReactions(message.reactions);
   const reactionTotal = message.reactions?.length ?? 0;
 
@@ -418,9 +430,11 @@ function MessageBubble({ message, mine, showAuthor, group = false, direct = fals
   };
 
   const keepMessage = () => {
+    const conversation = useChatStore.getState().conversations.find((item) => item.id === message.conversationId);
+    const directory = useUserStore.getState().users;
     if (!conversation) return;
-    const senderName = author?.displayName ?? users.find((user) => user.id === message.senderId)?.displayName ?? 'عضو';
-    const entry = toSavedEntry(message, currentUser.id, conversationTitle(conversation, currentUser.id, users), senderName);
+    const senderName = author?.displayName ?? directory.find((user) => user.id === message.senderId)?.displayName ?? 'عضو';
+    const entry = toSavedEntry(message, currentUserId, conversationTitle(conversation, currentUserId, directory), senderName);
     if (entry) toggleSaved(entry);
     setMenuOpen(false);
   };
@@ -675,7 +689,7 @@ function MessageBubble({ message, mine, showAuthor, group = false, direct = fals
         </button>
       )}
       {showAuthor && !mine && author && <PersonButton user={author} onOpen={onOpenProfile} />}
-      <div className={['bubble', tone ? `is-${tone}` : '', message.link ? 'has-link' : '', message.type === 'image' || message.type === 'video' ? 'has-media' : ''].filter(Boolean).join(' ')}>
+      <div className={['bubble', tone ? `is-${tone}` : '', message.link ? 'has-link' : '', message.type === 'image' || message.type === 'video' ? 'has-media' : '', mediaSending ? 'is-sending' : ''].filter(Boolean).join(' ')}>
         {tone && tone !== 'reply' && <AimMark tone={tone} />}
         {showAuthor && !mine && author && <PersonName user={author} onOpen={onOpenProfile} />}
         {message.replyToId && <ReplyQuote messageId={message.replyToId} />}
@@ -718,6 +732,11 @@ function MessageBubble({ message, mine, showAuthor, group = false, direct = fals
           {message.editedAt && <span className="edited-mark">تم التعديل</span>}
           {formatMessageTime(message.createdAt)}
           {mine && !failed && <StatusMark message={message} seen={direct && canSeeReceipts && directSeen} />}
+          {mine && mediaSending && (
+            <button type="button" className="media-cancel" onClick={() => cancelMessage(message.id)}>
+              إلغاء
+            </button>
+          )}
         </span>
         {reactionTotal > 0 && (
           <button
@@ -735,11 +754,6 @@ function MessageBubble({ message, mine, showAuthor, group = false, direct = fals
             ))}
             {reactionTotal > 1 && <small>{reactionTotal}</small>}
           </button>
-        )}
-        {mine && mediaSending && (
-          <IonButton size="small" fill="clear" color="medium" onClick={() => cancelMessage(message.id)}>
-            إلغاء
-          </IonButton>
         )}
       </div>
       </div>
@@ -771,7 +785,7 @@ function MessageBubble({ message, mine, showAuthor, group = false, direct = fals
             <ul className="reaction-people">
               {(message.reactions ?? []).map((item) => {
                 const person = users.find((user) => user.id === item.userId);
-                const own = item.userId === currentUser.id;
+                const own = item.userId === currentUserId;
                 return (
                   <li key={`${item.userId}-${item.emoji}`}>
                     <button

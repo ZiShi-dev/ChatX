@@ -7,7 +7,7 @@ import { InboxWatch } from '../lib/inboxWatch';
 import { notifyChatMessage } from '../lib/notifications';
 import { useAuthStore } from '../stores/authStore';
 import { useChatStore } from '../stores/chatStore';
-import { useMuteStore } from '../stores/muteStore';
+import { quietLevel, useMuteStore } from '../stores/muteStore';
 import { useSettingsStore } from '../stores/settingsStore';
 import { useUserStore } from '../stores/userStore';
 
@@ -17,7 +17,7 @@ function rememberPhoneWatch() {
   if (!Capacitor.isNativePlatform()) return;
   const origin = String(import.meta.env.VITE_API_ORIGIN ?? '').trim().replace(/\/$/, '');
   if (!HTTPS_ORIGIN.test(origin)) return;
-  const quiet = useMuteStore.getState().mutes.map((item) => `${item.conversationId}=${item.level}`).join(',');
+  const quiet = useMuteStore.getState().mutes.map((item) => `${item.conversationId}=${quietLevel(item)}`).join(',');
   const hiddenKinds = Object.entries(useSettingsStore.getState().notifyTypes)
     .filter(([, enabled]) => !enabled)
     .map(([kind]) => kind)
@@ -62,7 +62,7 @@ export function useInboxAlerts() {
           title: item.senderName || sender?.displayName || 'ChatX',
           body: item.preview,
           tag: item.id,
-          mention: item.kind === 'everyone' ? 'everyone' : item.kind === 'mention' || item.kind === 'reply' ? true : undefined,
+          mention: item.kind,
         });
       });
     };

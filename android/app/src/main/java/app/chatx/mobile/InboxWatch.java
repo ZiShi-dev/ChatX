@@ -68,6 +68,10 @@ final class InboxWatch {
         if ("none".equals(level)) return true;
         if ("mentions".equals(level)) return !"mention".equals(kind) && !"reply".equals(kind);
         if ("everyone".equals(level)) return !"everyone".equals(kind) && !"mention".equals(kind);
+        if (level.startsWith("off:")) {
+            String blocked = "." + level.substring(4) + ".";
+            return kind != null && blocked.contains("." + kind + ".");
+        }
         return false;
     }
 

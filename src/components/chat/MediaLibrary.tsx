@@ -1,6 +1,7 @@
 import { useMemo, useState, type ReactNode } from 'react';
 import { IonIcon } from '@ionic/react';
 import { imageOutline, linkOutline, play, videocamOutline } from 'ionicons/icons';
+import { useNavigate } from 'react-router-dom';
 import { firstUrl, siteHost } from '../../lib/link';
 import { formatDuration } from '../../lib/media';
 import { isSafeExternalUrl } from '../../lib/url';
@@ -29,17 +30,19 @@ type MediaPanelProps = {
 };
 
 export function MediaPanel({ conversationId, kind, scope }: MediaPanelProps) {
+  const navigate = useNavigate();
   const messages = useChatStore((state) => state.messages);
   const media = useMemo(() => collectMedia(messages, conversationId), [conversationId, messages]);
+  const openMessage = (messageId: string) => navigate(`/chat/${conversationId}?at=${messageId}`);
 
   if (kind === 'photos') {
     if (media.photos.length === 0) return <p className="group-empty">لا توجد صور في هذه {scope}.</p>;
     return (
       <div className="group-photo-grid">
         {media.photos.map((message) => (
-          <div key={message.id} className="group-tile">
+          <button key={message.id} type="button" className="group-tile" aria-label="فتح الصورة في المحادثة" onClick={() => openMessage(message.id)}>
             {message.media?.localPreviewUrl ? <img src={message.media.localPreviewUrl} alt="" /> : <IonIcon icon={imageOutline} />}
-          </div>
+          </button>
         ))}
       </div>
     );
@@ -50,13 +53,13 @@ export function MediaPanel({ conversationId, kind, scope }: MediaPanelProps) {
     return (
       <div className="group-photo-grid">
         {media.videos.map((message) => (
-          <div key={message.id} className="group-tile">
+          <button key={message.id} type="button" className="group-tile" aria-label="فتح الفيديو في المحادثة" onClick={() => openMessage(message.id)}>
             {message.media?.localPreviewUrl ? <img src={message.media.localPreviewUrl} alt="" /> : <IonIcon icon={videocamOutline} />}
             <span className="group-tile-play">
               <IonIcon icon={play} />
             </span>
             {typeof message.media?.duration === 'number' && <time>{formatDuration(message.media.duration)}</time>}
-          </div>
+          </button>
         ))}
       </div>
     );

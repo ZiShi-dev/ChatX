@@ -50,9 +50,54 @@ describe('group inbox', () => {
     expect(inboxKind(messages[0], messages, 'me', 'mrerreur')).toBeNull();
   });
 
+  it('notifies you once when someone reacts to your message', () => {
+    const mine = message({
+      id: 'mine',
+      senderId: 'me',
+      conversationId: 'c-equipe',
+      createdAt: '2026-10-08T09:00:00.000Z',
+      text: 'أبدأ',
+      reactions: [{ emoji: '👍', userId: 'me' }, { emoji: '❤️', userId: 'amina' }],
+    });
+    const items = groupNotifications([{ ...group, unreadCount: 0 }], [mine], 'me', 'mrerreur');
+    expect(items).toEqual([expect.objectContaining({
+      id: 'mine',
+      senderId: 'amina',
+      kind: 'reaction',
+      preview: '❤️',
+      unread: true,
+      unreadCount: 1,
+    })]);
+    const read = groupNotifications([{ ...group, unreadCount: 0 }], [mine], 'me', 'mrerreur', [], null, new Set(['mine']));
+    expect(read[0]?.unread).toBe(false);
+    expect(read[0]?.unreadCount).toBe(0);
+    const muted = groupNotifications([{ ...group, unreadCount: 0 }], [mine], 'me', 'mrerreur', [], null, [], { ...DEFAULT_NOTIFY_TYPES, reaction: false });
+    expect(muted[0]?.suppressed).toBe(true);
+  });
+
+  it('ignores your own reaction and a reaction on someone else\'s message', () => {
+    const own = message({ id: 'own', senderId: 'me', conversationId: 'c-equipe', reactions: [{ emoji: '👍', userId: 'me' }] });
+    const theirs = message({ id: 'theirs', senderId: 'amina', conversationId: 'c-equipe', createdAt: '2026-10-08T10:00:00.000Z', reactions: [{ emoji: '😂', userId: 'lucas' }] });
+    const items = groupNotifications([{ ...group, unreadCount: 0 }], [own, theirs], 'me', 'mrerreur');
+    expect(items.some((item) => item.kind === 'reaction')).toBe(false);
+  });
+
   it('hides notifications that arrived before the inbox was cleared', () => {
     const items = groupNotifications([group], messages, 'me', 'mrerreur', [], '2026-10-08T11:30:00.000Z');
     expect(items.map((item) => item.id)).toEqual(['plain', 'reply']);
+  });
+
+  it('mutes one kind without silencing the others', () => {
+    const items = groupNotifications(
+      [group],
+      messages,
+      'me',
+      'mrerreur',
+      [{ conversationId: 'c-equipe', level: 'custom', off: ['message', 'signal'] }],
+    );
+    expect(items.find((item) => item.kind === 'message')?.suppressed).toBe(true);
+    expect(items.find((item) => item.kind === 'mention')?.suppressed).toBe(false);
+    expect(items.find((item) => item.kind === 'reply')?.suppressed).toBe(false);
   });
 
   it('keeps replies visible when the room only allows mentions and replies', () => {

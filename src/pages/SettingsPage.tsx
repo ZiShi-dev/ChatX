@@ -1,7 +1,9 @@
+import { useRef, useState } from 'react';
 import { IonContent, IonHeader, IonPage, IonToggle } from '@ionic/react';
 import NetworkStatusBanner from '../components/common/NetworkBanner';
 import NotificationPermissionCard from '../components/common/NotificationPermission';
 import PageNav from '../components/common/PageNav';
+import { APPEARANCE_PRESETS, DEFAULT_LOGO, logoFromFile, wallpaperFromFile } from '../lib/appearance';
 import { notificationPresentation, type InboxKind } from '../lib/inbox';
 import { formatBytes } from '../lib/media';
 import { useChatStore } from '../stores/chatStore';
@@ -21,6 +23,141 @@ const videoChoices: Array<{ value: VideoQuality; label: string; hint: string }> 
 ];
 
 type SettingsPageProps = { embedded?: boolean };
+
+function AppearanceSettings() {
+  const appearance = useSettingsStore((state) => state.appearance);
+  const setAppearance = useSettingsStore((state) => state.setAppearance);
+  const resetAppearance = useSettingsStore((state) => state.resetAppearance);
+  const logoRef = useRef<HTMLInputElement>(null);
+  const wallpaperRef = useRef<HTMLInputElement>(null);
+  const [logoError, setLogoError] = useState('');
+  const [wallpaperError, setWallpaperError] = useState('');
+  const opacity = Math.round(appearance.wallpaperOpacity * 100);
+
+  return (
+    <section className="settings-block">
+      <h2>المظهر</h2>
+      <p className="settings-lead">يبقى على هذا الجهاز فقط. لون الكتابة يتبع إضاءة الخلفية.</p>
+      <article className="setting-card column">
+        <strong>اسم التطبيق</strong>
+        <input
+          className="look-name"
+          dir="auto"
+          maxLength={24}
+          value={appearance.name}
+          aria-label="اسم التطبيق"
+          placeholder="ChatX"
+          onChange={(event) => setAppearance({ name: event.target.value })}
+        />
+        <div className="look-logo">
+          <img src={appearance.logo || DEFAULT_LOGO} alt="" width="48" height="48" decoding="async" />
+          <div className="look-actions">
+            <button type="button" onClick={() => logoRef.current?.click()}>تغيير الشعار</button>
+            {appearance.logo ? <button type="button" onClick={() => { setLogoError(''); setAppearance({ logo: '' }); }}>إزالة الشعار</button> : null}
+          </div>
+          <input
+            ref={logoRef}
+            type="file"
+            accept="image/*"
+            hidden
+            aria-label="اختيار الشعار"
+            onChange={(event) => {
+              const file = event.target.files?.[0];
+              event.target.value = '';
+              if (!file) return;
+              void logoFromFile(file).then(
+                (logo) => {
+                  setLogoError('');
+                  setAppearance({ logo });
+                },
+                () => setLogoError('تعذر استخدام هذه الصورة. اختر صورة أصغر.'),
+              );
+            }}
+          />
+        </div>
+        {logoError ? <p className="form-error">{logoError}</p> : null}
+      </article>
+      <article className="setting-card column">
+        <strong>صورة الخلفية</strong>
+        <div className="look-preview">
+          {appearance.wallpaper
+            ? <img src={appearance.wallpaper} alt="" decoding="async" style={{ opacity: appearance.wallpaperOpacity }} />
+            : <span>بدون صورة</span>}
+        </div>
+        <div className="look-actions">
+          <button type="button" onClick={() => wallpaperRef.current?.click()}>{appearance.wallpaper ? 'تغيير الصورة' : 'اختيار صورة'}</button>
+          {appearance.wallpaper ? <button type="button" onClick={() => { setWallpaperError(''); setAppearance({ wallpaper: '' }); }}>إزالة الصورة</button> : null}
+          <input
+            ref={wallpaperRef}
+            type="file"
+            accept="image/*"
+            hidden
+            aria-label="اختيار صورة الخلفية"
+            onChange={(event) => {
+              const file = event.target.files?.[0];
+              event.target.value = '';
+              if (!file) return;
+              void wallpaperFromFile(file).then(
+                (wallpaper) => {
+                  setWallpaperError('');
+                  setAppearance({ wallpaper });
+                },
+                () => setWallpaperError('تعذر استخدام هذه الصورة. اختر صورة أصغر.'),
+              );
+            }}
+          />
+        </div>
+        {appearance.wallpaper ? (
+          <label className="look-opacity">
+            <span>الشفافية <b dir="ltr">{opacity}%</b></span>
+            <input
+              type="range"
+              min={15}
+              max={80}
+              step={5}
+              value={opacity}
+              aria-label="شفافية الخلفية"
+              onChange={(event) => setAppearance({ wallpaperOpacity: Number(event.target.value) / 100 })}
+            />
+          </label>
+        ) : null}
+        {wallpaperError ? <p className="form-error">{wallpaperError}</p> : null}
+      </article>
+      <article className="setting-card column">
+        <strong>الألوان</strong>
+        <div className="setting-choices look-presets" role="radiogroup" aria-label="أنماط جاهزة">
+          {APPEARANCE_PRESETS.map((preset) => {
+            const selected = appearance.accent === preset.look.accent && appearance.bg === preset.look.bg && appearance.frame === preset.look.frame;
+            return (
+              <button
+                key={preset.id}
+                type="button"
+                role="radio"
+                dir="auto"
+                aria-checked={selected}
+                className={selected ? 'is-on' : ''}
+                onClick={() => setAppearance(preset.look)}
+              >
+                <span className="look-swatch" style={{ background: preset.look.bg, borderColor: preset.look.frame }}>
+                  <span style={{ background: preset.look.accent }} />
+                </span>
+                {preset.label}
+              </button>
+            );
+          })}
+        </div>
+        <div className="look-colors">
+          <label className="look-color">التمييز <span className="look-chip" style={{ background: appearance.accent }}><input type="color" aria-label="لون التمييز" value={appearance.accent} onChange={(event) => setAppearance({ accent: event.target.value })} /></span></label>
+          <label className="look-color">الخلفية <span className="look-chip" style={{ background: appearance.bg }}><input type="color" aria-label="لون الخلفية" value={appearance.bg} onChange={(event) => setAppearance({ bg: event.target.value, surface: event.target.value })} /></span></label>
+          <label className="look-color">الإطار <span className="look-chip" style={{ background: appearance.frame }}><input type="color" aria-label="لون الإطار" value={appearance.frame} onChange={(event) => setAppearance({ frame: event.target.value })} /></span></label>
+        </div>
+        <button type="button" className="storage-clear" onClick={() => { setLogoError(''); setWallpaperError(''); resetAppearance(); }}>
+          استعادة المظهر
+        </button>
+      </article>
+    </section>
+  );
+}
 
 export default function SettingsPage({ embedded = false }: SettingsPageProps) {
   const dataSaver = useSettingsStore((state) => state.dataSaver);
@@ -49,8 +186,26 @@ export default function SettingsPage({ embedded = false }: SettingsPageProps) {
   const imageHint = imageChoices.find((choice) => choice.value === imageQuality)?.hint;
   const videoHint = videoChoices.find((choice) => choice.value === videoQuality)?.hint;
 
+  const showTyping = useSettingsStore((state) => state.showTyping);
+  const setShowTyping = useSettingsStore((state) => state.setShowTyping);
+
   const body = (
     <>
+        <AppearanceSettings />
+        <section className="settings-block">
+          <h2>الخصوصية</h2>
+          <article className="setting-card">
+            <div>
+              <strong>أظهر عندما أكتب</strong>
+              <p>لتمكين/تعطيل إعداد «العرض أثناء الكتابة»، انتقل إلى إعدادات التطبيق ← الخصوصية ← تمكين/تعطيل إعداد «العرض أثناء الكتابة».</p>
+            </div>
+            <IonToggle
+              checked={showTyping}
+              aria-label="العرض أثناء الكتابة"
+              onIonChange={(event) => setShowTyping(event.detail.checked)}
+            />
+          </article>
+        </section>
         <section className="settings-block">
           <h2>الإشعارات</h2>
           <p className="settings-lead">نفس الإذن لأندرويد، سواء كانت الرسالة في مجموعة أو في محادثة خاصة.</p>

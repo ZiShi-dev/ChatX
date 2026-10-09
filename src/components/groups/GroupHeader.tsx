@@ -7,8 +7,8 @@ type GroupHeaderProps = {
 export default function GroupHeader({ title, subtitle, online }: GroupHeaderProps) {
   return (
     <div className="chat-heading">
-      <strong>{title}</strong>
-      <span className={online ? 'online' : undefined}>{subtitle}</span>
+      <strong dir="auto">{title}</strong>
+      <span dir="auto" className={online ? 'online' : undefined}>{subtitle}</span>
     </div>
   );
 }

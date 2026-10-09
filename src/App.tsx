@@ -59,6 +59,11 @@ function NativeChrome() {
         })
       : Promise.resolve({ remove: async () => undefined });
     const listener = CapApp.addListener('backButton', () => {
+      const scrim = document.querySelector('.app-scrim');
+      if (scrim instanceof HTMLElement) {
+        scrim.click();
+        return;
+      }
       const path = window.location.pathname;
       if (path === '/home' || path === '/activation') {
         void CapApp.exitApp();
@@ -115,6 +120,7 @@ function AppRoutes() {
 const App: React.FC = () => (
   <AppErrorBoundary>
     <IonApp>
+      <div className="app-wallpaper" aria-hidden="true" />
       <StartupScreen><AppRoutes /></StartupScreen>
     </IonApp>
   </AppErrorBoundary>

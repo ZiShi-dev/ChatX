@@ -2,7 +2,7 @@ import { MAX_NOTIFICATION_PREVIEW_LENGTH, MESSAGE_PAGE_SIZE, NOTIFICATION_GROUP_
 import { unreadStart } from './conversation';
 import { messagePreview } from './media';
 import { mentionTone } from './mention';
-import { notifyLevel, type ChatMute, type NotifyLevel } from '../stores/muteStore';
+import { roomAllows, type ChatMute } from '../stores/muteStore';
 import type { Conversation } from '../types/conversation';
 import type { Message } from '../types/message';
 
@@ -60,6 +60,18 @@ export function formatInboxBadge(count: number) {
   return String(count);
 }
 
+/** Dernière réaction d'une autre personne sur un message à moi. Une seule notice par message. */
+export function reactionNotice(message: Message, userId: string) {
+  if (message.senderId !== userId || message.deletedForEveryone) return undefined;
+  const list = message.reactions;
+  if (!list?.length) return undefined;
+  for (let index = list.length - 1; index >= 0; index -= 1) {
+    const item = list[index];
+    if (item && item.userId !== userId && item.emoji) return item;
+  }
+  return undefined;
+}
+
 export function inboxKind(message: Message, messages: Message[], userId: string, username: string): InboxKind | null {
   if (message.senderId === userId || message.deletedForEveryone) return null;
   const tone = mentionTone(message.text ?? '', username);
@@ -73,11 +85,8 @@ export function inboxKind(message: Message, messages: Message[], userId: string,
   return 'message';
 }
 
-function roomSuppressed(level: NotifyLevel, kind: InboxKind) {
-  if (level === 'none') return true;
-  if (level === 'mentions') return kind !== 'mention' && kind !== 'reply';
-  if (level === 'everyone') return kind !== 'everyone' && kind !== 'mention';
-  return false;
+function roomSuppressed(mutes: ChatMute[], conversationId: string, kind: InboxKind) {
+  return !roomAllows(mutes, conversationId, kind);
 }
 
 export function resolveMessageFocus(messages: Message[], conversationId: string, messageId: string, limit = MESSAGE_PAGE_SIZE) {
@@ -133,24 +142,41 @@ export function groupNotifications(
       .filter((message) => message.conversationId === conversation.id && !message.deletedForEveryone)
       .sort((a, b) => a.createdAt.localeCompare(b.createdAt));
     const unreadFrom = unreadStart(room.length, conversation.unreadCount);
-    const level = notifyLevel(mutes, conversation.id);
     room.forEach((message, index) => {
       if (clearedAt && message.createdAt <= clearedAt) return;
       const kind = inboxKind(message, messages, userId, username);
-      if (!kind) return;
-      const inWindow = unreadFrom >= 0 && index >= unreadFrom;
+      if (kind) {
+        const inWindow = unreadFrom >= 0 && index >= unreadFrom;
+        const unread = inWindow && !read.has(message.id);
+        items.push({
+          id: message.id,
+          ids: [message.id],
+          count: 1,
+          conversationId: conversation.id,
+          senderId: message.senderId,
+          kind,
+          createdAt: message.createdAt,
+          preview: notificationPreview(messagePreview(message)),
+          unread,
+          unreadCount: unread ? 1 : 0,
+          suppressed: roomSuppressed(mutes, conversation.id, kind) || typePrefs[kind] === false,
+        });
+      }
+      const actor = reactionNotice(message, userId);
+      if (!actor) return;
+      const unread = !read.has(message.id);
       items.push({
         id: message.id,
         ids: [message.id],
         count: 1,
         conversationId: conversation.id,
-        senderId: message.senderId,
-        kind,
+        senderId: actor.userId,
+        kind: 'reaction',
         createdAt: message.createdAt,
-        preview: notificationPreview(messagePreview(message)),
-        unread: inWindow && !read.has(message.id),
-        unreadCount: inWindow && !read.has(message.id) ? 1 : 0,
-        suppressed: roomSuppressed(level, kind) || typePrefs[kind] === false,
+        preview: actor.emoji,
+        unread,
+        unreadCount: unread ? 1 : 0,
+        suppressed: roomSuppressed(mutes, conversation.id, 'reaction') || typePrefs.reaction === false,
       });
     });
   });
@@ -211,7 +237,7 @@ export function unseenInboxAlerts(known: ReadonlySet<string>, items: InboxItem[]
 export function presentInbox(items: InboxItem[], mutes: ChatMute[] = [], typePrefs: NotifyTypePrefs = DEFAULT_NOTIFY_TYPES) {
   const decorated = items.map((item) => ({
     ...item,
-    suppressed: roomSuppressed(notifyLevel(mutes, item.conversationId), item.kind) || typePrefs[item.kind] === false,
+    suppressed: roomSuppressed(mutes, item.conversationId, item.kind) || typePrefs[item.kind] === false,
   }));
   return collapse(decorated.sort((a, b) => b.createdAt.localeCompare(a.createdAt)));
 }

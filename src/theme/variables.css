@@ -40,12 +40,36 @@
   --chatx-accent: #3d9b84;
   --chatx-danger: #c4524a;
   --chatx-border: #2a3833;
+  --chatx-frame: #31403a;
+  --chatx-raised: #17211e;
+  --chatx-soft: #24312c;
+  --chatx-on-soft: #f4fbf8;
+  --chatx-wash: #21483d;
+  --chatx-accent-soft: #8fd1be;
+  --chatx-mine: #14685a;
+  --chatx-on-accent: #f4fbf8;
+  --chatx-ink-surface: #f4fbf8;
+  --chatx-ink-raised: #f4fbf8;
+  --chatx-on-mine: #f4fbf8;
+  --chatx-muted-surface: #8ea099;
+  --chatx-muted-raised: #8ea099;
+  --chatx-muted-mine: #b7c3be;
+  --ion-safe-area-top: var(--safe-area-inset-top, env(safe-area-inset-top, 0px));
+  --ion-safe-area-right: var(--safe-area-inset-right, env(safe-area-inset-right, 0px));
+  --ion-safe-area-bottom: var(--safe-area-inset-bottom, env(safe-area-inset-bottom, 0px));
+  --chatx-nav-bottom: calc(var(--ion-safe-area-bottom, 0px) + var(--chatx-gesture-extra, 0px));
+  --ion-safe-area-left: var(--safe-area-inset-left, env(safe-area-inset-left, 0px));
   --ion-font-family: "Segoe UI", system-ui, sans-serif;
   color-scheme: dark;
 }
 
 body {
-  background: #0c100f;
+  background: var(--chatx-bg);
+}
+
+ion-app {
+  padding-bottom: var(--chatx-nav-bottom, var(--ion-safe-area-bottom, 0px));
+  color: var(--chatx-text);
 }
 
 ion-content::part(scroll) {

@@ -6,8 +6,8 @@
   z-index: 10000;
   display: grid;
   place-items: center;
-  background: #101614;
-  padding: env(safe-area-inset-top) 24px env(safe-area-inset-bottom);
+  background: var(--chatx-bg);
+  padding: var(--ion-safe-area-top, env(safe-area-inset-top, 0px)) 24px var(--chatx-nav-bottom, var(--ion-safe-area-bottom, 0px));
   animation: startup-exit 200ms ease-out 900ms both;
 }
 
@@ -23,13 +23,16 @@
   width: 128px;
   height: 128px;
   border-radius: 30px;
+  object-fit: cover;
   animation: startup-logo-in 650ms cubic-bezier(.2, .8, .2, 1) both;
 }
 
 .startup-name {
-  color: #e7eeea;
+  max-width: min(320px, 100%);
+  color: var(--chatx-text);
   font: 700 28px/1.2 var(--ion-font-family, system-ui, sans-serif);
-  letter-spacing: 1px;
+  text-align: center;
+  overflow-wrap: anywhere;
   animation: startup-name-in 400ms ease-out 180ms both;
 }
 

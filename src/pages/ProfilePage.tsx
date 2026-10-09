@@ -125,13 +125,28 @@ export default function ProfilePage({ embedded = false, onShowSettings }: Profil
           />
           <h1>{currentUser.displayName}</h1>
           <p className="profile-handle" dir="auto">@{currentUser.username}</p>
-          {currentUser.bio ? <p className="group-bio" dir="auto">{currentUser.bio}</p> : null}
           {saveError ? <p className="form-error">{saveError}</p> : null}
-          <p className="profile-status">
-            <i className={getUserPresence(currentUser.id, [currentUser]) === 'online' ? 'on' : ''} />
-            {connectionLabel(currentUser, { self: true })}
-            {roleLabel(currentUser.role) && <span className="kind-pill">{roleLabel(currentUser.role)}</span>}
-          </p>
+        </section>
+        <dl className="account-facts">
+          <div>
+            <dt>الدور</dt>
+            <dd>{roleLabel(currentUser.role) || 'عضو'}</dd>
+          </div>
+          <div>
+            <dt>الحالة</dt>
+            <dd className="profile-status">
+              <i className={getUserPresence(currentUser.id, [currentUser]) === 'online' ? 'on' : ''} />
+              {connectionLabel(currentUser, { self: true })}
+            </dd>
+          </div>
+        </dl>
+        <section className="profile-bio">
+          <span>النبذة</span>
+          {currentUser.bio ? (
+            <p dir="auto">{currentUser.bio}</p>
+          ) : (
+            <button type="button" className="group-bio-add" onClick={openEditor}>أضف نبذة</button>
+          )}
         </section>
         <section className="profile-actions">
           <button type="button" onClick={openEditor}>

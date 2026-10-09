@@ -40,7 +40,7 @@ export default function PageNav({ title, fallback, action, sub = false, quiet = 
               <IonIcon icon={chevronForwardOutline} />
             </button>
           )}
-          {typeof title === 'string' ? <strong>{title}</strong> : title}
+          {typeof title === 'string' ? <strong dir="auto">{title}</strong> : title}
         </div>
         {action}
       </div>

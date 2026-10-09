@@ -73,6 +73,7 @@ export default function GroupMembersPage() {
       <UserProfileModal
         user={selected}
         isSelf={selected?.id === currentUser.id}
+        room={conversation && conversation.type !== 'private' ? { name: conversation.name ?? 'مجموعة', adminId: conversation.adminId } : undefined}
         onClose={() => setSelected(undefined)}
         onMessage={messageUser}
       />

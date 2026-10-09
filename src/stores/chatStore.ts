@@ -10,7 +10,7 @@ import { SEED_READ_CURSORS, SEED_READ_TIMES } from '../data/readCursors';
 import { applyReaction } from '../lib/reactions';
 import { advanceCursor, noteReadTime, type ReadCursors, type ReadTimes } from '../lib/readReceipts';
 import { isServerId, mergeHomeMessages, readHomePayload, readOpenedRoom, readRoomMessages, readRoomReaders, readUpdatedRoom, SERVER_GLOBAL_ROOM_ID } from '../lib/home';
-import { readInboxPayload, readInboxUnread } from '../lib/inbox';
+import { reactionNotice, readInboxPayload, readInboxUnread } from '../lib/inbox';
 import type { InboxItem } from '../lib/inbox';
 import { firstUrl, linkDraft, siteHost } from '../lib/link';
 import { AdminApiError, adminFetch, adminFetchBlob, invalidateApiSession } from '../lib/adminApi';
@@ -26,6 +26,18 @@ import type { Conversation } from '../types/conversation';
 import type { User } from '../types/user';
 import type { Message, MessageStatus } from '../types/message';
 import type { ImageQuality, VideoQuality } from '../types/settings';
+
+function noticedReactions(readIds: string[], messages: Message[], userId: string) {
+  const known = new Set(readIds);
+  let next: string[] | undefined;
+  for (const message of messages) {
+    if (!reactionNotice(message, userId) || known.has(message.id)) continue;
+    next ??= readIds.slice();
+    next.push(message.id);
+    known.add(message.id);
+  }
+  return next ?? readIds;
+}
 
 type PickedFile = {
   fileName: string;
@@ -790,15 +802,21 @@ export const useChatStore = create<ChatState>((set, get) => ({
       catch { set({ lastError: 'تعذر حفظ القراءة على الجهاز. حاول مجددًا.' }); return; }
     }
     inboxReadVersion++;
-    set((state) => ({
-      serverInbox: state.serverInbox.map((item) => ({ ...item, unread: false, unreadCount: 0 })),
-      serverUnread: 0,
-      conversations: state.conversations.map((conversation) =>
-        isServerId(useAuthStore.getState().currentUser.id) || conversation.type === 'private' || conversation.unreadCount === 0
-          ? conversation
-          : { ...conversation, unreadCount: 0 },
-      ),
-    }));
+    set((state) => {
+      const inboxReadIds = isServerId(owner)
+        ? state.inboxReadIds
+        : noticedReactions(state.inboxReadIds, state.messages, owner);
+      return {
+        inboxReadIds,
+        serverInbox: state.serverInbox.map((item) => ({ ...item, unread: false, unreadCount: 0 })),
+        serverUnread: 0,
+        conversations: state.conversations.map((conversation) =>
+          isServerId(owner) || conversation.type === 'private' || conversation.unreadCount === 0
+            ? conversation
+            : { ...conversation, unreadCount: 0 },
+        ),
+      };
+    });
     if (isServerId(owner)) { cacheInbox(owner, get().serverInbox, get().serverUnread); void syncPendingReadWrites(); }
   },
   markNotificationsRead: (ids) => {

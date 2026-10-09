@@ -130,6 +130,13 @@ export function unreadOnScreen(unread: number, total: number, visible: number) {
   return Math.max(0, total - Math.max(firstUnread, firstVisible));
 }
 
+export function resumeMessageId(messageIds: string[], cursorId: string, unread: number) {
+  if (unread <= 0 || !cursorId) return '';
+  const index = messageIds.indexOf(cursorId);
+  if (index < 0 || index >= messageIds.length - 1) return '';
+  return cursorId;
+}
+
 export function catchUpLabel(count: number) {
   if (count <= 0) return '';
   if (count === 1) return 'رسالة جديدة';

@@ -31,6 +31,7 @@ import { formatInboxBadge, groupNotifications, inboxBadgeCount } from '../lib/in
 import { connectionLabel, getUserPresence } from '../lib/presence';
 import { isServerId } from '../lib/home';
 import { startPolling } from '../lib/poll';
+import { brandName, textDirection } from '../lib/appearance';
 import { messagePreview } from '../lib/media';
 import { useAuthStore } from '../stores/authStore';
 import { useChatStore } from '../stores/chatStore';
@@ -105,6 +106,8 @@ export default function HomePage() {
   const inboxClearedAt = useChatStore((state) => state.inboxClearedAt);
   const inboxReadIds = useChatStore((state) => state.inboxReadIds);
   const notifyTypes = useSettingsStore((state) => state.notifyTypes);
+  const brandTitle = useSettingsStore((state) => state.appearance.name);
+  const brandLogo = useSettingsStore((state) => state.appearance.logo);
   const inboxCount = useMemo(
     () => serverAccount
       ? serverUnread
@@ -143,10 +146,10 @@ export default function HomePage() {
       <IonHeader>
         <NetworkStatusBanner />
         <IonToolbar className="home-toolbar">
-          <div className="home-nav">
-            <div className="home-nav-brand" dir="ltr">
-              <img src="/assets/icon/icon.png" alt="" width="32" height="32" decoding="async" />
-              <strong>ChatX</strong>
+          <div className="home-nav" dir={textDirection(brandName(brandTitle))}>
+            <div className="home-nav-brand" dir={textDirection(brandName(brandTitle))}>
+              <img src={brandLogo || '/assets/icon/icon.png'} alt="" width="32" height="32" decoding="async" />
+              <strong dir="auto">{brandName(brandTitle)}</strong>
             </div>
             <div className="home-nav-actions">
               <button type="button" className="home-nav-new" aria-label="محادثة جديدة" onClick={() => navigate('/new')}>
@@ -227,5 +230,6 @@ function muteHint(conversationId: string, mutes: ChatMute[]) {
   if (level === 'none') return 'بدون إشعارات';
   if (level === 'mentions') return '@ فقط';
   if (level === 'everyone') return '@everyone';
+  if (level === 'custom') return 'مخصص';
   return undefined;
 }

@@ -34,6 +34,7 @@ export default function NewChatPage() {
   const [query, setQuery] = useState('');
   const [selected, setSelected] = useState<string[]>([]);
   const [notice, setNotice] = useState('');
+  const [busy, setBusy] = useState(false);
 
   const people = useMemo(() => {
     const normalized = query.trim().toLocaleLowerCase('ar');
@@ -52,17 +53,22 @@ export default function NewChatPage() {
   );
 
   const startPrivate = (userId: string) => {
+    if (busy) return;
     setNotice('');
+    setBusy(true);
     void openPrivate(userId).then((conversationId) => {
+      setBusy(false);
       if (conversationId) navigate(`/chat/${conversationId}`, { replace: true });
       else setNotice('تعذر فتح المحادثة.');
     });
   };
 
   const submitGroup = () => {
-    if (!title.trim() || selected.length < 2) return;
+    if (busy || !title.trim() || selected.length < 2) return;
     setNotice('');
+    setBusy(true);
     void createGroup(title, selected).then((conversationId) => {
+      setBusy(false);
       if (conversationId) navigate(`/chat/${conversationId}`, { replace: true });
       else setNotice('تعذر إنشاء المجموعة.');
     });
@@ -94,6 +100,7 @@ export default function NewChatPage() {
             <label className="group-name">
               <span>اسم المجموعة</span>
               <input
+                dir="auto"
                 value={title}
                 maxLength={40}
                 placeholder="مثال: مشروع المساء"
@@ -114,7 +121,7 @@ export default function NewChatPage() {
             )}
           </div>
         )}
-        {notice && <p className="muted new-empty">{notice}</p>}
+        {notice && <p className="form-error new-empty">{notice}</p>}
         <SearchBar value={query} placeholder="ابحث عن شخص" onChange={setQuery} />
         {people.length === 0 ? (
           <p className="muted new-empty">لا توجد نتائج.</p>
@@ -127,6 +134,7 @@ export default function NewChatPage() {
                   key={user.id}
                   type="button"
                   className={mode === 'group' && on ? 'person-row picked' : 'person-row'}
+                  disabled={busy}
                   onClick={() => (mode === 'private' ? startPrivate(user.id) : toggle(user.id))}
                 >
                   <Avatar name={user.displayName} color={user.color} src={user.avatarUrl} />
@@ -149,7 +157,7 @@ export default function NewChatPage() {
       </IonContent>
       {mode === 'group' && (
         <IonFooter className="chat-footer">
-          <IonButton expand="block" disabled={!title.trim() || selected.length < 2} onClick={submitGroup}>
+          <IonButton expand="block" disabled={busy || !title.trim() || selected.length < 2} onClick={submitGroup}>
             إنشاء المجموعة
           </IonButton>
         </IonFooter>

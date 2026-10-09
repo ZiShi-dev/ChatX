@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { IonContent, IonFooter, IonHeader, IonIcon, IonPage } from '@ionic/react';
 import { arrowDown, bookmarkOutline, peopleOutline, searchOutline } from 'ionicons/icons';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
@@ -14,7 +14,7 @@ import PageNav from '../components/common/PageNav';
 import GroupHeader from '../components/groups/GroupHeader';
 import UserProfileModal from '../components/users/UserProfileModal';
 import type { User } from '../types/user';
-import { MESSAGE_HIGHLIGHT_DURATION, MESSAGE_PAGE_SIZE } from '../constants/chat';
+import { MESSAGE_HIGHLIGHT_DURATION, MESSAGE_PAGE_SIZE, SKELETON_DELAY_MS } from '../constants/chat';
 import { startPolling } from '../lib/poll';
 import { GLOBAL_CHAT_ID } from '../data/conversations';
 import { isServerId, SERVER_GLOBAL_ROOM_ID } from '../lib/home';
@@ -22,13 +22,16 @@ import { catchUpLabel, membersOf, otherParticipant, unreadAbove } from '../lib/c
 import { resolveMessageFocus } from '../lib/inbox';
 import { matchingMessages } from '../lib/messageSearch';
 import { connectionLabel, getUserPresence } from '../lib/presence';
-import { recalledScroll, rememberScroll } from '../lib/scrollMemory';
 import { useAuthStore } from '../stores/authStore';
 import { useChatStore } from '../stores/chatStore';
 import { useSavedStore } from '../stores/savedStore';
 import { useUserStore } from '../stores/userStore';
 
 const NO_TYPING: string[] = [];
+
+function pinBottom(scroller: HTMLElement) {
+  scroller.scrollTop = scroller.scrollHeight;
+}
 
 export default function ChatPage() {
   const { id = '' } = useParams();
@@ -41,6 +44,8 @@ export default function ChatPage() {
   const endRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLIonContentElement>(null);
   const stickRef = useRef(true);
+  const placedRef = useRef(false);
+  const scrollerRef = useRef<HTMLElement | null>(null);
   const lengthRef = useRef(0);
   const currentUser = useAuthStore((state) => state.currentUser);
   const users = useUserStore((state) => state.users);
@@ -57,6 +62,7 @@ export default function ChatPage() {
   const openPrivate = useChatStore((state) => state.openPrivate);
   const [profile, setProfile] = useState<User>();
   const [ready, setReady] = useState(false);
+  const [skeleton, setSkeleton] = useState(false);
   const [notice, setNotice] = useState('');
   const [arrivalUnread, setArrivalUnread] = useState(0);
   const [fresh, setFresh] = useState(0);
@@ -67,7 +73,13 @@ export default function ChatPage() {
   const membersRef = useRef<HTMLButtonElement>(null);
   const directRef = useRef<HTMLButtonElement>(null);
   const savedRef = useRef<HTMLButtonElement>(null);
-  const savedHere = useSavedStore((state) => state.entries.filter((entry) => entry.userId === currentUser.id && entry.conversationId === id).length);
+  const savedHere = useSavedStore((state) => {
+    let count = 0;
+    for (const entry of state.entries) {
+      if (entry.userId === currentUser.id && entry.conversationId === id) count += 1;
+    }
+    return count;
+  });
   const conversation = conversations.find((item) => item.id === id);
   const roomId = conversation && conversation.type !== 'private' ? conversation.id : '';
   const privateId = conversation?.type === 'private' ? conversation.id : '';
@@ -84,6 +96,8 @@ export default function ChatPage() {
     () => (searching ? matchingMessages(messages, searchQuery) : messages),
     [messages, searchQuery, searching],
   );
+  const messagesRef = useRef(messages);
+  messagesRef.current = messages;
 
   useEffect(() => {
     setSearchOpen(false);
@@ -92,14 +106,20 @@ export default function ChatPage() {
 
   useEffect(() => {
     if (!searching) return;
-    endRef.current?.scrollIntoView({ block: 'end' });
+    void contentRef.current?.getScrollElement().then((scroller) => {
+      if (scroller) pinBottom(scroller);
+    });
   }, [searching, searchQuery, thread.length]);
 
   useEffect(() => {
-    setReady(useChatStore.getState().fullRooms.includes(id));
+    const cached = useChatStore.getState().fullRooms.includes(id);
+    setReady(cached);
+    setSkeleton(false);
     setNotice('');
     let alive = true;
-    const wait = new Promise((resolve) => window.setTimeout(resolve, 220));
+    const skeletonTimer = window.setTimeout(() => {
+      if (alive) setSkeleton(true);
+    }, SKELETON_DELAY_MS);
     const load = (async () => {
       const me = useAuthStore.getState().currentUser.id;
       if (isServerId(me) && id === GLOBAL_CHAT_ID) {
@@ -110,22 +130,34 @@ export default function ChatPage() {
       if (isServerId(me)) await useChatStore.getState().loadHome();
       return useChatStore.getState().loadRoom(id, focusId && isServerId(focusId) ? { aroundId: focusId } : undefined);
     })();
-    void Promise.all([wait, load]).then(([, loaded]) => {
+    void load.then((loaded) => {
       if (!alive) return;
-      setNotice(loaded ? '' : 'تعذر تحميل الرسائل.');
+      window.clearTimeout(skeletonTimer);
+      const hasMessages = useChatStore.getState().messages.some((message) => message.conversationId === id);
+      setNotice(loaded || hasMessages ? '' : 'تعذر تحميل الرسائل.');
       setReady(true);
     });
     return () => {
       alive = false;
+      window.clearTimeout(skeletonTimer);
     };
   }, [id, navigate, focusId]);
 
   useEffect(() => {
     if (!isServerId(id)) return;
-    return startPolling(() => useChatStore.getState().loadRoom(id, focusId && isServerId(focusId) ? { aroundId: focusId } : undefined), {
+    let alive = true;
+    const stop = startPolling(async () => {
+      const loaded = await useChatStore.getState().loadRoom(id, focusId && isServerId(focusId) ? { aroundId: focusId } : undefined);
+      if (!alive) return;
+      if (loaded || useChatStore.getState().messages.some((message) => message.conversationId === id)) setNotice('');
+    }, {
       immediate: false,
       active: () => window.location.pathname === `/chat/${id}` && (Boolean(focusId) || (useChatStore.getState().historyLimit[id] ?? MESSAGE_PAGE_SIZE) <= MESSAGE_PAGE_SIZE),
     });
+    return () => {
+      alive = false;
+      stop();
+    };
   }, [id, focusId]);
 
   useEffect(() => {
@@ -138,7 +170,8 @@ export default function ChatPage() {
     setFresh(0);
     setAway(false);
     lengthRef.current = 0;
-    stickRef.current = count === 0 && recalledScroll(id) === undefined;
+    placedRef.current = false;
+    stickRef.current = true;
   }, [id]);
 
   useEffect(() => {
@@ -195,91 +228,153 @@ export default function ChatPage() {
     if (isServerId(id)) return;
     const shown = Math.min(messages.length, historyLimit[id] ?? MESSAGE_PAGE_SIZE);
     if (unreadAbove(arrivalUnread, messages.length, shown) > 0) return;
-    markRead(id);
+    void markRead(id).then((saved) => {
+      if (saved) setArrivalUnread(0);
+    });
   }, [arrivalUnread, focusId, focusMissing, historyLimit, id, markRead, messages.length]);
 
   useEffect(() => {
-    if (!ready || !isServerId(id)) return;
-    let timer: number | undefined;
-    let reading = false;
-    const check = async () => {
-      if (reading || document.visibilityState === 'hidden' || window.location.pathname !== `/chat/${id}`) return;
-      const scroller = await contentRef.current?.getScrollElement();
-      if (!scroller) return;
-      const bounds = scroller.getBoundingClientRect();
-      const visible = messages.filter((message) => {
-        if (message.status !== 'sent') return false;
-        const node = document.getElementById(`msg-${message.id}`);
-        if (!node) return false;
-        const rect = node.getBoundingClientRect();
-        const overlap = Math.max(0, Math.min(rect.bottom, bounds.bottom) - Math.max(rect.top, bounds.top));
-        return rect.height > 0 && overlap >= Math.min(rect.height, bounds.height) * 0.6;
-      });
-      const target = visible.at(-1);
-      if (!target) return;
-      reading = true;
-      try { await markRead(id, target.id); } finally { reading = false; }
-    };
-    const schedule = () => {
-      window.clearTimeout(timer);
-      timer = window.setTimeout(() => void check(), 900);
-    };
+    if (!ready) return;
     let stopped = false;
     let scroller: HTMLElement | undefined;
+    let readTimer: number | undefined;
+    let reading = false;
+    const syncStick = () => {
+      if (!scroller) return;
+      const gap = scroller.scrollHeight - scroller.scrollTop - scroller.clientHeight;
+      const atEnd = gap < 96;
+      stickRef.current = atEnd;
+      setAway((current) => (current === !atEnd ? current : !atEnd));
+      if (atEnd) setFresh((count) => (count === 0 ? count : 0));
+    };
+    const markVisible = async () => {
+      if (!placedRef.current || !isServerId(id) || reading || !scroller) return;
+      if (document.visibilityState === 'hidden' || window.location.pathname !== `/chat/${id}`) return;
+      const list = messagesRef.current;
+      const gap = scroller.scrollHeight - scroller.scrollTop - scroller.clientHeight;
+      let targetId = '';
+      if (gap < 96) {
+        for (let index = list.length - 1; index >= 0; index -= 1) {
+          if (list[index].status === 'sent') {
+            targetId = list[index].id;
+            break;
+          }
+        }
+      } else {
+        const bounds = scroller.getBoundingClientRect();
+        const nodes = scroller.querySelectorAll<HTMLElement>('[id^="msg-"]');
+        for (let index = nodes.length - 1; index >= 0; index -= 1) {
+          const rect = nodes[index].getBoundingClientRect();
+          const overlap = Math.max(0, Math.min(rect.bottom, bounds.bottom) - Math.max(rect.top, bounds.top));
+          if (rect.height > 0 && overlap >= 12) {
+            targetId = nodes[index].id.slice(4);
+            break;
+          }
+        }
+      }
+      const target = list.find((message) => message.id === targetId && message.status === 'sent');
+      if (!target) return;
+      reading = true;
+      try {
+        const saved = await markRead(id, target.id);
+        if (!saved) return;
+        const index = list.findIndex((message) => message.id === target.id);
+        if (index < 0) return;
+        const remaining = list.slice(index + 1).filter((message) => message.status === 'sent' && message.senderId !== currentUser.id).length;
+        setArrivalUnread((current) => (current > remaining ? remaining : current));
+      } finally { reading = false; }
+    };
+    const onScroll = () => {
+      if (!placedRef.current) return;
+      syncStick();
+      window.clearTimeout(readTimer);
+      readTimer = window.setTimeout(() => void markVisible(), 900);
+    };
+    const thread = endRef.current?.parentElement;
+    const observer = thread ? new ResizeObserver(() => {
+      const element = scrollerRef.current;
+      if (!element || !stickRef.current) return;
+      pinBottom(element);
+    }) : undefined;
+    if (thread && observer) observer.observe(thread);
     void contentRef.current?.getScrollElement().then((element) => {
       if (stopped) return;
       scroller = element;
-      scroller.addEventListener('scroll', schedule, { passive: true });
-      schedule();
+      scrollerRef.current = element;
+      scroller.addEventListener('scroll', onScroll, { passive: true });
+      readTimer = window.setTimeout(() => void markVisible(), 900);
     });
-    document.addEventListener('visibilitychange', schedule);
+    const onVisible = () => {
+      window.clearTimeout(readTimer);
+      readTimer = window.setTimeout(() => void markVisible(), 900);
+    };
+    document.addEventListener('visibilitychange', onVisible);
     return () => {
       stopped = true;
-      window.clearTimeout(timer);
-      scroller?.removeEventListener('scroll', schedule);
-      document.removeEventListener('visibilitychange', schedule);
+      window.clearTimeout(readTimer);
+      observer?.disconnect();
+      scroller?.removeEventListener('scroll', onScroll);
+      scrollerRef.current = null;
+      document.removeEventListener('visibilitychange', onVisible);
     };
-  }, [id, ready, messages, markRead, historyLimit]);
+  }, [currentUser.id, id, markRead, ready]);
 
   useEffect(() => {
     if (!ready) return;
     const previous = lengthRef.current;
     lengthRef.current = messages.length;
-    if (previous === 0) {
-      if (focusId) {
-        stickRef.current = false;
-        return;
-      }
-      const saved = recalledScroll(id);
-      const shown = Math.min(messages.length, historyLimit[id] ?? MESSAGE_PAGE_SIZE);
-      if (arrivalUnread > 0 && unreadAbove(arrivalUnread, messages.length, shown) === 0) {
-        document.getElementById('unread-anchor')?.scrollIntoView({ block: 'center' });
-        stickRef.current = false;
-        return;
-      }
-      if (typeof saved === 'number') {
-        void contentRef.current?.scrollToPoint(0, saved, 0);
-        stickRef.current = false;
-        return;
-      }
-      endRef.current?.scrollIntoView({ block: 'end' });
-      stickRef.current = true;
+    if (focusId) {
+      stickRef.current = false;
+      placedRef.current = true;
       return;
     }
+    if (!placedRef.current && messages.length > 0) {
+      stickRef.current = true;
+      let alive = true;
+      let tries = 0;
+      const step = async () => {
+        if (!alive) return;
+        const scroller = await contentRef.current?.getScrollElement();
+        if (!alive || !scroller) return;
+        pinBottom(scroller);
+        tries += 1;
+        requestAnimationFrame(() => {
+          if (!alive) return;
+          const gap = scroller.scrollHeight - scroller.scrollTop - scroller.clientHeight;
+          const overflow = scroller.scrollHeight > scroller.clientHeight + 8;
+          if (tries < 12 && (!overflow || gap > 32)) {
+            void step();
+            return;
+          }
+          placedRef.current = true;
+          if (stickRef.current) pinBottom(scroller);
+        });
+      };
+      void step();
+      return () => {
+        alive = false;
+      };
+    }
     if (messages.length > previous && stickRef.current) {
-      endRef.current?.scrollIntoView({ block: 'end' });
+      const scroller = scrollerRef.current;
+      if (scroller) pinBottom(scroller);
       return;
     }
     if (messages.length > previous) setFresh((count) => count + (messages.length - previous));
-  }, [arrivalUnread, focusId, historyLimit, id, messages.length, ready]);
+  }, [focusId, id, messages.length, ready]);
 
   useEffect(() => {
-    if (stickRef.current) endRef.current?.scrollIntoView({ block: 'end' });
+    if (!stickRef.current) return;
+    const scroller = scrollerRef.current;
+    if (scroller) pinBottom(scroller);
   }, [typingIds.length]);
 
-  useEffect(() => () => {
-    void contentRef.current?.getScrollElement().then((element) => rememberScroll(id, element.scrollTop));
-  }, [id]);
+  useEffect(() => {
+    if (focusId || !stickRef.current) return;
+    const scroller = scrollerRef.current;
+    if (scroller) pinBottom(scroller);
+    else void contentRef.current?.scrollToBottom(0);
+  }, [focusId]);
 
   useEffect(() => {
     if (!privateId) return;
@@ -312,6 +407,19 @@ export default function ChatPage() {
     window.addEventListener('click', openProfile, true);
     return () => window.removeEventListener('click', openProfile, true);
   }, [roomId, navigate]);
+
+  const revealOlder = useCallback(async () => {
+    const scroller = await contentRef.current?.getScrollElement();
+    const before = scroller?.scrollHeight ?? 0;
+    const top = scroller?.scrollTop ?? 0;
+    const loaded = await loadOlder(id);
+    if (scroller && loaded) {
+      await new Promise((resolve) => window.requestAnimationFrame(() => window.requestAnimationFrame(resolve)));
+      const delta = scroller.scrollHeight - before;
+      if (delta > 0) scroller.scrollTop = top + delta;
+    }
+    return loaded;
+  }, [id, loadOlder]);
 
   const leavingDemo = isServerId(currentUser.id) && id === GLOBAL_CHAT_ID;
   if (!conversation || leavingDemo) {
@@ -405,25 +513,12 @@ export default function ChatPage() {
         />
         {searchOpen && <MessageSearch value={searchQuery} onChange={setSearchQuery} />}
       </IonHeader>
-      <IonContent
-        ref={contentRef}
-        scrollEvents
-        onIonScroll={(event) => {
-          rememberScroll(id, event.detail.scrollTop);
-          void contentRef.current?.getScrollElement().then((element) => {
-            const gap = element.scrollHeight - element.scrollTop - element.clientHeight;
-            const atEnd = gap < 96;
-            stickRef.current = atEnd;
-            setAway(!atEnd);
-            if (atEnd) setFresh(0);
-          });
-        }}
-      >
+      <IonContent ref={contentRef} className="chat-scroll">
         {notice ? <p className="focus-miss" role="status">{notice}</p> : null}
         {focusMiss && <p className="focus-miss" role="status">تعذر العثور على الرسالة</p>}
         <div className="chat-thread">
           {!ready ? (
-            <PageSkeleton kind="chat" />
+            skeleton ? <PageSkeleton kind="chat" /> : null
           ) : thread.length === 0 ? (
             <EmptyState title={searching ? 'لا توجد رسائل' : 'لا توجد رسائل بعد'} />
           ) : (
@@ -442,7 +537,7 @@ export default function ChatPage() {
               unreadCount={arrivalUnread}
               spotlightId={spotlight}
               onOpenProfile={setProfile}
-              onLoadOlder={() => loadOlder(id)}
+              onLoadOlder={revealOlder}
             />
           )}
           <TypingIndicator names={typingNames} />
@@ -454,7 +549,13 @@ export default function ChatPage() {
           type="button"
           className="unread-catch"
           onClick={() => {
-            void loadOlder(id).then(() => document.getElementById('unread-anchor')?.scrollIntoView({ block: 'start' }));
+            void revealOlder().then(() => {
+              const node = document.getElementById('unread-anchor');
+              const scroller = scrollerRef.current;
+              if (!node || !scroller) return;
+              const top = scroller.scrollTop + node.getBoundingClientRect().top - scroller.getBoundingClientRect().top;
+              scroller.scrollTop = Math.max(0, top);
+            });
           }}
         >
           {catchUpLabel(pendingUnread)}
@@ -468,7 +569,16 @@ export default function ChatPage() {
           useChatStore.setState((state) => ({ historyLimit: { ...state.historyLimit, [id]: 30 } }));
           if (focusId) setParams({}, { replace: true });
           void useChatStore.getState().loadRoom(id);
-          endRef.current?.scrollIntoView({ block: 'end' });
+          const pin = () => {
+            const scroller = scrollerRef.current;
+            if (scroller) pinBottom(scroller);
+            else void contentRef.current?.scrollToBottom(0);
+          };
+          pin();
+          requestAnimationFrame(() => {
+            pin();
+            requestAnimationFrame(pin);
+          });
         }}>
           <IonIcon icon={arrowDown} />
           {fresh > 0 ? <span>{fresh}</span> : null}
@@ -480,6 +590,7 @@ export default function ChatPage() {
       <UserProfileModal
         user={profile}
         isSelf={profile?.id === currentUser.id}
+        room={conversation.type !== 'private' ? { name: conversation.name ?? 'مجموعة', adminId: conversation.adminId } : undefined}
         onClose={() => setProfile(undefined)}
         onMessage={(userId) => {
           setProfile(undefined);

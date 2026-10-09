@@ -4,8 +4,10 @@ import { cameraOutline } from 'ionicons/icons';
 import { useNavigate } from 'react-router-dom';
 import Avatar from '../components/common/Avatar';
 import { useDataSaver } from '../hooks/useDataSaver';
+import { brandName, DEFAULT_LOGO } from '../lib/appearance';
 import { readBanner, readPhoto } from '../lib/photo';
 import { useAuthStore } from '../stores/authStore';
+import { useSettingsStore } from '../stores/settingsStore';
 
 type GoogleButton = {
   accounts: {
@@ -47,6 +49,8 @@ export default function ActivationPage() {
   const [banner, setBanner] = useState('');
   const [bio, setBio] = useState('');
   const [error, setError] = useState('');
+  const brandTitle = useSettingsStore((state) => state.appearance.name);
+  const brandLogo = useSettingsStore((state) => state.appearance.logo);
 
   onCredential.current = (token: string) => {
     void (async () => {
@@ -155,7 +159,10 @@ export default function ActivationPage() {
     <IonPage>
       <IonContent className="activation">
         <div className="gate">
-          <p className="gate-mark">ChatX</p>
+          <div className="gate-brand">
+            <img src={brandLogo || DEFAULT_LOGO} alt="" width="96" height="96" decoding="async" />
+            <strong dir="auto">{brandName(brandTitle)}</strong>
+          </div>
           <div className="gate-card">
             <span className="gate-dots" aria-hidden="true">
               <i className={step === 'google' ? 'on' : ''} />

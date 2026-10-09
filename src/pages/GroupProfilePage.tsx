@@ -19,7 +19,8 @@ import { groupTurnStatus, type TurnRefresh } from '../lib/groupTurnStatus';
 import { readBanner, readPhoto } from '../lib/photo';
 import { useAuthStore } from '../stores/authStore';
 import { useChatStore } from '../stores/chatStore';
-import { notifyLevel, ROOM_NOTIFY_LEVELS, useMuteStore } from '../stores/muteStore';
+import { useSettingsStore } from '../stores/settingsStore';
+import RoomNotifyPanel from '../components/conversations/RoomNotifyPanel';
 import { useUserStore } from '../stores/userStore';
 import type { User } from '../types/user';
 
@@ -37,13 +38,12 @@ export default function GroupProfilePage() {
   const navigate = useNavigate();
   const location = useLocation();
   const currentUser = useAuthStore((state) => state.currentUser);
+  const accent = useSettingsStore((state) => state.appearance.accent);
   const users = useUserStore((state) => state.users);
   const conversation = useChatStore((state) => state.conversations.find((item) => item.id === id));
   const openPrivate = useChatStore((state) => state.openPrivate);
   const updateGroup = useChatStore((state) => state.updateGroup);
   const allMessages = useChatStore((state) => state.messages);
-  const mutes = useMuteStore((state) => state.mutes);
-  const setLevel = useMuteStore((state) => state.setLevel);
   const photoRef = useRef<HTMLInputElement>(null);
   const bannerRef = useRef<HTMLInputElement>(null);
   const [selected, setSelected] = useState<User>();
@@ -145,7 +145,7 @@ export default function GroupProfilePage() {
         ) : (
           <div className="profile-frame">
             <section className="profile-hero">
-              <div className={conversation.bannerUrl ? 'profile-banner is-photo' : 'profile-banner'} style={{ '--banner': '#3d9b84' } as CSSProperties}>
+              <div className={conversation.bannerUrl ? 'profile-banner is-photo' : 'profile-banner'} style={{ '--banner': accent } as CSSProperties}>
                 {conversation.bannerUrl ? <img src={conversation.bannerUrl} alt="" /> : null}
                 {canEdit && (
                   <button type="button" className="banner-pick" aria-label="تغيير الغلاف" onClick={() => bannerRef.current?.click()}>
@@ -166,14 +166,14 @@ export default function GroupProfilePage() {
               </div>
               {canEdit ? (
                 <button type="button" className="photo-pick profile-photo" aria-label="تغيير صورة المجموعة" onClick={() => photoRef.current?.click()}>
-                  <Avatar name={groupName} color="#3d9b84" size={96} src={conversation.avatarUrl} />
+                  <Avatar name={groupName} color={accent} size={96} src={conversation.avatarUrl} />
                   <span className="photo-badge">
                     <IonIcon icon={cameraOutline} />
                   </span>
                 </button>
               ) : (
                 <span className="group-hero-photo">
-                  <Avatar name={groupName} color="#3d9b84" size={96} src={conversation.avatarUrl} />
+                  <Avatar name={groupName} color={accent} size={96} src={conversation.avatarUrl} />
                 </span>
               )}
               <input
@@ -239,28 +239,7 @@ export default function GroupProfilePage() {
             </div>
             {tab === 'notify' && (
               <section className="group-block" role="tabpanel">
-                <p className="group-block-note">اختر ما يصلك من هذه المجموعة.</p>
-                <div className="group-notify" role="radiogroup" aria-label="إشعارات المجموعة">
-                  {ROOM_NOTIFY_LEVELS.map((item) => {
-                    const on = notifyLevel(mutes, conversation.id) === item.id;
-                    return (
-                      <button
-                        key={item.id}
-                        type="button"
-                        role="radio"
-                        aria-checked={on}
-                        className={on ? 'is-on' : undefined}
-                        onClick={() => setLevel(conversation.id, item.id)}
-                      >
-                        <span>
-                          <strong>{item.label}</strong>
-                          <small>{item.hint}</small>
-                        </span>
-                        <i />
-                      </button>
-                    );
-                  })}
-                </div>
+                <RoomNotifyPanel conversationId={conversation.id} room />
               </section>
             )}
             {(tab === 'photos' || tab === 'videos' || tab === 'links') && (
@@ -294,6 +273,7 @@ export default function GroupProfilePage() {
       <UserProfileModal
         user={selected}
         isSelf={selected?.id === currentUser.id}
+        room={conversation && isRoom ? { name: conversation.name ?? 'مجموعة', adminId: conversation.adminId } : undefined}
         onClose={() => setSelected(undefined)}
         onMessage={messageUser}
       />
@@ -304,7 +284,7 @@ export default function GroupProfilePage() {
               <span className="app-handle" />
               <h2 id="group-edit-title">تعديل المجموعة</h2>
               <button type="button" className="photo-pick profile-photo sheet-photo" aria-label="تغيير صورة المجموعة" onClick={() => photoRef.current?.click()}>
-                <Avatar name={draftName || groupName} color="#3d9b84" size={96} src={conversation?.avatarUrl} />
+                <Avatar name={draftName || groupName} color={accent} size={96} src={conversation?.avatarUrl} />
                 <span className="photo-badge">
                   <IonIcon icon={cameraOutline} />
                 </span>

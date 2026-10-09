@@ -8,7 +8,6 @@ import PermissionDialog from '../common/PermissionDialog';
 import EmojiPanel from './EmojiPanel';
 import Avatar from '../common/Avatar';
 import EmojiText from '../common/EmojiText';
-import { membersOf } from '../../lib/conversation';
 import { activeMention, EVERYONE_HANDLE } from '../../lib/mention';
 import { clipFileName } from '../../lib/chatFile';
 import { fitChatImage } from '../../lib/chatImage';
@@ -59,6 +58,8 @@ function accessGranted(kind: AccessKind) {
 }
 
 const drafts = new Map<string, string>();
+const EMPTY_USERS: User[] = [];
+const EMPTY_IDS: string[] = [];
 
 type MessageComposerProps = {
   conversationId: string;
@@ -97,18 +98,34 @@ export default function MessageComposer({ conversationId }: MessageComposerProps
   const editMessage = useChatStore((state) => state.editMessage);
   const cancelEdit = useChatStore((state) => state.cancelEdit);
   const cancelReply = useChatStore((state) => state.cancelReply);
-  const editingId = useChatStore((state) => state.editingId);
-  const replyingTo = useChatStore((state) => state.replyingTo);
-  const messages = useChatStore((state) => state.messages);
+  const currentUserId = useAuthStore((state) => state.currentUser.id);
+  const roomType = useChatStore((state) => state.conversations.find((item) => item.id === conversationId)?.type ?? 'private');
+  const participantIds = useChatStore((state) => state.conversations.find((item) => item.id === conversationId)?.participantIds ?? EMPTY_IDS);
+  const editStamp = useChatStore((state) => {
+    if (!state.editingId) return '';
+    const message = state.messages.find((item) => item.id === state.editingId && item.conversationId === conversationId);
+    return message ? `${message.id}\u0000${message.text ?? ''}` : '';
+  });
+  const replyStamp = useChatStore((state) => {
+    const target = state.replyingTo;
+    if (!target || target.conversationId !== conversationId) return '';
+    const message = state.messages.find((item) => item.id === target.messageId);
+    if (!message) return '';
+    return `${message.id}\u0000${message.senderId}\u0000${messagePreview(message, message.senderId === currentUserId)}`;
+  });
+  const editSplit = editStamp.indexOf('\u0000');
+  const editing = editSplit < 0 ? undefined : { id: editStamp.slice(0, editSplit), text: editStamp.slice(editSplit + 1) };
+  const replySplit = replyStamp.indexOf('\u0000');
+  const replySenderSplit = replySplit < 0 ? -1 : replyStamp.indexOf('\u0000', replySplit + 1);
+  const replying = replySenderSplit < 0 ? undefined : {
+    id: replyStamp.slice(0, replySplit),
+    senderId: replyStamp.slice(replySplit + 1, replySenderSplit),
+    preview: replyStamp.slice(replySenderSplit + 1),
+  };
   const users = useUserStore((state) => state.users);
-  const currentUser = useAuthStore((state) => state.currentUser);
-  const conversations = useChatStore((state) => state.conversations);
-  const conversation = conversations.find((item) => item.id === conversationId);
-  const editing = messages.find((message) => message.id === editingId && message.conversationId === conversationId);
-  const replying = replyingTo?.conversationId === conversationId
-    ? messages.find((message) => message.id === replyingTo.messageId)
-    : undefined;
-  const replyingAuthor = users.find((user) => user.id === replying?.senderId);
+  const replyingAuthor = replying ? users.find((user) => user.id === replying.senderId)?.displayName ?? '' : '';
+  const showTyping = useSettingsStore((state) => state.showTyping);
+  const setTyping = useChatStore((state) => state.setTyping);
   const imageQuality = useSettingsStore((state) => state.imageQuality);
   const videoQuality = useSettingsStore((state) => state.videoQuality);
   const setImageQuality = useSettingsStore((state) => state.setImageQuality);
@@ -135,8 +152,8 @@ export default function MessageComposer({ conversationId }: MessageComposerProps
   const fileRef = useRef<HTMLInputElement>(null);
   const folderRef = useRef<HTMLInputElement>(null);
 
-  const members = conversation ? membersOf(conversation, users).filter((user) => user.id !== currentUser.id) : [];
-  const token = conversation && conversation.type !== 'private' ? activeMention(draft, cursor) : null;
+  const token = roomType !== 'private' ? activeMention(draft, cursor) : null;
+  const members = token ? users.filter((user) => participantIds.includes(user.id) && user.id !== currentUserId) : EMPTY_USERS;
   const mentionQuery = token?.query.toLocaleLowerCase('en') ?? '';
   const people = token
     ? members.filter((user) => {
@@ -151,6 +168,23 @@ export default function MessageComposer({ conversationId }: MessageComposerProps
   const matches = showEveryone ? [EVERYONE, ...people] : people;
   const activeMatch = Math.min(mentionIndex, Math.max(matches.length - 1, 0));
 
+  useEffect(() => {
+    const mine = currentUserId;
+    const dropMine = () => {
+      const current = useChatStore.getState().typingByConversation[conversationId] ?? [];
+      if (!current.includes(mine)) return;
+      setTyping(conversationId, current.filter((userId) => userId !== mine));
+    };
+    if (!showTyping || draft.trim().length === 0) {
+      dropMine();
+      return;
+    }
+    const current = useChatStore.getState().typingByConversation[conversationId] ?? [];
+    if (!current.includes(mine)) setTyping(conversationId, [...current, mine]);
+    const timer = window.setTimeout(dropMine, 4000);
+    return () => window.clearTimeout(timer);
+  }, [conversationId, currentUserId, draft, setTyping, showTyping]);
+
   const resizeField = () => {
     const field = fieldRef.current;
     if (!field) return;
@@ -160,7 +194,7 @@ export default function MessageComposer({ conversationId }: MessageComposerProps
   };
 
   useEffect(() => {
-    const key = `${currentUser.id}:${conversationId}`;
+    const key = `${currentUserId}:${conversationId}`;
     setDraft(drafts.get(key) ?? '');
     window.requestAnimationFrame(resizeField);
     return () => {
@@ -170,9 +204,9 @@ export default function MessageComposer({ conversationId }: MessageComposerProps
       if (editingRef.current) return;
       drafts.set(key, draftRef.current);
     };
-  }, [conversationId, currentUser.id]);
+  }, [conversationId, currentUserId]);
 
-  useEffect(() => { setAttachments([]); setSavingEdit(false); }, [conversationId, currentUser.id]);
+  useEffect(() => { setAttachments([]); setSavingEdit(false); }, [conversationId, currentUserId]);
 
   useEffect(() => {
     if (!editing) return;
@@ -422,7 +456,6 @@ export default function MessageComposer({ conversationId }: MessageComposerProps
     setDraft(next);
     setCursor(place);
     window.requestAnimationFrame(() => {
-      field?.focus();
       field?.setSelectionRange(place, place);
       resizeField();
     });
@@ -444,8 +477,8 @@ export default function MessageComposer({ conversationId }: MessageComposerProps
       setSavingEdit(true);
       const saved = await editMessage(editing.id, text);
       setSavingEdit(false);
-      if (!saved || roomRef.current !== conversationId || useAuthStore.getState().currentUser.id !== currentUser.id) return;
-      drafts.delete(`${currentUser.id}:${conversationId}`);
+      if (!saved || roomRef.current !== conversationId || useAuthStore.getState().currentUser.id !== currentUserId) return;
+      drafts.delete(`${currentUserId}:${conversationId}`);
       setDraft('');
       setEmojiOpen(false);
       if (fieldRef.current) fieldRef.current.style.height = 'auto';
@@ -481,8 +514,8 @@ export default function MessageComposer({ conversationId }: MessageComposerProps
         {replying && !editing && (
           <div className="edit-banner">
             <div className="edit-quote">
-              <strong>الرد على {replyingAuthor?.displayName ?? 'عضو'}</strong>
-              <p><EmojiText text={messagePreview(replying, replying.senderId === 'me')} /></p>
+              <strong>الرد على {replyingAuthor || 'عضو'}</strong>
+              <p><EmojiText text={replying.preview} /></p>
             </div>
             <button type="button" className="edit-close" aria-label="إلغاء الرد" onClick={() => cancelReply()}>
               <IonIcon icon={closeOutline} />
@@ -604,7 +637,7 @@ export default function MessageComposer({ conversationId }: MessageComposerProps
             ))}
           </div>
         )}
-        {emojiOpen && <EmojiPanel onPick={insertEmoji} />}
+        {emojiOpen && <EmojiPanel onPick={insertEmoji} onClose={() => { setEmojiOpen(false); fieldRef.current?.focus(); }} />}
         <div className="composer-field">
           <button
             type="button"
@@ -626,6 +659,7 @@ export default function MessageComposer({ conversationId }: MessageComposerProps
             aria-expanded={emojiOpen}
             onClick={() => {
               setMenuOpen(false);
+              if (!emojiOpen) fieldRef.current?.blur();
               setEmojiOpen((open) => !open);
             }}
           >

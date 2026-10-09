@@ -92,7 +92,7 @@ export async function notifyChatMessage(input: {
   title: string;
   body: string;
   tag?: string;
-  mention?: boolean | 'everyone';
+  mention?: boolean | 'mention' | 'everyone' | 'reply' | 'signal' | 'message' | 'reaction';
 }) {
   if (input.conversationId && useMuteStore.getState().blocks(input.conversationId, input.mention)) return;
   const permission = known ?? (await readChatNotificationPermission());

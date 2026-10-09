@@ -10,7 +10,7 @@ import { otherParticipant } from '../lib/conversation';
 import { useAuthStore } from '../stores/authStore';
 import { useChatStore } from '../stores/chatStore';
 import { connectionLabel, getUserPresence } from '../lib/presence';
-import { notifyLevel, ROOM_NOTIFY_LEVELS, useMuteStore } from '../stores/muteStore';
+import RoomNotifyPanel from '../components/conversations/RoomNotifyPanel';
 import { useUserStore } from '../stores/userStore';
 
 export default function DirectMediaPage() {
@@ -18,8 +18,6 @@ export default function DirectMediaPage() {
   const currentUser = useAuthStore((state) => state.currentUser);
   const users = useUserStore((state) => state.users);
   const conversation = useChatStore((state) => state.conversations.find((item) => item.id === id));
-  const mutes = useMuteStore((state) => state.mutes);
-  const setLevel = useMuteStore((state) => state.setLevel);
   const other = conversation?.type === 'private' ? otherParticipant(conversation, currentUser.id, users) : undefined;
 
   return (
@@ -50,32 +48,7 @@ export default function DirectMediaPage() {
               conversationId={conversation.id}
               scope="المحادثة"
               label="وسائط المحادثة"
-              notify={
-                <>
-                  <p className="group-block-note">اختر ما يصلك من هذه المحادثة.</p>
-                  <div className="group-notify" role="radiogroup" aria-label="إشعارات المحادثة">
-                    {ROOM_NOTIFY_LEVELS.map((item) => {
-                      const on = notifyLevel(mutes, conversation.id) === item.id;
-                      return (
-                        <button
-                          key={item.id}
-                          type="button"
-                          role="radio"
-                          aria-checked={on}
-                          className={on ? 'is-on' : undefined}
-                          onClick={() => setLevel(conversation.id, item.id)}
-                        >
-                          <span>
-                            <strong>{item.label}</strong>
-                            <small>{item.hint}</small>
-                          </span>
-                          <i />
-                        </button>
-                      );
-                    })}
-                  </div>
-                </>
-              }
+              notify={<RoomNotifyPanel conversationId={conversation.id} />}
             />
           </div>
         )}

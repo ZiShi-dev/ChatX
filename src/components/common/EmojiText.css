@@ -26,3 +26,10 @@
   pointer-events: none;
   user-select: none;
 }
+
+.bubble-text .chat-emoji,
+.chat-event .chat-emoji {
+  width: 38px;
+  height: 38px;
+  vertical-align: calc((1em - 38px) / 2);
+}
