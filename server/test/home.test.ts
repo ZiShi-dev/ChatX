@@ -33,6 +33,33 @@ function member(id: string, name: string, email: string): AuthUser {
 }
 
 describe('home', () => {
+  it('validates unchanged responses only after authorization and sends changed data normally', async () => {
+    const deps = testDeps();
+    const nora = member('11111111-1111-4111-8111-111111111111', 'نورة', 'nora@example.com');
+    await deps.repo.insertUser(nora);
+    await deps.repo.createSession(hashSession('conditional-token'), nora.id, new Date(now + 60_000));
+    const handle = createApi(deps);
+    const headers = { cookie: 'chatx_session=conditional-token', origin: 'https://localhost' };
+    const first = await handle(new Request('http://localhost/api/home', { headers }));
+    const etag = first.headers.get('etag');
+    assert.ok(etag);
+    assert.equal(first.headers.get('access-control-expose-headers'), 'etag');
+    assert.ok((await first.text()).length > 0);
+    const unchanged = await handle(new Request('http://localhost/api/home', { headers: { ...headers, 'if-none-match': etag } }));
+    assert.equal(unchanged.status, 304);
+    assert.equal((await unchanged.arrayBuffer()).byteLength, 0);
+    const denied = await handle(new Request('http://localhost/api/home', { headers: { 'if-none-match': etag } }));
+    assert.equal(denied.status, 401);
+    const posted = await handle(new Request(`http://localhost/api/rooms/${GLOBAL_ROOM_ID}/messages`, {
+      method: 'POST', headers: { ...headers, 'content-type': 'application/json', 'x-chatx-request': '1' },
+      body: JSON.stringify({ id: '33333333-3333-4333-8333-333333333333', text: 'New message' }),
+    }));
+    assert.equal(posted.status, 200);
+    const changed = await handle(new Request('http://localhost/api/home', { headers: { ...headers, 'if-none-match': etag } }));
+    assert.equal(changed.status, 200);
+    assert.notEqual(changed.headers.get('etag'), etag);
+    assert.ok((await changed.text()).includes('New message'));
+  });
   it('shows ChatX for a signed-in member and counts an unread message', async () => {
     const deps = testDeps();
     const nora = member('11111111-1111-4111-8111-111111111111', 'نورة', 'nora@example.com');
@@ -86,6 +113,9 @@ describe('home', () => {
       body: JSON.stringify({ messageId: latestId }),
     }));
     assert.equal(read.status, 200);
+    const readCounts = await read.json() as { unreadCount: number; unreadNotifications: number };
+    assert.equal(readCounts.unreadCount, 0);
+    assert.equal(readCounts.unreadNotifications, 0);
 
     const after = await handle(new Request('http://127.0.0.1/api/home', { headers: { cookie: `chatx_session=${laylaToken}` } }));
     const cleared = await after.json() as { conversations: Array<{ unreadCount: number }> };

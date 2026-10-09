@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import {
   acceptGoogle,
   endSession,
@@ -57,6 +58,7 @@ function jpeg(bytes: Uint8Array) {
   securityHeaders(headers);
   headers.set('content-type', 'image/jpeg');
   headers.set('cache-control', 'private, max-age=86400');
+  headers.set('vary', 'Cookie');
   return new Response(bytesBody(bytes), { status: 200, headers });
 }
 
@@ -66,6 +68,7 @@ function download(name: string, bytes: Uint8Array) {
   headers.set('content-type', 'application/octet-stream');
   headers.set('content-disposition', attachmentName(name));
   headers.set('cache-control', 'private, max-age=86400');
+  headers.set('vary', 'Cookie');
   return new Response(bytesBody(bytes), { status: 200, headers });
 }
 
@@ -122,7 +125,8 @@ function withCors(request: Request, response: Response, origin: string | null) {
   const headers = new Headers(response.headers);
   headers.set('access-control-allow-origin', origin);
   headers.set('access-control-allow-credentials', 'true');
-  headers.set('vary', 'Origin');
+  headers.set('access-control-expose-headers', 'etag');
+  headers.append('vary', 'Origin');
   if (request.headers.get('access-control-request-private-network') === 'true') {
     headers.set('access-control-allow-private-network', 'true');
   }
@@ -134,7 +138,8 @@ async function route(deps: Deps, request: Request) {
   if (request.method === 'OPTIONS') {
     const headers = new Headers({
       'access-control-allow-methods': 'GET, POST, PATCH, DELETE, OPTIONS',
-      'access-control-allow-headers': 'content-type, x-chatx-request',
+      'access-control-allow-headers': 'content-type, x-chatx-request, if-none-match',
+      'access-control-max-age': '600',
     });
     securityHeaders(headers);
     return new Response(null, { status: 204, headers });
@@ -184,7 +189,7 @@ async function route(deps: Deps, request: Request) {
   const roomRead = path.match(/^\/api\/rooms\/([0-9a-f-]{36})\/read$/i);
   if (roomRead && request.method === 'POST') {
     const result = await markRoomSeen(deps, { token: readCookie(request.headers.get('cookie'), 'chatx_session'), roomId: roomRead[1], messageId: body.messageId });
-    return result.ok ? json({ ok: true }) : failure(deps, result.error);
+    return result.ok ? json(result) : failure(deps, result.error);
   }
   const messageChange = path.match(/^\/api\/rooms\/([0-9a-f-]{36})\/messages\/([0-9a-f-]{36})$/i);
   if (messageChange && (request.method === 'PATCH' || request.method === 'DELETE')) {
@@ -336,5 +341,18 @@ async function route(deps: Deps, request: Request) {
 }
 
 export function createApi(deps: Deps) {
-  return async (request: Request) => withCors(request, await route(deps, request), allowedOrigin(request.headers.get('origin'), deps));
+  return async (request: Request) => {
+    // Always authorize and build the current representation before validating it.
+    let response = await route(deps, request);
+    if (request.method === 'GET' && response.status === 200 && response.headers.get('content-type')?.startsWith('application/json')) {
+      const body = await response.text();
+      const etag = `"${createHash('sha256').update(body).digest('base64url')}"`;
+      const headers = new Headers(response.headers);
+      headers.set('etag', etag);
+      response = request.headers.get('if-none-match') === etag
+        ? new Response(null, { status: 304, headers })
+        : new Response(body, { status: 200, headers });
+    }
+    return withCors(request, response, allowedOrigin(request.headers.get('origin'), deps));
+  };
 }

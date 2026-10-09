@@ -96,10 +96,12 @@ describe('chat images', () => {
     assert.equal(body.messages[0]?.fileSize, jpeg.length);
 
     const picture = await handle(new Request(`http://127.0.0.1/api/rooms/${roomId}/messages/${messageId}/image`, {
-      headers: { cookie: `chatx_session=${laylaToken}` },
+      headers: { cookie: `chatx_session=${laylaToken}`, origin: 'https://localhost' },
     }));
     assert.equal(picture.status, 200);
     assert.equal(picture.headers.get('content-type'), 'image/jpeg');
+    assert.match(picture.headers.get('vary') ?? '', /Cookie/i);
+    assert.match(picture.headers.get('vary') ?? '', /Origin/i);
     assert.deepEqual(Buffer.from(await picture.arrayBuffer()), jpeg);
 
     const outsider = await handle(new Request(`http://127.0.0.1/api/rooms/${roomId}/messages/${messageId}/image`, {

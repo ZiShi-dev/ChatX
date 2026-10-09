@@ -223,7 +223,9 @@ export async function markRoomSeen(deps: Deps, input: { token: string; roomId: s
   if (!user || user.role !== 'member') return { ok: false as const, error: 'invalid_credentials' as const };
   if (!ROOM_ID.test(input.roomId) || typeof input.messageId !== 'string' || !ROOM_ID.test(input.messageId)) return { ok: false as const, error: 'not_found' as const };
   const ok = await deps.repo.markRoomRead(input.roomId, user.id, new Date(deps.now()), input.messageId);
-  return ok ? { ok: true as const } : { ok: false as const, error: 'not_found' as const };
+  if (!ok) return { ok: false as const, error: 'not_found' as const };
+  const [rooms, unreadNotifications] = await Promise.all([deps.repo.listHome(user.id), deps.repo.countUnreadNotifications(user.id)]);
+  return { ok: true as const, unreadCount: rooms.find((room) => room.id === input.roomId)?.unreadCount ?? 0, unreadNotifications };
 }
 
 export async function changeMessage(deps: Deps, input: { token: string; roomId: string; messageId: string; text: unknown; deleting: boolean }) {
