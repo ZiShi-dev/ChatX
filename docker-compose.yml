@@ -27,6 +27,9 @@ services:
     depends_on:
       db:
         condition: service_healthy
+    networks:
+      - default
+      - dokploy-network
     healthcheck:
       test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:8787/api/health').then((response)=>process.exit(response.ok?0:1)).catch(()=>process.exit(1))"]
       interval: 5s
@@ -36,3 +39,7 @@ services:
 
 volumes:
   chatx-pg:
+
+networks:
+  dokploy-network:
+    external: true
