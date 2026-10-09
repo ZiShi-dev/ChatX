@@ -23,6 +23,9 @@ export function offlineShell(): Plugin {
       };
       // Include the static graph used to boot; lazy screens and emoji cache on demand.
       for (const name of entries) visit(name);
+      // The inbox must survive an offline reload even on the first visit, before
+      // the worker controlled the page and could cache its lazy module on demand.
+      for (const name of graphs.keys()) if (/assets\/NotificationsPage-/.test(name)) visit(name);
       // Ionic loads its shell components dynamically, including before registration.
       // Save these small runtime chunks so the installed UI can boot offline.
       for (const name of graphs.keys()) if (name.startsWith('assets/p-')) visit(name);

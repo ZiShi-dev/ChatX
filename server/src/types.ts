@@ -51,7 +51,7 @@ export interface AuthRepository {
   notifyTurnMembers(message: RoomMessage): Promise<void>;
   listNotifications(userId: string, limit: number, before: { at: Date; messageId: string } | null): Promise<InboxNotice[]>;
   countUnreadNotifications(userId: string): Promise<number>;
-  markNotificationsRead(userId: string, ids: string[] | 'all', now: Date): Promise<void>;
+  markNotificationsRead(userId: string, ids: string[] | 'all', now: Date, until?: Date): Promise<void>;
   clearNotifications(userId: string, now: Date): Promise<void>;
   markRoomRead(roomId: string, userId: string, now: Date, messageId: string): Promise<boolean>;
   setReaction(input: { roomId: string; messageId: string; userId: string; emoji: string | null; at: Date }): Promise<'ok' | 'missing'>;

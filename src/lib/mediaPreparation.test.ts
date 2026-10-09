@@ -7,6 +7,7 @@ it('serializes media work without starting the next decoder early', async () => 
   const first = prepareMedia(async () => { order.push('first'); await new Promise<void>((resolve) => { release = resolve; }); });
   const second = prepareMedia(async () => { order.push('second'); return 2; });
   await Promise.resolve();
+  await new Promise(resolve => setTimeout(resolve, 0));
   expect(order).toEqual(['first']);
   release();
   await first;

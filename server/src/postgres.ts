@@ -541,21 +541,21 @@ export function createPostgresRepository(pool: pg.Pool): AuthRepository {
       );
       return result.rows[0]?.count ?? 0;
     },
-    async markNotificationsRead(userId, ids, now) {
+    async markNotificationsRead(userId, ids, now, until) {
       if (ids === 'all') {
-        await pool.query('UPDATE notifications SET read_at = $2 WHERE user_id = $1 AND read_at IS NULL', [userId, now]);
+        await pool.query('UPDATE notifications SET read_at = $2 WHERE user_id = $1 AND read_at IS NULL AND ($3::timestamptz IS NULL OR created_at <= $3)', [userId, now, until ?? null]);
         return;
       }
       if (ids.length === 0) return;
       await pool.query(
-        'UPDATE notifications SET read_at = $3 WHERE user_id = $1 AND message_id = ANY($2::uuid[]) AND read_at IS NULL',
-        [userId, ids, now],
+        'UPDATE notifications SET read_at = $3 WHERE user_id = $1 AND message_id = ANY($2::uuid[]) AND read_at IS NULL AND ($4::timestamptz IS NULL OR created_at <= $4)',
+        [userId, ids, now, until ?? null],
       );
     },
     async clearNotifications(userId, now) {
       await pool.query(
         `INSERT INTO inbox_state (user_id, cleared_at) VALUES ($1, $2)
-         ON CONFLICT (user_id) DO UPDATE SET cleared_at = EXCLUDED.cleared_at`,
+         ON CONFLICT (user_id) DO UPDATE SET cleared_at = GREATEST(inbox_state.cleared_at, EXCLUDED.cleared_at)`,
         [userId, now],
       );
       await pool.query('UPDATE notifications SET read_at = $2 WHERE user_id = $1 AND read_at IS NULL AND created_at <= $2', [userId, now]);

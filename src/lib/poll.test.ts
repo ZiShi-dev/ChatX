@@ -41,6 +41,27 @@ describe('network polling', () => {
     await vi.advanceTimersByTimeAsync(60_000);
     expect(task).toHaveBeenCalledTimes(2);
   });
+  it('backs off repeated failed refreshes and resumes immediately on recovery', async () => {
+    const task = vi.fn(async () => 'offline');
+    stop = startPolling(task);
+    await vi.advanceTimersByTimeAsync(39999);
+    expect(task).toHaveBeenCalledTimes(1);
+    await vi.advanceTimersByTimeAsync(1);
+    expect(task).toHaveBeenCalledTimes(2);
+    window.dispatchEvent(new Event('online'));
+    await vi.advanceTimersByTimeAsync(0);
+    expect(task).toHaveBeenCalledTimes(3);
+  });
+  it('honors the server retry deadline even when connectivity changes', async () => {
+    const task = vi.fn(async () => { throw { retryAfter: 90000 }; });
+    stop = startPolling(task);
+    await vi.advanceTimersByTimeAsync(10000);
+    window.dispatchEvent(new Event('online'));
+    await vi.advanceTimersByTimeAsync(79999);
+    expect(task).toHaveBeenCalledTimes(1);
+    await vi.advanceTimersByTimeAsync(1);
+    expect(task).toHaveBeenCalledTimes(2);
+  });
   it('skips hidden, offline and inactive screens, then resumes on reconnect', async () => {
     const task = vi.fn(async () => undefined);
     let active = false;

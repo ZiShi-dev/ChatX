@@ -344,17 +344,17 @@ export function createMemoryRepository(): AuthRepository {
       const cleared = clearedAt.get(userId) ?? 0;
       return notices.filter((notice) => notice.userId === userId && !notice.read && notice.createdAt.getTime() > cleared).length;
     },
-    async markNotificationsRead(userId, ids, now) {
+    async markNotificationsRead(userId, ids, now, until) {
       for (const notice of notices) {
         if (notice.userId !== userId || notice.read) continue;
-        if (ids === 'all' || ids.includes(notice.messageId)) notice.read = true;
+        if ((ids === 'all' || ids.includes(notice.messageId)) && (!until || notice.createdAt <= until)) notice.read = true;
       }
       void now;
     },
     async clearNotifications(userId, now) {
-      clearedAt.set(userId, now.getTime());
+      clearedAt.set(userId, Math.max(clearedAt.get(userId) ?? 0, now.getTime()));
       for (const notice of notices) {
-        if (notice.userId === userId) notice.read = true;
+        if (notice.userId === userId && notice.createdAt <= now) notice.read = true;
       }
     },
     async markRoomRead(roomId, userId, now, messageId) {

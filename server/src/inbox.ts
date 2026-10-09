@@ -58,24 +58,30 @@ export async function readInbox(deps: Deps, input: { token: string; before: stri
   return { ok: true as const, notifications: notices.map(inboxView), unreadCount };
 }
 
-export async function markInboxRead(deps: Deps, input: { token: string; ids: unknown; all: unknown }) {
+export async function markInboxRead(deps: Deps, input: { token: string; ids: unknown; all: unknown; until?: unknown }) {
   const user = await sessionUser(deps, input.token);
   if (!user || user.role !== 'member') return { ok: false as const, error: 'invalid_credentials' as const };
   const now = new Date(deps.now());
+  let until: Date | undefined;
+  if (input.until !== undefined) {
+    if (typeof input.until !== 'string' || !Number.isFinite(Date.parse(input.until))) return { ok: false as const, error: 'invalid_credentials' as const };
+    until = new Date(Math.min(now.getTime(), Date.parse(input.until)));
+  }
   if (input.all === true) {
-    await deps.repo.markNotificationsRead(user.id, 'all', now);
-    return { ok: true as const };
+    await deps.repo.markNotificationsRead(user.id, 'all', now, until);
+    return { ok: true as const, unreadCount: await deps.repo.countUnreadNotifications(user.id) };
   }
   if (!Array.isArray(input.ids) || input.ids.length > INBOX_PAGE_SIZE || input.ids.some((id) => typeof id !== 'string' || !ID.test(id))) {
     return { ok: false as const, error: 'invalid_credentials' as const };
   }
-  await deps.repo.markNotificationsRead(user.id, input.ids, now);
-  return { ok: true as const };
+  await deps.repo.markNotificationsRead(user.id, input.ids, now, until);
+  return { ok: true as const, unreadCount: await deps.repo.countUnreadNotifications(user.id) };
 }
 
-export async function clearInbox(deps: Deps, token: string) {
+export async function clearInbox(deps: Deps, token: string, until?: unknown) {
   const user = await sessionUser(deps, token);
   if (!user || user.role !== 'member') return { ok: false as const, error: 'invalid_credentials' as const };
-  await deps.repo.clearNotifications(user.id, new Date(deps.now()));
+  if (until !== undefined && (typeof until !== 'string' || !Number.isFinite(Date.parse(until)))) return { ok: false as const, error: 'invalid_credentials' as const };
+  await deps.repo.clearNotifications(user.id, new Date(until === undefined ? deps.now() : Math.min(deps.now(), Date.parse(until as string))));
   return { ok: true as const };
 }

@@ -36,6 +36,18 @@ async function verifyTurnNotifications(repo: AuthRepository) {
   assert.equal((await repo.listNotifications(people[1].id, 30, null))[0].read, false);
   return { people, message };
 }
+async function verifyNotificationCutoffs(repo: AuthRepository) {
+  const { people, message } = await verifyTurnNotifications(repo);
+  const future: RoomMessage = { ...message, id: randomUUID(), createdAt: new Date(now.getTime() + 1000) };
+  await repo.addRoomMessage(future); await repo.notifyTurnMembers(future);
+  await repo.markNotificationsRead(people[1].id, 'all', future.createdAt, now);
+  await repo.markNotificationsRead(people[1].id, [future.id], future.createdAt, now);
+  assert.equal((await repo.listNotifications(people[1].id, 30, null)).find(item => item.messageId === message.id)?.read, true);
+  assert.equal((await repo.listNotifications(people[1].id, 30, null)).find(item => item.messageId === future.id)?.read, false);
+  await repo.clearNotifications(people[1].id, now);
+  assert.equal((await repo.listNotifications(people[1].id, 30, null)).some(item => item.messageId === message.id), false);
+  assert.equal((await repo.listNotifications(people[1].id, 30, null)).some(item => item.messageId === future.id), true);
+}
 async function verifyGroupRotation(repo: AuthRepository) {
   const people = [user(randomUUID()), user(randomUUID()), user(randomUUID())];
   for (const person of people) await repo.insertUser(person);
@@ -119,6 +131,7 @@ async function verify(repo: AuthRepository) {
 it('keeps stable pagination, scoped access, monotonic reads and immutable deletion', async () => { await verify(createMemoryRepository()); });
 it('persists weekly group rights and rotates only once under concurrent reads', async () => { await verifyGroupRotation(createMemoryRepository()); });
 it('notifies every group member once and keeps read status private', async () => { await verifyTurnNotifications(createMemoryRepository()); });
+it('preserves newer notifications across delayed mark-all and clear operations', async () => { await verifyNotificationCutoffs(createMemoryRepository()); });
 
 const database = process.env.CHATX_TEST_DATABASE_URL;
 it('verifies PostgreSQL migrations, cursor SQL and transaction rollback', { skip: !database }, async () => {
@@ -141,6 +154,7 @@ it('verifies PostgreSQL migrations, cursor SQL and transaction rollback', { skip
       assert.equal(notices.length, 1);
       assert.equal(notices[0].read, person.id === turnNotices.people[0].id);
     }
+    await verifyNotificationCutoffs(repo);
     await verifyGroupRotation(repo);
     await verifyLowBandwidth(repo);
     const five = Array.from({ length: 5 }, () => user(randomUUID()));

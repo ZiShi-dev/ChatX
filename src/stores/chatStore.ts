@@ -1,3 +1,5 @@
+import { constrainedDevice } from '../lib/deviceBudget';
+import { queueRoomRead, queueInboxClear, cacheInbox, pendingReads, queueNotificationReads, overlayPendingReads, flushPendingReads } from '../lib/pendingReads';
 import { uploadResumable } from '../lib/resumableUpload';
 import { readRoomSync, mergeRoomDelta } from '../lib/roomSync';
 import { create } from 'zustand';
@@ -36,7 +38,7 @@ import { useNetworkStore } from './networkStore';
 import { useSettingsStore } from './settingsStore';
 import { useUserStore } from './userStore';
 import { preserveCurrentTurn, readGroupTurnPayload } from '../lib/groupTurn';
-import { syncServerClock } from '../lib/serverClock';
+import { serverNow, syncServerClock } from '../lib/serverClock';
 import { saveOutgoing, loadOutgoing, removeOutgoing, saveReceivedMedia, readReceivedMedia, clearReceivedMedia } from '../lib/durableChat';
 import { createOutgoingScheduler } from '../lib/outgoingScheduler';
 import { retryDelay, retryableStatus } from '../lib/retry';
@@ -201,6 +203,8 @@ function rememberConversation(conversation: Conversation) {
 
 function mergeInbox(current: InboxItem[], page: InboxItem[], older: boolean) {
   const key = (item: InboxItem) => `${item.kind}:${item.id}`;
+  const previous = new Map(current.map(item => [key(item), item]));
+  page = page.map(item => { const old = previous.get(key(item)); return old && !old.unread && old.createdAt === item.createdAt ? { ...item, unread: false, unreadCount: 0 } : item; });
   if (older) {
     const seen = new Set(current.map(key));
     return [...current, ...page.filter((item) => !seen.has(key(item)))];
@@ -760,22 +764,17 @@ export const useChatStore = create<ChatState>((set, get) => ({
       const target = get().messages.find((item) => item.id === messageId && item.conversationId === conversationId);
       if (!target) return false;
       if (previous && (previous.createdAt > target.createdAt || (previous.createdAt === target.createdAt && previous.id >= target.id))) return true;
-      try {
-        const result = await adminFetch(`/api/rooms/${conversationId}/read`, { method: 'POST', body: { messageId } }) as { unreadCount?: number; unreadNotifications?: number } | null;
-        if (owner !== useAuthStore.getState().currentUser.id) return false;
-        set((state) => ({ readCursors: { ...state.readCursors, [conversationId]: { ...state.readCursors[conversationId], [useAuthStore.getState().currentUser.id]: messageId } } }));
-        if (result && Number.isInteger(result.unreadCount) && result.unreadCount! >= 0 && Number.isInteger(result.unreadNotifications) && result.unreadNotifications! >= 0) {
-          set((state) => ({
-            conversations: state.conversations.map((room) => room.id === conversationId ? { ...room, unreadCount: result.unreadCount! } : room),
-            serverUnread: result.unreadNotifications!,
-          }));
-        } else {
-          // Compatibility with a server that has not received the smaller read response yet.
-          await get().loadInbox();
-          await get().loadHome();
-        }
-        return true;
-      } catch { set({ lastError: 'تعذر حفظ حالة القراءة. ستتم إعادة المحاولة عند عرض الرسالة.' }); return false; }
+        try { queueRoomRead(owner, conversationId, messageId, target.createdAt); }
+        catch { set({ lastError: 'تعذر حفظ القراءة على الجهاز.' }); return false; }
+        inboxReadVersion++;
+        set(state => {
+          const serverInbox = overlayPendingReads(owner, state.serverInbox);
+          const read = state.serverInbox.filter(item => item.unread).length - serverInbox.filter(item => item.unread).length;
+          return { serverInbox, serverUnread: Math.max(0, state.serverUnread - read) };
+        });
+        cacheInbox(owner, get().serverInbox, get().serverUnread);
+        await syncPendingReadWrites();
+      return !pendingReads(owner).rooms[conversationId];
     }
     set((state) => ({
       conversations: state.conversations.map((conversation) =>
@@ -785,24 +784,31 @@ export const useChatStore = create<ChatState>((set, get) => ({
     return true;
   },
   markAllRead: () => {
+    const owner = useAuthStore.getState().currentUser.id;
+    if (isServerId(owner)) {
+      try { queueNotificationReads(owner, [], get().serverInbox.reduce((latest, item) => item.createdAt > latest ? item.createdAt : latest, '') || new Date(serverNow()).toISOString()); }
+      catch { set({ lastError: 'تعذر حفظ القراءة على الجهاز. حاول مجددًا.' }); return; }
+    }
+    inboxReadVersion++;
     set((state) => ({
       serverInbox: state.serverInbox.map((item) => ({ ...item, unread: false, unreadCount: 0 })),
       serverUnread: 0,
       conversations: state.conversations.map((conversation) =>
-        conversation.type === 'private' || conversation.unreadCount === 0
+        isServerId(useAuthStore.getState().currentUser.id) || conversation.type === 'private' || conversation.unreadCount === 0
           ? conversation
           : { ...conversation, unreadCount: 0 },
       ),
     }));
-    if (isServerId(useAuthStore.getState().currentUser.id)) {
-      void adminFetch('/api/notifications/read', { method: 'POST', body: { all: true } }).catch(() => {
-        set({ lastError: 'تعذر حفظ قراءة الإشعارات. أعد المحاولة.' });
-        void get().loadInbox();
-      });
-    }
+    if (isServerId(owner)) { cacheInbox(owner, get().serverInbox, get().serverUnread); void syncPendingReadWrites(); }
   },
   markNotificationsRead: (ids) => {
     if (ids.length === 0) return;
+    const owner = useAuthStore.getState().currentUser.id;
+    if (isServerId(owner)) {
+        try { queueNotificationReads(owner, ids, undefined, Object.fromEntries(ids.map(id => [id, get().serverInbox.find(item => item.id === id)?.createdAt ?? new Date(serverNow()).toISOString()]))); }
+      catch { set({ lastError: 'تعذر حفظ القراءة على الجهاز. حاول مجددًا.' }); return; }
+    }
+    inboxReadVersion++;
     set((state) => {
       const known = new Set(state.inboxReadIds);
       let changed = false;
@@ -817,41 +823,27 @@ export const useChatStore = create<ChatState>((set, get) => ({
       if (!changed && hit === 0 && serverInbox.every((item, index) => item === state.serverInbox[index])) return state;
       return { inboxReadIds: [...known], serverInbox, serverUnread: Math.max(0, state.serverUnread - hit) };
     });
-    if (isServerId(useAuthStore.getState().currentUser.id)) {
-      const owner = useAuthStore.getState().currentUser.id;
-      void (async () => {
-        try {
-          for (let index = 0; index < ids.length; index += 30) {
-            await adminFetch('/api/notifications/read', { method: 'POST', body: { ids: ids.slice(index, index + 30) } });
-          }
-        } catch {
-          if (owner !== useAuthStore.getState().currentUser.id) return;
-          set((state) => ({ inboxReadIds: state.inboxReadIds.filter((id) => !ids.includes(id)), lastError: 'تعذر حفظ قراءة الإشعارات. أعد المحاولة.' }));
-          void get().loadInbox();
-        }
-      })();
-    }
+    if (isServerId(owner)) { cacheInbox(owner, get().serverInbox, get().serverUnread); void syncPendingReadWrites(); }
   },
   clearInbox: () => {
+    const owner = useAuthStore.getState().currentUser.id;
+    if (isServerId(owner)) {
+      try { queueInboxClear(owner, get().serverInbox.reduce((latest, item) => item.createdAt > latest ? item.createdAt : latest, '') || new Date(serverNow()).toISOString()); }
+      catch { set({ lastError: 'تعذر حفظ الإجراء على الجهاز. حاول مجددًا.' }); return; }
+    }
+    inboxReadVersion++;
     set((state) => ({
       inboxClearedAt: new Date().toISOString(),
       serverInbox: [],
       serverUnread: 0,
       inboxHasMore: false,
       conversations: state.conversations.map((conversation) =>
-        conversation.type === 'private' || conversation.unreadCount === 0
+        isServerId(owner) || conversation.type === 'private' || conversation.unreadCount === 0
           ? conversation
           : { ...conversation, unreadCount: 0 },
       ),
     }));
-    if (isServerId(useAuthStore.getState().currentUser.id)) {
-      const owner = useAuthStore.getState().currentUser.id;
-      void adminFetch('/api/notifications/clear', { method: 'POST' }).catch(() => {
-        if (owner !== useAuthStore.getState().currentUser.id) return;
-        set({ inboxClearedAt: null, lastError: 'تعذر مسح الإشعارات. أعد المحاولة.' });
-        void get().loadInbox();
-      });
-    }
+    if (isServerId(owner)) { cacheInbox(owner, [], 0); void syncPendingReadWrites(); }
   },
   setTyping: (conversationId, userIds) => {
     const current = get().typingByConversation[conversationId] ?? [];
@@ -992,18 +984,26 @@ export const useChatStore = create<ChatState>((set, get) => ({
   loadInbox: async (before) => {
     const me = useAuthStore.getState().currentUser.id;
     if (!isServerId(me)) return 'local';
+    void syncPendingReadWrites();
+    const readVersion = inboxReadVersion;
     const query = before ? `?before=${encodeURIComponent(before.at)}&beforeId=${encodeURIComponent(before.id)}` : '';
     try {
       const payload = await adminFetch(`/api/notifications${query}`);
       if (me !== useAuthStore.getState().currentUser.id || !useAuthStore.getState().activated) return 'invalid';
+      if (readVersion !== inboxReadVersion) return 'ok';
       const items = readInboxPayload(payload);
       const unread = readInboxUnread(payload);
       if (!items || unread === null) return 'invalid';
-      set((state) => ({
-        serverInbox: mergeInbox(state.serverInbox, items, Boolean(before)),
-        serverUnread: unread,
+        const overlaid = overlayPendingReads(me, items);
+        const pending = pendingReads(me);
+        const cutoff = [pending.allUntil, pending.clearedUntil].filter(Boolean).sort().at(-1);
+        const allCovered = !before && cutoff && items.every(item => item.createdAt <= cutoff);
+        set((state) => ({
+          serverInbox: mergeInbox(state.serverInbox, overlaid, Boolean(before)),
+          serverUnread: before ? state.serverUnread : allCovered ? 0 : Math.max(0, unread - items.filter(item => item.unread && !overlaid.some(row => row.id === item.id && row.kind === item.kind && row.unread)).length),
         inboxHasMore: items.length === NOTIFICATIONS_PAGE_SIZE,
       }));
+      cacheInbox(me, get().serverInbox, get().serverUnread);
       return 'ok';
     } catch (error) {
       const offline = !(error instanceof AdminApiError) || error.code === 'offline' || error.code === 'unavailable';
@@ -1234,8 +1234,63 @@ export const useChatStore = create<ChatState>((set, get) => ({
   },
 }));
 
+let readRetryTimer: number | undefined;
+let readRetryAttempts = 0;
+let readRetryAt = 0;
+let readServerRetryAt = 0;
+let readSyncPending: Promise<void> | undefined;
+let readSyncOwner: string | undefined;
+let inboxReadVersion = 0;
+async function syncPendingReadWrites() {
+  const owner = useAuthStore.getState().currentUser.id;
+  if (!isServerId(owner) || !useAuthStore.getState().activated || useNetworkStore.getState().network === 'offline' || navigator.onLine === false) return;
+  if (readSyncPending && readSyncOwner === owner) return readSyncPending;
+  if (Date.now() < readRetryAt) return;
+  readSyncOwner = owner;
+  window.clearTimeout(readRetryTimer);
+  readSyncPending = flushPendingReads(owner, () => owner === useAuthStore.getState().currentUser.id && useAuthStore.getState().activated && useNetworkStore.getState().network !== 'offline' && navigator.onLine !== false,
+    async (path, body) => {
+      const version = inboxReadVersion;
+      const result = await adminFetch(path, { method: 'POST', body });
+      if (owner !== useAuthStore.getState().currentUser.id) return result;
+      const queued = pendingReads(owner);
+      const sent = body as { ids?: string[]; all?: boolean; until?: string; messageId?: string };
+      const roomId = path.includes('/rooms/') ? path.split('/')[3] : undefined;
+      // Intermediate acknowledgements still count other locally read items as
+      // unread on the server. Apply its global badge only after the final intent.
+      const countsCurrent = version === inboxReadVersion && !queued.clearUntil
+        && (sent.all ? queued.allUntil === sent.until : !queued.allUntil)
+        && queued.ids.every(id => sent.ids?.includes(id))
+        && Object.entries(queued.rooms).every(([id, message]) => id === roomId && message === sent.messageId);
+      inboxReadVersion++;
+      if (path === '/api/notifications/read' && countsCurrent && typeof (result as { unreadCount?: unknown }).unreadCount === 'number') useChatStore.setState({ serverUnread: (result as { unreadCount: number }).unreadCount });
+      if (path.includes('/rooms/')) {
+        const roomId = path.split('/')[3]; const messageId = (body as {messageId:string}).messageId;
+        const counts = result as { unreadCount?: number; unreadNotifications?: number };
+        const target = useChatStore.getState().messages.find(item => item.id === messageId);
+        useChatStore.setState(state => ({
+          readCursors: { ...state.readCursors, [roomId]: { ...state.readCursors[roomId], [owner]: messageId } },
+          conversations: state.conversations.map(room => room.id === roomId && typeof counts.unreadCount === 'number' ? { ...room, unreadCount: counts.unreadCount } : room),
+          serverUnread: countsCurrent && typeof counts.unreadNotifications === 'number' ? counts.unreadNotifications : state.serverUnread,
+          serverInbox: state.serverInbox.map(item => item.conversationId === roomId && item.kind !== 'reaction' && target && (item.createdAt < target.createdAt || item.createdAt === target.createdAt && item.id <= messageId) ? { ...item, unread: false, unreadCount: 0 } : item),
+        }));
+      }
+      cacheInbox(owner, useChatStore.getState().serverInbox, useChatStore.getState().serverUnread);
+      return result;
+    }).then(() => { readRetryAttempts = 0; readRetryAt = 0; readServerRetryAt = 0; }).catch(error => {
+      if (owner !== useAuthStore.getState().currentUser.id) return;
+      if (error instanceof AdminApiError && !retryableStatus(error.status)) return;
+      const wait = retryDelay(++readRetryAttempts, error instanceof AdminApiError ? error.retryAfter : 0);
+      readRetryAt = Date.now() + wait;
+      readServerRetryAt = error instanceof AdminApiError ? Date.now() + error.retryAfter : 0;
+      readRetryTimer = window.setTimeout(syncPendingReadWrites, wait);
+    }).finally(() => { if (readSyncOwner === owner) readSyncPending = undefined; });
+  return readSyncPending;
+}
+
 useNetworkStore.subscribe((state, previous) => {
   if (state.network === previous.network) return;
+  if (state.network !== 'offline') { readRetryAt = readServerRetryAt; void syncPendingReadWrites(); }
   if (state.network === 'offline') useChatStore.getState().pauseOutgoing();
   else if (previous.network === 'offline') useChatStore.getState().flushOutgoing();
   else outgoing.wake();
@@ -1243,6 +1298,7 @@ useNetworkStore.subscribe((state, previous) => {
 
 let cacheTimer: number | undefined;
 function switchChatAccount() {
+  window.clearTimeout(readRetryTimer); readRetryAttempts = 0; readRetryAt = 0; readServerRetryAt = 0;
   outgoingReady = false;
   roomSyncCursors.clear(); roomSyncPending.clear();
   window.clearTimeout(cacheTimer);
@@ -1257,7 +1313,7 @@ function switchChatAccount() {
     messages: snapshot?.messages ?? (demo ? MESSAGES : []),
     fullRooms: snapshot?.conversations.map((room) => room.id) ?? [],
     roomHasMore: {}, historyLimit: {}, readCursors: {}, readTimes: {}, typingByConversation: {},
-    serverInbox: [], serverUnread: 0, inboxHasMore: false, inboxReadIds: [], inboxClearedAt: null,
+    serverInbox: auth.activated ? overlayPendingReads(auth.currentUser.id, pendingReads(auth.currentUser.id).inbox ?? []) : [], serverUnread: auth.activated ? pendingReads(auth.currentUser.id).unread ?? 0 : 0, inboxHasMore: false, inboxReadIds: [], inboxClearedAt: null,
     editingId: null, replyingTo: null, lastError: '',
   });
   useUserStore.setState({ users: snapshot?.users ?? [auth.currentUser] });
@@ -1281,7 +1337,7 @@ const outgoing = createOutgoingScheduler({
   pending: () => useChatStore.getState().messages.filter((message) => isServerId(message.conversationId) && message.status === 'pending'
     && !useChatStore.getState().messages.some((other) => other.conversationId === message.conversationId && (other.type === 'text') === (message.type === 'text') && preparing.has(other.id))),
   available: () => outgoingReady && useAuthStore.getState().activated && useNetworkStore.getState().network !== 'offline',
-  concurrency: () => useNetworkStore.getState().network === 'slow' || useSettingsStore.getState().dataSaver ? 1 : 2,
+  concurrency: () => constrainedDevice() || useNetworkStore.getState().network === 'slow' || useSettingsStore.getState().dataSaver ? 1 : 2,
   send: async (id) => { const message = useChatStore.getState().messages.find((item) => item.id === id); if (message) await prepareAndSend(message); },
 });
 switchChatAccount();

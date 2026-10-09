@@ -1,3 +1,4 @@
+import { yieldToInterface } from './deviceBudget';
 const IMAGE_URL_MAX = 80_000;
 const IMAGE_BYTES_MAX = 60_000;
 const JPEG_PREFIX = 'data:image/jpeg;base64,/9j/';
@@ -47,12 +48,16 @@ function drawJpeg(image: HTMLImageElement, edge: number, quality: number) {
 export async function fitChatImage(source: string, qualityLevel: 'saver' | 'medium' | 'original' = 'saver'): Promise<{ url: string; bytes: number; width: number; height: number } | null> {
   const byteLimit = qualityLevel === 'saver' ? 20_000 : qualityLevel === 'medium' ? 40_000 : IMAGE_BYTES_MAX;
   const ready = readyJpeg(source);
-  if (ready && ready <= byteLimit) return { url: source, bytes: ready, width: 0, height: 0 };
+  if (ready && ready <= byteLimit) {
+    const image = await loadImage(source);
+    return { url: source, bytes: ready, width: image?.naturalWidth ?? 0, height: image?.naturalHeight ?? 0 };
+  }
   const image = await loadImage(source);
   if (!image || image.naturalWidth * image.naturalHeight > 24_000_000) return null;
   let edge = qualityLevel === 'saver' ? 640 : qualityLevel === 'medium' ? 800 : 960;
   let quality = qualityLevel === 'saver' ? 0.58 : qualityLevel === 'medium' ? 0.66 : 0.72;
   for (let attempt = 0; attempt < 6; attempt += 1) {
+    await yieldToInterface();
     const drawn = drawJpeg(image, edge, quality);
     const bytes = drawn ? readyJpeg(drawn.url) : null;
     if (drawn && bytes && bytes <= byteLimit) return { url: drawn.url, bytes, width: drawn.width, height: drawn.height };
