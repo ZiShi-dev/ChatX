@@ -1,0 +1,54 @@
+import {readFile} from 'node:fs/promises';
+import assert from 'node:assert/strict';
+import {createRequire} from 'node:module';
+const require=createRequire(import.meta.url);
+const {chromium}=require(process.env.CHATX_PLAYWRIGHT_PATH||'playwright');
+const browser=await chromium.launch({headless:true,executablePath:process.env.CHATX_CHROME_PATH});
+const alice={id:'11111111-1111-4111-8111-111111111111',username:'alice',displayName:'Alice',role:'member',bio:'',status:'online',color:'#4d7ea8'};
+const roomId='00000000-0000-4000-8000-000000000001';
+const room={id:roomId,type:'global',name:'ChatX',participantIds:[alice.id],unreadCount:0,createdAt:'2026-10-09T12:00:00Z'};
+const context=await browser.newContext({viewport:{width:360,height:740},hasTouch:true,acceptDownloads:true,permissions:['notifications']});
+const page=await context.newPage();const errors=[];page.on('pageerror',error=>errors.push(error.message));
+try{
+ const assets=await page.evaluate(async()=>{
+  const canvas=document.createElement('canvas');canvas.width=720;canvas.height=1080;
+  const ctx=canvas.getContext('2d');ctx.fillStyle='#346a7c';ctx.fillRect(0,0,720,1080);ctx.fillStyle='#e4bc7e';ctx.fillRect(80,100,560,800);const image=canvas.toDataURL('image/png');
+  document.body.append(canvas);const stream=canvas.captureStream(15);const recorder=new MediaRecorder(stream,{mimeType:'video/webm'});const parts=[];
+  const complete=new Promise(resolve=>{recorder.ondataavailable=event=>parts.push(event.data);recorder.onstop=async()=>{const reader=new FileReader();reader.onload=()=>resolve(reader.result);reader.readAsDataURL(new Blob(parts,{type:'video/webm'}));};});const started=new Promise(resolve=>recorder.onstart=resolve);recorder.start();await started;for(let frame=0;frame<6;frame++){await new Promise(resolve=>setTimeout(resolve,120));ctx.fillStyle=frame%2?'#182f39':'#ffffff';ctx.fillRect(0,0,100,100);stream.getVideoTracks()[0].requestFrame?.();}recorder.stop();const video=await complete;stream.getTracks().forEach(track=>track.stop());return{image,video};
+ });
+ const messages=[['image',assets.image],['image',assets.image],['video',assets.video]].map(([type,source],i)=>({id:`aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa${i}`,conversationId:roomId,senderId:alice.id,type,status:'sent',createdAt:`2026-10-09T12:0${i}:00Z`,media:{state:'cached',fileSize:1000,width:720,height:1080,localPreviewUrl:source}}));
+ await context.addInitScript(({alice,room,messages})=>{
+  localStorage.setItem('chatx.auth',JSON.stringify({activated:true,currentUser:alice,accounts:[alice]}));
+  localStorage.setItem(`chatx.chat.v1.${alice.id}`,JSON.stringify({conversations:[room],messages:[],users:[alice]}));
+  Object.defineProperty(navigator,'canShare',{value:()=>true,configurable:true});
+  Object.defineProperty(navigator,'share',{value:async data=>{window.__shared={name:data.files[0].name,size:data.files[0].size};},configurable:true});
+ },{alice,room,messages});
+ await page.route('**/api/**',route=>{const path=new URL(route.request().url()).pathname;const body=path==='/api/home'?{conversations:[room],users:[alice]}:path==='/api/profile'?{user:alice}:path.endsWith('/sync')?{messages:[],readers:[],removedIds:[],reset:true,hasMore:false,historyHasMore:false,cursor:'cccccccc-cccc-4ccc-8ccc-cccccccccccc.0'}:{ok:true,notifications:[],unreadCount:0,saved:[],presence:[]};return route.fulfill({json:body});});
+ await page.goto('http://127.0.0.1:4186/chat/'+roomId);await page.evaluate(async({owner,messages})=>{const db=await new Promise(resolve=>{const req=indexedDB.open('chatx-durable-v1',2);req.onsuccess=()=>resolve(req.result);});await new Promise(resolve=>{const tx=db.transaction('outgoing','readwrite');for(const message of messages)tx.objectStore('outgoing').put({key:owner+':'+message.id,owner,message:{...message,status:'failed',prepared:true,retryable:false}});tx.oncomplete=resolve;});db.close();},{owner:alice.id,messages});await page.reload();await page.locator('.startup-screen').waitFor({state:'detached'});
+ await page.locator('.media-open').first().click();await page.locator('.mv-stage img').waitFor();await page.getByRole('button',{name:'تنزيل على الجهاز'}).isEnabled();
+ await page.getByRole('button',{name:'تكبير',exact:true}).click();await page.getByRole('button',{name:'إعادة ضبط التكبير'}).getByText('150%').waitFor();
+ await page.getByRole('button',{name:'تدوير الصورة'}).click();assert.ok((await page.locator('.mv-stage img').getAttribute('style')).includes('rotate(90deg)'));
+ await page.getByRole('button',{name:'معلومات الملف'}).click();await page.locator('.mv-info').waitFor();await page.getByRole('button',{name:'معلومات الملف'}).click();
+ const downloadPromise=page.waitForEvent('download');await page.getByRole('button',{name:'تنزيل على الجهاز'}).click();const download=await downloadPromise;assert.match(download.suggestedFilename(),/\.png$/);assert.equal(await download.failure(),null);assert.deepEqual(await readFile(await download.path()),Buffer.from(assets.image.split(',')[1],'base64'));
+ await page.getByRole('button',{name:'مشاركة الملف'}).click();assert.match((await page.evaluate(()=>window.__shared)).name,/\.png$/);
+ await page.getByRole('button',{name:'تدوير الصورة'}).click();await page.getByRole('button',{name:'تدوير الصورة'}).click();await page.getByRole('button',{name:'تدوير الصورة'}).click();
+ const bounds=await page.locator('.mv-stage').boundingBox();const x=bounds.x+bounds.width/2,y=bounds.y+bounds.height/2;
+ const cdp=await context.newCDPSession(page);
+ await cdp.send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[{x:x-30,y,id:0},{x:x+30,y,id:1}]});
+ await cdp.send('Input.dispatchTouchEvent',{type:'touchMove',touchPoints:[{x:x-80,y,id:0},{x:x+80,y,id:1}]});
+ await cdp.send('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]});
+ await page.waitForFunction(()=>document.querySelector('[aria-label="إعادة ضبط التكبير"]').textContent!=='100%');
+ await page.mouse.move(x,y);await page.mouse.down();await page.mouse.move(x+25,y+20,{steps:5});await page.mouse.up();assert.ok(!/translate\(0px,\s*0px\)/.test(await page.locator('.mv-stage img').getAttribute('style')));
+ await page.getByRole('button',{name:'إعادة ضبط التكبير'}).click();
+ await page.mouse.move(x+60,y);await page.mouse.down();await page.mouse.move(x-60,y,{steps:8});await page.mouse.up();await page.locator('.mv-count').getByText('2 / 3').waitFor();
+ await page.mouse.move(x-60,y);await page.mouse.down();await page.mouse.move(x+60,y,{steps:8});await page.mouse.up();await page.locator('.mv-count').getByText('1 / 3').waitFor();
+ await page.screenshot({path:'docs/media-viewer-mobile.png'});
+ await page.keyboard.press('ArrowRight');await page.locator('.mv-count').getByText('2 / 3').waitFor();
+ await page.getByRole('button',{name:'الوسيط التالي'}).click();await page.locator('.mv-stage video').waitFor();
+ await page.locator('.mv-stage video').evaluate(async video=>{await video.play();video.pause();});await page.getByLabel('سرعة الفيديو').selectOption('1.5');assert.equal(await page.locator('.mv-stage video').evaluate(video=>video.playbackRate),1.5);
+ const videoDownload=page.waitForEvent('download');await page.getByRole('button',{name:'تنزيل على الجهاز'}).click();assert.match((await videoDownload).suggestedFilename(),/\.webm$/);
+ await page.getByRole('button',{name:'الوسيط السابق'}).click();await page.setViewportSize({width:1280,height:800});await page.screenshot({path:'docs/media-viewer-desktop.png'});
+ await page.getByRole('button',{name:'الرد على الرسالة'}).click();await page.locator('.media-viewer').waitFor({state:'detached'});
+ assert.deepEqual(errors,[]);
+ console.log('PASS mobile/desktop viewer, zoom/pinch/pan/swipe/reset/rotation, media navigation, image/video downloads, file sharing, video playback and reply');
+}finally{await context.close();await browser.close();}

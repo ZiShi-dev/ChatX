@@ -1,6 +1,16 @@
 package app.chatx.mobile;
 
 import android.Manifest;
+import android.app.Activity;
+import android.content.Intent;
+import android.util.Base64;
+import androidx.activity.result.ActivityResult;
+import androidx.core.content.FileProvider;
+import com.getcapacitor.annotation.ActivityCallback;
+import java.io.OutputStream;
+import java.io.FileOutputStream;
+import java.io.FileInputStream;
+import java.util.UUID;
 import android.content.ContentUris;
 import android.database.Cursor;
 import android.net.Uri;
@@ -45,6 +55,106 @@ public class StorageAccessPlugin extends Plugin {
 
     private static final int MAX_FILES = 50;
     private static final int MAX_ENTRIES = 200;
+
+    private File exportFile(PluginCall call) {
+        String id = call.getString("id", "");
+        String name = new File(call.getString("name", "ChatX-media")).getName();
+        if (!id.matches("[0-9a-f-]{36}") || name.equals(".") || name.equals("..") || name.isEmpty()) throw new IllegalArgumentException("Invalid export");
+        return new File(new File(new File(getContext().getCacheDir(), "media-export"), id), name);
+    }
+
+    @PluginMethod
+    public void createExport(PluginCall call) {
+        getBridge().execute(() -> {
+            try {
+                File root = new File(getContext().getCacheDir(), "media-export");
+                File[] previous = root.listFiles();
+                if (previous != null) for (File directory : previous) {
+                    if (directory.lastModified() < System.currentTimeMillis() - 86400000L) {
+                        File[] files = directory.listFiles();
+                        if (files != null) for (File file : files) file.delete();
+                        directory.delete();
+                    }
+                }
+                String id = UUID.randomUUID().toString();
+                File directory = new File(root, id);
+                if (!directory.mkdirs()) throw new IllegalStateException("Cache unavailable");
+                JSObject result = new JSObject(); result.put("id", id); call.resolve(result);
+            } catch (Exception error) { call.reject("Unable to prepare file.", error); }
+        });
+    }
+
+    @PluginMethod
+    public void appendExport(PluginCall call) {
+        getBridge().execute(() -> {
+            try {
+                String encoded = call.getString("base64", "");
+                if (encoded.length() > 349528) throw new IllegalArgumentException("Chunk too large");
+                File file = exportFile(call);
+                try (OutputStream stream = new FileOutputStream(file, true)) { stream.write(Base64.decode(encoded, Base64.DEFAULT)); }
+                call.resolve();
+            } catch (Exception error) { call.reject("Unable to prepare file.", error); }
+        });
+    }
+
+    @PluginMethod
+    public void discardExport(PluginCall call) {
+        try { File file = exportFile(call); file.delete(); file.getParentFile().delete(); call.resolve(); }
+        catch (Exception error) { call.reject("Unable to clear temporary file.", error); }
+    }
+
+    @PluginMethod
+    public void saveFile(PluginCall call) {
+        try {
+            if (!exportFile(call).isFile()) throw new IllegalStateException("Missing file");
+            Intent intent = new Intent(Intent.ACTION_CREATE_DOCUMENT);
+            intent.addCategory(Intent.CATEGORY_OPENABLE);
+            intent.setType(call.getString("mimeType", "application/octet-stream"));
+            intent.putExtra(Intent.EXTRA_TITLE, exportFile(call).getName());
+            startActivityForResult(call, intent, "fileSaved");
+        } catch (Exception error) { call.reject("Unable to open save dialog.", error); }
+    }
+
+    @ActivityCallback
+    private void fileSaved(PluginCall call, ActivityResult result) {
+        if (call == null) return;
+        if (result.getResultCode() != Activity.RESULT_OK || result.getData() == null || result.getData().getData() == null) {
+            JSObject cancelled = new JSObject(); cancelled.put("cancelled", true); call.resolve(cancelled); return;
+        }
+        Uri uri = result.getData().getData();
+        getBridge().execute(() -> {
+            try {
+                try (FileInputStream input = new FileInputStream(exportFile(call));
+                     OutputStream output = getContext().getContentResolver().openOutputStream(uri, "w")) {
+                    if (output == null) throw new IllegalStateException("Output unavailable");
+                    byte[] buffer = new byte[32768]; int count;
+                    while ((count = input.read(buffer)) != -1) output.write(buffer, 0, count);
+                }
+                call.resolve();
+            } catch (Exception error) {
+                try { getContext().getContentResolver().delete(uri, null, null); } catch (Exception ignored) { }
+                call.reject("Unable to save file.", error);
+            }
+        });
+    }
+
+    @PluginMethod
+    public void shareFile(PluginCall call) {
+        try {
+            File file = exportFile(call);
+            if (!file.isFile()) throw new IllegalStateException("Missing file");
+            Uri uri = FileProvider.getUriForFile(getContext(), getContext().getPackageName() + ".fileprovider", file);
+            Intent intent = new Intent(Intent.ACTION_SEND);
+            intent.setType(call.getString("mimeType", "application/octet-stream"));
+            intent.putExtra(Intent.EXTRA_STREAM, uri);
+            intent.setClipData(android.content.ClipData.newRawUri("", uri));
+            intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+            getActivity().runOnUiThread(() -> {
+                try { getActivity().startActivity(Intent.createChooser(intent, "")); call.resolve(); }
+                catch (Exception error) { call.reject("Unable to share file.", error); }
+            });
+        } catch (Exception error) { call.reject("Unable to share file.", error); }
+    }
 
     @PluginMethod
     public void requestAccess(PluginCall call) {

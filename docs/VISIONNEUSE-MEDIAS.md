@@ -1,0 +1,13 @@
+# Visionneuse des médias
+
+La photo ou vidéo ouverte depuis une bulle occupe un écran sombre, adapté au téléphone, au paysage et à l'ordinateur. Les commandes comprennent fermeture, téléchargement sur l'appareil, partage du fichier lorsque disponible, conservation privée dans les messages enregistrés, réponse et informations. Les médias déjà chargés dans la conversation apparaissent dans une bande de miniatures ; les éléments distants ne sont téléchargés que sur demande.
+
+Photos : zoom de 100 % à 500 %, boutons, molette, double clic, pincement, déplacement de l'image, rotation par quarts de tour et remise à l'échelle. Un glissement horizontal à l'échelle normale change de média ; un glissement vertical ferme le lecteur. Un appui sur la photo masque les commandes. Flèches du clavier pour naviguer, +/−/0 pour zoomer/réinitialiser, fermeture par la boîte de dialogue Ionic.
+
+Vidéos réellement disponibles : lecture manuelle avec commandes natives (progression, pause, volume), vitesse 0,5× à 2×, plein écran et fenêtre flottante lorsque les API du navigateur sont disponibles. Les anciens fichiers SVG utilisés comme aperçus simulés ne sont pas exportés comme de vraies vidéos. Aucun nouveau protocole d'envoi vidéo côté serveur n'est ajouté ici.
+
+Web : fichier local téléchargé avec nom et type réels ; partage du fichier via Web Share lorsque pris en charge. Android : export temporaire privé par blocs de 256 Kio pour limiter la mémoire du pont JavaScript, copie vers l'emplacement choisi via le sélecteur système, confirmation après fermeture du flux de sortie. Une annulation ne donne pas de message de réussite. Partage via FileProvider et autorisation de lecture temporaire, nettoyage des exports abandonnés de plus de 24 h à la prochaine préparation. Aucun téléchargement supplémentaire nécessaire pour exporter un média déjà disponible.
+
+Validation : quatre tests d'export (format/octet local, disponibilité, partage non supporté, blocs Android et annulation), compilation TypeScript et APK. Le script `scripts/verify-media-viewer.mjs` teste Chrome en 360×740 et 1280×800 : zoom, pincement, déplacement, gestes, rotation, galerie, téléchargement photo identique octet par octet, lecture/téléchargement WebM, vitesse, partage simulé et réponse. Captures avec médias synthétiques : `media-viewer-mobile.png` et `media-viewer-desktop.png`. Le dialogue natif et la destination réelle restent à vérifier sur un téléphone Android ; le test navigateur ne valide pas cette partie.
+
+Références : [sélecteur de sauvegarde Android](https://developer.android.com/training/data-storage/shared/documents-files), [plugins Android Capacitor](https://capacitorjs.com/docs/plugins/android).

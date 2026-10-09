@@ -1,3 +1,4 @@
+import MediaViewer from './MediaViewer';
 import { memo, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { IonButton, IonIcon, IonModal } from '@ionic/react';
@@ -100,7 +101,6 @@ function MediaBlock({ message }: { message: Message }) {
   const autoImages = useSettingsStore((state) => state.autoDownloadImages);
   const autoVideos = useSettingsStore((state) => state.autoDownloadVideos);
   const [open, setOpen] = useState(false);
-  const [zoomed, setZoomed] = useState(false);
   const media = message.media;
 
   useEffect(() => {
@@ -114,7 +114,7 @@ function MediaBlock({ message }: { message: Message }) {
   const progress = message.downloadProgress ?? message.uploadProgress;
   const busy = typeof progress === 'number';
   const poster = media.localPreviewUrl;
-  const playable = message.type === 'video' && poster && !poster.endsWith('.svg');
+  const playable = ready && message.type === 'video' && poster && !poster.endsWith('.svg') && !poster.startsWith('data:image/');
   const ratio = media.width && media.height ? `${media.width} / ${media.height}` : undefined;
 
   return (
@@ -126,7 +126,7 @@ function MediaBlock({ message }: { message: Message }) {
           aria-label={ready ? (message.type === 'video' ? 'تشغيل' : 'عرض') : 'تحميل'}
           onClick={() => (ready ? setOpen(true) : downloadMedia(message.id))}
         >
-          {poster ? (
+          {playable ? <video className="media-preview" src={poster} muted playsInline preload="metadata" style={ratio ? { aspectRatio: ratio } : undefined} /> : poster ? (
             <img className={ready ? 'media-preview' : 'media-preview is-held'} src={poster} alt="" style={ratio ? { aspectRatio: ratio } : undefined} />
           ) : (
             <span className="media-placeholder" style={ratio ? { aspectRatio: ratio } : undefined} />
@@ -153,29 +153,7 @@ function MediaBlock({ message }: { message: Message }) {
           </p>
         )}
       </div>
-      <IonModal isOpen={open} onDidDismiss={() => { setOpen(false); setZoomed(false); }}>
-        <div className="viewer">
-          <button type="button" className="viewer-close" onClick={() => setOpen(false)} aria-label="إغلاق">
-            <IonIcon icon={closeOutline} />
-          </button>
-          {message.type === 'image' && poster && (
-            <button type="button" className="viewer-zoom" onClick={() => setZoomed((value) => !value)}>
-              {zoomed ? 'تصغير' : 'تكبير'}
-            </button>
-          )}
-          <div className={zoomed ? 'viewer-frame is-zoomed' : 'viewer-frame'}>
-            {playable ? (
-              <video className="media-preview tall" src={poster} controls playsInline preload="metadata" />
-            ) : poster && message.type === 'image' ? (
-              <img className="media-preview tall" src={poster} alt="" />
-            ) : poster && message.type === 'video' ? (
-              <img className="media-preview tall" src={poster} alt="" />
-            ) : (
-              <p>{message.type === 'video' ? 'الفيديو جاهز محليًا. لا يوجد تشغيل تلقائي.' : 'الصورة المحفوظة محليًا.'}</p>
-            )}
-          </div>
-        </div>
-      </IonModal>
+      {open && <MediaViewer messageId={message.id} conversationId={message.conversationId} onClose={() => setOpen(false)} />}
     </>
   );
 }
