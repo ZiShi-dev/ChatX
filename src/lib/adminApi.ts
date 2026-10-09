@@ -1,5 +1,6 @@
 import { Capacitor } from '@capacitor/core';
 import { reportNetworkFailure, reportNetworkSuccess } from '../stores/networkStore';
+import { syncServerClock } from './serverClock';
 
 const HTTPS_ORIGIN = /^https:\/\/[A-Za-z0-9.-]+(?::[0-9]{1,5})?$/;
 let sessionVersion = 0;
@@ -72,6 +73,7 @@ export async function adminFetch(path: string, init?: { method?: string; body?: 
     });
     if (controller.signal.aborted) throw new AdminApiError('offline', 0);
     if (version !== sessionVersion) throw new AdminApiError('account_changed', 0);
+    syncServerClock(response.headers.get('date'));
     if (response.status === 304 && cached) { reportNetworkSuccess(Date.now() - started); return JSON.parse(cached.body) as unknown; }
     const body = await response.text();
     let data: unknown = null;

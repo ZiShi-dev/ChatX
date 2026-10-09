@@ -1,13 +1,23 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { adminFetch, adminFetchBlob, invalidateApiSession } from './adminApi';
+import { resetServerClock, serverNow } from './serverClock';
 
 afterEach(() => {
   invalidateApiSession();
+  resetServerClock();
   vi.useRealTimers();
   vi.unstubAllGlobals();
 });
 
 describe('API reliability', () => {
+  it('synchronizes the server clock even when the response body is reused from a 304', async () => {
+    vi.stubGlobal('fetch', vi.fn()
+      .mockResolvedValueOnce(new Response('{"ok":true}', { headers: { etag: '"v1"', date: 'Fri, 09 Oct 2026 12:00:00 GMT' } }))
+      .mockResolvedValueOnce(new Response(null, { status: 304, headers: { date: 'Fri, 09 Oct 2026 12:01:00 GMT' } })));
+    await adminFetch('/api/home');
+    await adminFetch('/api/home');
+    expect(Math.abs(serverNow() - Date.parse('2026-10-09T12:01:00Z'))).toBeLessThan(1000);
+  });
   it('cancels a request immediately on a phone disconnection', async () => {
     vi.useFakeTimers();
     vi.stubGlobal('fetch', vi.fn((_url: string, init: RequestInit) => new Promise<Response>((_resolve, reject) => {

@@ -11,3 +11,11 @@ L’écran du groupe affiche la fin du tour, coupe les droits localement à l’
 Les tests couvrent les modifications répétées, la dernière milliseconde autorisée, le refus à l’échéance, la rotation sans modification, dix cycles sans doublon, le rattrapage après inactivité et les lectures concurrentes. La même vérification de repository est incluse dans le test PostgreSQL optionnel (`CHATX_TEST_DATABASE_URL`).
 
 Validation : 96 tests frontend et 28 tests serveur réussis, ainsi que le test PostgreSQL réel dans un schéma temporaire isolé. Compilation et typage frontend et serveur réussis.
+
+## Correction de l’attente persistante
+
+L’écran affichait « mise à jour du prochain tour » dès que la date locale dépassait l’échéance, même après une réponse périmée ou un échec réseau. Cette indication est désormais réservée à une requête en cours. Les échecs et réponses périmées affichent un état explicite et un bouton de relance. La relance à l’échéance, le polling et le bouton partagent la même requête pour éviter les doublons.
+
+Le calcul utilise l’en-tête HTTP `Date` du serveur et une horloge monotone du client, y compris lors d’une réponse `304`. L’API expose cet en-tête pour Android. La santé publique annonce `groupTurnPolicy: weekly-v2` pour vérifier le déploiement du système hebdomadaire.
+
+Les tests de navigateur reproduisent une réponse périmée, une coupure puis un rétablissement, avec une horloge de téléphone avancée de plusieurs semaines et une URL terminée par `/`.

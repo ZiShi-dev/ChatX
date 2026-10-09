@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
 import { createPortal } from 'react-dom';
 import { IonContent, IonHeader, IonIcon, IonPage } from '@ionic/react';
 import { cameraOutline, pencilOutline } from 'ionicons/icons';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { collectMedia, MediaPanel } from '../components/chat/MediaLibrary';
 import Avatar from '../components/common/Avatar';
 import EmptyState from '../components/common/EmptyState';
@@ -14,6 +14,8 @@ import { connectionLabel } from '../lib/presence';
 import { canEditRoom, canTakeGroupTurn, roleLabel } from '../lib/roles';
 import { isServerId } from '../lib/home';
 import { startPolling } from '../lib/poll';
+import { serverNow } from '../lib/serverClock';
+import { groupTurnStatus, type TurnRefresh } from '../lib/groupTurnStatus';
 import { readBanner, readPhoto } from '../lib/photo';
 import { useAuthStore } from '../stores/authStore';
 import { useChatStore } from '../stores/chatStore';
@@ -22,19 +24,6 @@ import { useUserStore } from '../stores/userStore';
 import type { User } from '../types/user';
 
 type GroupTab = 'members' | 'notify' | 'photos' | 'videos' | 'links';
-
-function turnSentence(name: string, mine: boolean, now: number, opensAt?: string) {
-  const opens = opensAt ? Date.parse(opensAt) : Number.NaN;
-  const waiting = Number.isFinite(opens) && opens > now;
-  const expires = opens + 7 * 24 * 60 * 60 * 1000;
-  if (Number.isFinite(expires) && now >= expires) return 'انتهى الدور — جارٍ تحديث الدور التالي';
-  const end = Number.isFinite(expires) ? new Intl.DateTimeFormat('ar', { day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit', numberingSystem: 'latn' }).format(expires) : '';
-  const date = waiting ? new Intl.DateTimeFormat('ar', { day: 'numeric', month: 'long', numberingSystem: 'latn' }).format(opens) : '';
-  if (mine && waiting) return `دورك في ${date}`;
-  if (mine) return `دورك لتعديل الاسم والصورة بحرية حتى ${end}`;
-  if (waiting) return `دور ${name} في ${date}`;
-  return `دور ${name} لتعديل الاسم والصورة حتى ${end}`;
-}
 
 function memberCountLabel(count: number) {
   if (count <= 1) return 'عضو واحد';
@@ -46,6 +35,7 @@ function memberCountLabel(count: number) {
 export default function GroupProfilePage() {
   const { id = '' } = useParams();
   const navigate = useNavigate();
+  const location = useLocation();
   const currentUser = useAuthStore((state) => state.currentUser);
   const users = useUserStore((state) => state.users);
   const conversation = useChatStore((state) => state.conversations.find((item) => item.id === id));
@@ -61,17 +51,34 @@ export default function GroupProfilePage() {
   const [draftName, setDraftName] = useState('');
   const [draftBio, setDraftBio] = useState('');
   const [tab, setTab] = useState<GroupTab>('members');
-  const [now, setNow] = useState(Date.now);
+  const [now, setNow] = useState(serverNow);
+  const [turnRefresh, setTurnRefresh] = useState<TurnRefresh>('loading');
+  const pendingTurn = useRef<ReturnType<ReturnType<typeof useChatStore.getState>['loadHome']> | undefined>(undefined);
+  const loadTurn = () => {
+    if (!pendingTurn.current) pendingTurn.current = useChatStore.getState().loadHome().finally(() => { pendingTurn.current = undefined; });
+    return pendingTurn.current;
+  };
+  const refreshTurn = async () => {
+    setTurnRefresh('loading');
+    const result = await loadTurn();
+    setNow(serverNow());
+    setTurnRefresh(result);
+  };
   useEffect(() => {
     if (!isServerId(id)) return;
-    return startPolling(async () => { setNow(Date.now()); await useChatStore.getState().loadHome(); },
-      { active: () => window.location.pathname === `/group/${id}` });
-  }, [id]);
+    let alive = true;
+    const stop = startPolling(async () => {
+      setTurnRefresh('loading');
+      const result = await loadTurn();
+      if (alive) { setNow(serverNow()); setTurnRefresh(result); }
+    }, { active: () => location.pathname.replace(/\/$/, '') === `/group/${id}` });
+    return () => { alive = false; stop(); };
+  }, [id, location.pathname]);
   useEffect(() => {
     const starts = Date.parse(conversation?.turnOpensAt ?? '');
     const expires = starts + 7 * 24 * 60 * 60 * 1000;
     if (!Number.isFinite(expires)) return;
-    const timer = window.setTimeout(() => setNow(Date.now()), Math.max(0, Math.min(2_147_483_647, expires - Date.now())));
+    const timer = window.setTimeout(() => { setNow(serverNow()); void refreshTurn(); }, Math.max(0, Math.min(2_147_483_647, expires - serverNow())));
     return () => window.clearTimeout(timer);
   }, [conversation?.turnOpensAt]);
 
@@ -181,7 +188,10 @@ export default function GroupProfilePage() {
               />
               <h1>{groupName}</h1>
               {showTurn && conversation && (
-                <p className="group-turn">{turnSentence(turnHolder?.displayName ?? 'عضو', conversation.turnUserId === currentUser.id, now, conversation.turnOpensAt)}</p>
+                <p className="group-turn">{groupTurnStatus(turnHolder?.displayName ?? 'عضو', conversation.turnUserId === currentUser.id, now, conversation.turnOpensAt, turnRefresh)}</p>
+              )}
+              {showTurn && conversation?.turnOpensAt && now >= Date.parse(conversation.turnOpensAt) + 7 * 24 * 60 * 60 * 1000 && turnRefresh !== 'loading' && (
+                <button type="button" className="group-edit" onClick={() => void refreshTurn()}>إعادة المحاولة</button>
               )}
               {conversation.bio ? (
                 <p className="group-bio">{conversation.bio}</p>

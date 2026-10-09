@@ -43,7 +43,7 @@ describe('home', () => {
     const first = await handle(new Request('http://localhost/api/home', { headers }));
     const etag = first.headers.get('etag');
     assert.ok(etag);
-    assert.equal(first.headers.get('access-control-expose-headers'), 'etag');
+    assert.equal(first.headers.get('access-control-expose-headers'), 'etag, date');
     assert.ok((await first.text()).length > 0);
     const unchanged = await handle(new Request('http://localhost/api/home', { headers: { ...headers, 'if-none-match': etag } }));
     assert.equal(unchanged.status, 304);

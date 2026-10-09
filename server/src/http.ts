@@ -125,7 +125,7 @@ function withCors(request: Request, response: Response, origin: string | null) {
   const headers = new Headers(response.headers);
   headers.set('access-control-allow-origin', origin);
   headers.set('access-control-allow-credentials', 'true');
-  headers.set('access-control-expose-headers', 'etag');
+  headers.set('access-control-expose-headers', 'etag, date');
   headers.append('vary', 'Origin');
   if (request.headers.get('access-control-request-private-network') === 'true') {
     headers.set('access-control-allow-private-network', 'true');
@@ -144,7 +144,7 @@ async function route(deps: Deps, request: Request) {
     securityHeaders(headers);
     return new Response(null, { status: 204, headers });
   }
-  if (request.method === 'GET' && path === '/api/health') return json({ ok: true });
+  if (request.method === 'GET' && path === '/api/health') return json({ ok: true, groupTurnPolicy: 'weekly-v2' });
 
   const body = await readBody(request, requestBodyLimit(path));
   if (!body) return failure(deps, 'invalid_credentials');
