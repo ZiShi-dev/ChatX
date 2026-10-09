@@ -25,15 +25,15 @@ async function verifyTurnNotifications(repo: AuthRepository) {
   await repo.addRoomMessage(message);
   await Promise.all([repo.notifyTurnMembers(message), repo.notifyTurnMembers(message)]);
   for (const person of people) {
-    const notices = (await repo.listNotifications(person.id, 30)).filter(notice => notice.messageId === message.id);
+    const notices = (await repo.listNotifications(person.id, 30, null)).filter(notice => notice.messageId === message.id);
     assert.equal(notices.length, 1);
     assert.equal(notices[0].kind, 'signal');
     assert.equal(notices[0].read, false);
   }
-  assert.deepEqual(await repo.listNotifications(outsider.id, 30), []);
+  assert.deepEqual(await repo.listNotifications(outsider.id, 30, null), []);
   await repo.markNotificationsRead(people[0].id, [message.id], now);
-  assert.equal((await repo.listNotifications(people[0].id, 30))[0].read, true);
-  assert.equal((await repo.listNotifications(people[1].id, 30))[0].read, false);
+  assert.equal((await repo.listNotifications(people[0].id, 30, null))[0].read, true);
+  assert.equal((await repo.listNotifications(people[1].id, 30, null))[0].read, false);
   return { people, message };
 }
 async function verifyGroupRotation(repo: AuthRepository) {
@@ -137,7 +137,7 @@ it('verifies PostgreSQL migrations, cursor SQL and transaction rollback', { skip
     const turnBackfill = await readFile(new URL('../src/db/020_turn_notifications.sql', import.meta.url), 'utf8');
     await pool.query(turnBackfill); await pool.query(turnBackfill);
     for (const person of turnNotices.people) {
-      const notices = (await repo.listNotifications(person.id, 30)).filter(notice => notice.messageId === turnNotices.message.id);
+      const notices = (await repo.listNotifications(person.id, 30, null)).filter(notice => notice.messageId === turnNotices.message.id);
       assert.equal(notices.length, 1);
       assert.equal(notices[0].read, person.id === turnNotices.people[0].id);
     }
