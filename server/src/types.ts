@@ -48,7 +48,7 @@ export interface AuthRepository {
   readMessageFile(roomId: string, userId: string, messageId: string): Promise<{ name: string; bytes: Uint8Array } | null>;
   notifyRoomMessage(message: RoomMessage): Promise<void>;
   claimTurnNotice(roomId: string, holderId: string): Promise<boolean>;
-  notifyTurnHolder(message: RoomMessage): Promise<void>;
+  notifyTurnMembers(message: RoomMessage): Promise<void>;
   listNotifications(userId: string, limit: number, before: { at: Date; messageId: string } | null): Promise<InboxNotice[]>;
   countUnreadNotifications(userId: string): Promise<number>;
   markNotificationsRead(userId: string, ids: string[] | 'all', now: Date): Promise<void>;

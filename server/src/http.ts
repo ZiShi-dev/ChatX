@@ -147,7 +147,7 @@ async function route(deps: Deps, request: Request) {
     securityHeaders(headers);
     return new Response(null, { status: 204, headers });
   }
-  if (request.method === 'GET' && path === '/api/health') return json({ ok: true, groupTurnPolicy: 'weekly-v3-direct', networkPolicy: 'durable-delta-v1', securityPolicy:'bounded-api-v1' });
+  if (request.method === 'GET' && path === '/api/health') return json({ ok: true, groupTurnPolicy: 'weekly-v3-direct', networkPolicy: 'durable-delta-v1', securityPolicy:'bounded-api-v1', turnNotificationPolicy:'all-members-v1' });
   const groupTurn = path.match(/^\/api\/rooms\/([0-9a-f-]{36})\/turn$/i);
   if (groupTurn && request.method === 'GET') {
     const result = await readGroupTurn(deps, readCookie(request.headers.get('cookie'), 'chatx_session'), groupTurn[1]!);

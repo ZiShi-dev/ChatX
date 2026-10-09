@@ -449,12 +449,13 @@ export function createPostgresRepository(pool: pg.Pool): AuthRepository {
       );
       return (result.rowCount ?? 0) > 0;
     },
-    async notifyTurnHolder(message) {
+    async notifyTurnMembers(message) {
       await pool.query(
         `INSERT INTO notifications (user_id, message_id, room_id, kind, created_at)
-         VALUES ($1, $2, $3, 'signal', $4)
+         SELECT rm.user_id, $1, $2, 'signal', $3
+         FROM room_members rm WHERE rm.room_id = $2
          ON CONFLICT (user_id, message_id, kind) DO NOTHING`,
-        [message.senderId, message.id, message.roomId, message.createdAt],
+        [message.id, message.roomId, message.createdAt],
       );
     },
     async notifyRoomMessage(message) {

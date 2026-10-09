@@ -284,20 +284,15 @@ export function createMemoryRepository(): AuthRepository {
       room.turnNoticeFor = holderId;
       return true;
     },
-    async notifyTurnHolder(message) {
-      const user = users.get(message.senderId);
-      if (!user || notices.some((notice) => notice.userId === message.senderId && notice.messageId === message.id && notice.kind === 'signal')) return;
-      notices.push({
-        userId: message.senderId,
-        messageId: message.id,
-        roomId: message.roomId,
-        senderId: message.senderId,
-        senderName: user.displayName,
-        kind: 'signal',
-        text: message.text,
-        createdAt: message.createdAt,
-        read: false,
-      });
+    async notifyTurnMembers(message) {
+      const sender = users.get(message.senderId);
+      if (!sender) return;
+      for (const member of members.values()) {
+        if (member.roomId !== message.roomId || notices.some(notice => notice.userId === member.userId && notice.messageId === message.id)) continue;
+        notices.push({ userId: member.userId, messageId: message.id, roomId: message.roomId,
+          senderId: message.senderId, senderName: sender.displayName, kind: 'signal',
+          text: message.text, createdAt: message.createdAt, read: false });
+      }
     },
     async notifyRoomMessage(message) {
       const parent = message.replyToId ? messages.find((item) => item.id === message.replyToId && item.roomId === message.roomId) : undefined;

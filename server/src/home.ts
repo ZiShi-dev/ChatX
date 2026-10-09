@@ -174,7 +174,7 @@ async function publishTurnNotices(deps: Deps, userId: string) {
     });
     if (saved === 'missing' || saved === 'invalid') continue;
     posted = true;
-    await deps.repo.notifyTurnHolder(saved);
+    await deps.repo.notifyTurnMembers(saved);
   }
   return posted ? deps.repo.listHome(userId, at) : rooms;
 }
@@ -191,7 +191,7 @@ export async function readGroupTurn(deps: Deps, token: string, roomId: string) {
   if (turn.members.length > 1 && await deps.repo.claimTurnNotice(roomId, turn.holderId)) {
     const notice = await deps.repo.addRoomMessage({ id: randomUUID(), roomId, senderId: turn.holderId,
       text: groupTurnNotice(holder.displayName, turn.opensAt, at.getTime()), createdAt: at, deleted: false, event: true });
-    if (notice !== 'missing' && notice !== 'invalid') await deps.repo.notifyTurnHolder(notice);
+    if (notice !== 'missing' && notice !== 'invalid') await deps.repo.notifyTurnMembers(notice);
   }
   return { ok: true as const, roomId, turnUserId: turn.holderId, turnOpensAt: new Date(turn.opensAt).toISOString(),
     turnExpiresAt: new Date(turn.opensAt + GROUP_TURN_MS).toISOString(), serverTime: at.toISOString(),

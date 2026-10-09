@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import { it } from 'node:test';
 import pg from 'pg';
+import { readFile } from 'node:fs/promises';
 import { createMemoryRepository } from '../src/memory.ts';
 import { createPostgresRepository } from '../src/postgres.ts';
 import { migrate } from '../src/migrate.ts';
@@ -14,6 +15,27 @@ import type { AuthRepository, AuthUser, RoomMessage } from '../src/types.ts';
 
 const now = new Date('2026-10-09T12:00:00Z');
 const user = (id: string): AuthUser => ({ id, email: `${id}@example.invalid`, displayName: id, username: id, role: 'member', bio: '', avatarUrl: null, bannerUrl: null });
+async function verifyTurnNotifications(repo: AuthRepository) {
+  const people = Array.from({ length: 3 }, () => user(randomUUID()));
+  const outsider = user(randomUUID());
+  for (const person of [...people, outsider]) await repo.insertUser(person);
+  const roomId = randomUUID();
+  await repo.createRoom({ id: roomId, kind: 'group', creatorId: people[0].id, memberIds: people.slice(1).map(person => person.id), name: 'turn notices', at: now });
+  const message: RoomMessage = { id: randomUUID(), roomId, senderId: people[0].id, text: 'دور عضو لتعديل اسم المجموعة وصورتها', createdAt: now, deleted: false, event: true };
+  await repo.addRoomMessage(message);
+  await Promise.all([repo.notifyTurnMembers(message), repo.notifyTurnMembers(message)]);
+  for (const person of people) {
+    const notices = (await repo.listNotifications(person.id, 30)).filter(notice => notice.messageId === message.id);
+    assert.equal(notices.length, 1);
+    assert.equal(notices[0].kind, 'signal');
+    assert.equal(notices[0].read, false);
+  }
+  assert.deepEqual(await repo.listNotifications(outsider.id, 30), []);
+  await repo.markNotificationsRead(people[0].id, [message.id], now);
+  assert.equal((await repo.listNotifications(people[0].id, 30))[0].read, true);
+  assert.equal((await repo.listNotifications(people[1].id, 30))[0].read, false);
+  return { people, message };
+}
 async function verifyGroupRotation(repo: AuthRepository) {
   const people = [user(randomUUID()), user(randomUUID()), user(randomUUID())];
   for (const person of people) await repo.insertUser(person);
@@ -96,6 +118,7 @@ async function verify(repo: AuthRepository) {
 
 it('keeps stable pagination, scoped access, monotonic reads and immutable deletion', async () => { await verify(createMemoryRepository()); });
 it('persists weekly group rights and rotates only once under concurrent reads', async () => { await verifyGroupRotation(createMemoryRepository()); });
+it('notifies every group member once and keeps read status private', async () => { await verifyTurnNotifications(createMemoryRepository()); });
 
 const database = process.env.CHATX_TEST_DATABASE_URL;
 it('verifies PostgreSQL migrations, cursor SQL and transaction rollback', { skip: !database }, async () => {
@@ -108,6 +131,16 @@ it('verifies PostgreSQL migrations, cursor SQL and transaction rollback', { skip
   try {
     await migrate(pool);
     const repo = createPostgresRepository(pool);
+    const turnNotices = await verifyTurnNotifications(repo);
+    // Reproduce the old holder-only inbox, then apply the upgrade backfill twice.
+    await pool.query('DELETE FROM notifications WHERE message_id=$1 AND user_id<>$2', [turnNotices.message.id, turnNotices.people[0].id]);
+    const turnBackfill = await readFile(new URL('../src/db/020_turn_notifications.sql', import.meta.url), 'utf8');
+    await pool.query(turnBackfill); await pool.query(turnBackfill);
+    for (const person of turnNotices.people) {
+      const notices = (await repo.listNotifications(person.id, 30)).filter(notice => notice.messageId === turnNotices.message.id);
+      assert.equal(notices.length, 1);
+      assert.equal(notices[0].read, person.id === turnNotices.people[0].id);
+    }
     await verifyGroupRotation(repo);
     await verifyLowBandwidth(repo);
     const five = Array.from({ length: 5 }, () => user(randomUUID()));

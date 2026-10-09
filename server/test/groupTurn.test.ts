@@ -273,7 +273,7 @@ describe('group turn', () => {
     const chosen = await inbox(holderToken);
     assert.equal(chosen.notifications.some((item) => item.kind === 'signal' && item.preview.includes(`دور ${holderName}`)), true);
     const other = await inbox(otherToken);
-    assert.equal(other.notifications.some((item) => item.kind === 'signal'), false);
+    assert.equal(other.notifications.some((item) => item.kind === 'signal' && item.preview.includes(`دور ${holderName}`)), true);
     const patch = (token: string, name: string) => handle(new Request(`http://127.0.0.1/api/rooms/${GLOBAL_ROOM_ID}`, {
       method: 'PATCH',
       headers: headers(token),
