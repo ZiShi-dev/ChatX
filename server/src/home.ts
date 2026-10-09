@@ -154,8 +154,8 @@ async function sessionUser(deps: Deps, token: string) {
 }
 
 async function publishTurnNotices(deps: Deps, userId: string) {
-  const rooms = await deps.repo.listHome(userId);
   const at = new Date(deps.now());
+  const rooms = await deps.repo.listHome(userId, at);
   let posted = false;
   for (const room of rooms) {
     if ((room.kind !== 'group' && room.kind !== 'global') || !room.turnUserId || room.participantIds.length < 2) continue;
@@ -175,7 +175,7 @@ async function publishTurnNotices(deps: Deps, userId: string) {
     posted = true;
     await deps.repo.notifyTurnHolder(saved);
   }
-  return posted ? deps.repo.listHome(userId) : rooms;
+  return posted ? deps.repo.listHome(userId, at) : rooms;
 }
 
 export async function readHome(deps: Deps, token: string) {
@@ -224,7 +224,7 @@ export async function markRoomSeen(deps: Deps, input: { token: string; roomId: s
   if (!ROOM_ID.test(input.roomId) || typeof input.messageId !== 'string' || !ROOM_ID.test(input.messageId)) return { ok: false as const, error: 'not_found' as const };
   const ok = await deps.repo.markRoomRead(input.roomId, user.id, new Date(deps.now()), input.messageId);
   if (!ok) return { ok: false as const, error: 'not_found' as const };
-  const [rooms, unreadNotifications] = await Promise.all([deps.repo.listHome(user.id), deps.repo.countUnreadNotifications(user.id)]);
+  const [rooms, unreadNotifications] = await Promise.all([deps.repo.listHome(user.id, new Date(deps.now())), deps.repo.countUnreadNotifications(user.id)]);
   return { ok: true as const, unreadCount: rooms.find((room) => room.id === input.roomId)?.unreadCount ?? 0, unreadNotifications };
 }
 

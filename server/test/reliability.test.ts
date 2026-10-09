@@ -13,6 +13,37 @@ import type { AuthRepository, AuthUser, RoomMessage } from '../src/types.ts';
 
 const now = new Date('2026-10-09T12:00:00Z');
 const user = (id: string): AuthUser => ({ id, email: `${id}@example.invalid`, displayName: id, username: id, role: 'member', bio: '', avatarUrl: null, bannerUrl: null });
+async function verifyGroupRotation(repo: AuthRepository) {
+  const people = [user(randomUUID()), user(randomUUID()), user(randomUUID())];
+  for (const person of people) await repo.insertUser(person);
+  const roomId = randomUUID();
+  const week = 7 * 24 * 60 * 60 * 1000;
+  assert.equal(await repo.createRoom({ id: roomId, kind: 'group', creatorId: people[0].id,
+    memberIds: people.slice(1).map((person) => person.id), name: 'weekly', at: now }), roomId);
+  const read = async (at: Date) => (await repo.listHome(people[0].id, at)).find((room) => room.id === roomId)!;
+  let room = await read(now);
+  let previous: string | undefined;
+  for (let cycle = 0; cycle < 2; cycle += 1) {
+    const seen = new Set<string>();
+    for (let index = 0; index < people.length; index += 1) {
+      const holder = room.turnUserId!;
+      assert.notEqual(holder, previous);
+      assert.equal(seen.has(holder), false);
+      seen.add(holder);
+      const starts = room.turnOpensAt!.getTime();
+      assert.equal(await repo.updateRoom(roomId, holder, { name: 'first edit' }, new Date(starts)), true);
+      assert.equal(await repo.updateRoom(roomId, holder, { name: 'last edit', avatar: null }, new Date(starts + week - 1)), true);
+      assert.equal((await read(new Date(starts + week - 1))).turnUserId, holder);
+      const concurrent = await Promise.all([read(new Date(starts + week)), read(new Date(starts + week))]);
+      assert.equal(await repo.updateRoom(roomId, holder, { name: 'expired' }, new Date(starts + week)), false);
+      assert.equal(concurrent[0].turnUserId, concurrent[1].turnUserId);
+      assert.equal(concurrent[0].turnOpensAt!.getTime(), starts + week);
+      previous = holder;
+      room = concurrent[0];
+    }
+    assert.equal(seen.size, people.length);
+  }
+}
 async function verify(repo: AuthRepository) {
   const alice = user(randomUUID()); const bob = user(randomUUID()); const outsider = user(randomUUID());
   for (const person of [alice, bob, outsider]) await repo.insertUser(person);
@@ -58,6 +89,7 @@ async function verify(repo: AuthRepository) {
 }
 
 it('keeps stable pagination, scoped access, monotonic reads and immutable deletion', async () => { await verify(createMemoryRepository()); });
+it('persists weekly group rights and rotates only once under concurrent reads', async () => { await verifyGroupRotation(createMemoryRepository()); });
 
 const database = process.env.CHATX_TEST_DATABASE_URL;
 it('verifies PostgreSQL migrations, cursor SQL and transaction rollback', { skip: !database }, async () => {
@@ -70,6 +102,7 @@ it('verifies PostgreSQL migrations, cursor SQL and transaction rollback', { skip
   try {
     await migrate(pool);
     const repo = createPostgresRepository(pool);
+    await verifyGroupRotation(repo);
     const { alice, bob, roomId } = await verify(repo);
     const message: RoomMessage = { id: randomUUID(), roomId, senderId: alice.id, text: '', createdAt: now, deleted: false };
     await pool.query(`CREATE FUNCTION fail_image() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'test failure'; END $$`);

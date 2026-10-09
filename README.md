@@ -52,7 +52,7 @@ docker compose up --build
 
 Définir `POSTGRES_PASSWORD` dans `.env` avant Docker Compose. Le port PostgreSQL est interne à Docker ; l'API HTTP est publiée sur localhost pour un reverse proxy HTTPS. Le listener TLS Android reste configurable séparément. Aucun mot de passe par défaut n'est fourni.
 
-Les migrations sont appliquées au démarrage du serveur. `src/data` garde les données de démonstration. Les modifications et suppressions sont autorisées uniquement pour l'auteur, et les profils de groupe suivent les règles de tour du serveur. L'envoi de vidéos est explicitement indisponible pour les comptes serveur.
+Les migrations sont appliquées au démarrage du serveur. `src/data` garde les données de démonstration. Les modifications et suppressions sont autorisées uniquement pour l'auteur. Pour les profils de groupe, chaque titulaire peut modifier librement le nom et les images pendant sept jours. Le serveur choisit ensuite un membre aléatoire qui n’a pas encore eu son tour dans le cycle ; le dernier titulaire ne peut pas commencer le cycle suivant. Voir [les règles de rotation](docs/TOURS-GROUPE-2026-10-09.md). L'envoi de vidéos est explicitement indisponible pour les comptes serveur.
 
 Les messages sont paginés par 30, avec un cache local séparé par compte : 300 messages récents et 40 envois en attente au maximum, dans une limite de 1,8 million de caractères JSON. Les pièces jointes en attente sont persistées après préparation ; ne pas fermer pendant cette préparation. Le DOM affiche au maximum 120 bulles avec navigation entre fenêtres. Les lectures sont enregistrées explicitement depuis les messages visibles.
 

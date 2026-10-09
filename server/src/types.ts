@@ -30,7 +30,7 @@ export interface AuthRepository {
   touchPresence(tokenHash: string, presence: 'online' | 'away', now: Date): Promise<boolean>;
   listPresence(now: Date): Promise<Array<{ id: string; presence: 'online' | 'away' | null; lastSeenAt: Date | null }>>;
   ensureHome(userId: string): Promise<void>;
-  listHome(userId: string): Promise<HomeRoom[]>;
+  listHome(userId: string, at?: Date): Promise<HomeRoom[]>;
   listRoomMessages(roomId: string, userId: string, limit: number, page?: { beforeId?: string; aroundId?: string }): Promise<RoomMessage[] | null>;
   changeRoomMessage(roomId: string, userId: string, messageId: string, text: string | null, at: Date): Promise<boolean>;
   updateRoom(roomId: string, userId: string, patch: { name?: string; bio?: string; avatar?: string | null; banner?: string | null }, at: Date): Promise<boolean>;

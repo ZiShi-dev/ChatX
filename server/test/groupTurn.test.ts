@@ -6,7 +6,7 @@ import { createApi } from '../src/http.ts';
 import { createMemoryRepository } from '../src/memory.ts';
 import { hashSession } from '../src/session.ts';
 import type { AuthUser } from '../src/types.ts';
-import { advanceGroupTurn, GROUP_TURN_MS, groupTurnNotice } from '../src/groupTurn.ts';
+import { advanceGroupTurn, resolveGroupTurn, GROUP_TURN_MS, groupTurnNotice } from '../src/groupTurn.ts';
 import { GLOBAL_ROOM_ID, groupChangeLine } from '../src/home.ts';
 
 const a = '11111111-1111-4111-8111-111111111111';
@@ -15,6 +15,34 @@ const c = '33333333-3333-4333-8333-333333333333';
 const now = Date.parse('2026-10-08T12:00:00.000Z');
 
 describe('group turn', () => {
+  it('covers every member once per cycle without repeating the previous holder', () => {
+    const members = [a, b, c, '44444444-4444-4444-8444-444444444444'];
+    let turn = { holderId: a, opensAt: now, round: 1, done: [] as string[] };
+    const random = (length: number) => length - 1;
+    for (let cycle = 0; cycle < 10; cycle += 1) {
+      const seen = new Set<string>();
+      for (let index = 0; index < members.length; index += 1) {
+        assert.equal(seen.has(turn.holderId), false);
+        seen.add(turn.holderId);
+        const previous = turn.holderId;
+        const next = resolveGroupTurn({ members, ...turn, now: turn.opensAt + GROUP_TURN_MS, random });
+        assert.ok(next);
+        assert.notEqual(next.holderId, previous);
+        turn = next;
+      }
+      assert.equal(seen.size, members.length);
+      assert.equal(turn.round, cycle + 2);
+    }
+  });
+  it('catches up multiple idle weeks while preserving the weekly deadline', () => {
+    const turn = resolveGroupTurn({ members: [a, b, c], holderId: a, opensAt: now, round: 1, done: [],
+      now: now + 5 * GROUP_TURN_MS + 1234, random: () => 0 });
+    assert.ok(turn);
+    assert.equal(turn.opensAt, now + 5 * GROUP_TURN_MS);
+    assert.equal(turn.round, 2);
+    assert.equal(turn.holderId, c);
+    assert.deepEqual(turn.done, [a, b]);
+  });
   it('describes a name and photo change in one line', () => {
     assert.equal(groupChangeLine('نورة', { name: 'الصباح', avatar: 'photo' }), 'نورة غيّر اسم المجموعة إلى «الصباح» وغيّر صورة المجموعة');
     assert.equal(groupChangeLine('نورة', {}), '');
@@ -22,19 +50,17 @@ describe('group turn', () => {
     assert.equal(groupTurnNotice('ليلى', now + GROUP_TURN_MS, now).startsWith('دور ليلى لتعديل اسم المجموعة وصورتها في '), true);
   });
   it('gives the turn to the others, in a random order, before it returns', () => {
-    const first = advanceGroupTurn({
+    const first = resolveGroupTurn({
       members: [a, b, c],
       holderId: a,
       opensAt: now,
       round: 1,
       done: [],
-      actorId: a,
-      now,
-      changedIdentity: true,
+      now: now + GROUP_TURN_MS,
       random: () => 0,
     });
-    assert.equal(first.ok, true);
-    if (!first.ok) return;
+    assert.ok(first);
+    if (!first) return;
     assert.equal(first.holderId, b);
     assert.equal(first.opensAt, now + GROUP_TURN_MS);
     assert.deepEqual(first.done, [a]);
@@ -52,35 +78,31 @@ describe('group turn', () => {
     });
     assert.equal(early.ok, false);
 
-    const second = advanceGroupTurn({
+    const second = resolveGroupTurn({
       members: [a, b, c],
       holderId: first.holderId,
       opensAt: first.opensAt,
       round: first.round,
       done: first.done,
-      actorId: b,
-      now: first.opensAt,
-      changedIdentity: true,
+      now: first.opensAt + GROUP_TURN_MS,
       random: () => 0,
     });
-    assert.equal(second.ok, true);
-    if (!second.ok) return;
+    assert.ok(second);
+    if (!second) return;
     assert.equal(second.holderId, c);
     assert.deepEqual(second.done, [a, b]);
 
-    const third = advanceGroupTurn({
+    const third = resolveGroupTurn({
       members: [a, b, c],
       holderId: second.holderId,
       opensAt: second.opensAt,
       round: second.round,
       done: second.done,
-      actorId: c,
-      now: second.opensAt,
-      changedIdentity: true,
+      now: second.opensAt + GROUP_TURN_MS,
       random: () => 0,
     });
-    assert.equal(third.ok, true);
-    if (!third.ok) return;
+    assert.ok(third);
+    if (!third) return;
     assert.equal(third.holderId, a);
     assert.equal(third.done.length, 0);
     assert.notEqual(third.holderId, c);
@@ -169,7 +191,7 @@ describe('group turn', () => {
     assert.equal(renamed.status, 200);
     const first = await renamed.json() as { conversation: { name: string; turnUserId: string; turnOpensAt: string } };
     assert.equal(first.conversation.name, 'الصباح');
-    assert.notEqual(first.conversation.turnUserId, holder);
+    assert.equal(first.conversation.turnUserId, holder);
     const thread = await handle(new Request(`http://127.0.0.1/api/rooms/${group.conversation.id}/messages`, { headers: { cookie: `chatx_session=${holderToken}` } }));
     const posted = await thread.json() as { messages: Array<{ text: string; event?: boolean; senderId: string }> };
     const actor = people.find((person) => person.id === holder)?.displayName ?? '';
@@ -179,26 +201,34 @@ describe('group turn', () => {
     assert.equal(change?.text, `${actor} غيّر اسم المجموعة إلى «الصباح»`);
     const nextName = people.find((person) => person.id === first.conversation.turnUserId)?.displayName ?? '';
     assert.equal(posted.messages.some((message) => message.event && message.text.startsWith(`دور ${nextName}`)), true);
-    assert.ok(Date.parse(first.conversation.turnOpensAt) >= clock + GROUP_TURN_MS);
-    const secondId = first.conversation.turnUserId;
+    assert.equal(Date.parse(first.conversation.turnOpensAt), clock);
+    assert.equal((await patch(holderToken, { name: 'مرة أخرى' })).status, 200);
+    clock += GROUP_TURN_MS - 1;
+    assert.equal((await patch(holderToken, { name: 'آخر تعديل' })).status, 200);
+    clock += 1;
+    assert.equal((await patch(holderToken, { name: 'انتهى الدور' })).status, 403);
+    const refreshed = await handle(new Request('http://127.0.0.1/api/home', { headers: headers(holderToken) }));
+    const refreshedBody = await refreshed.json() as { conversations: Array<{ id: string; turnUserId: string }> };
+    const secondId = refreshedBody.conversations.find((room) => room.id === group.conversation.id)!.turnUserId;
+    assert.notEqual(secondId, holder);
     const secondToken = tokens[people.findIndex((person) => person.id === secondId)] ?? '';
-    assert.equal((await patch(secondToken, { name: 'مبكر' })).status, 403);
-    assert.equal((await patch(holderToken, { name: 'مرة أخرى' })).status, 403);
-
-    clock = Date.parse(first.conversation.turnOpensAt);
     const second = await patch(secondToken, { name: 'الظهر' });
     assert.equal(second.status, 200);
     const moved = await second.json() as { conversation: { turnUserId: string; turnOpensAt: string } };
     const thirdId = people.map((person) => person.id).find((id) => id !== holder && id !== secondId);
-    assert.equal(moved.conversation.turnUserId, thirdId);
-
-    clock = Date.parse(moved.conversation.turnOpensAt);
+    assert.equal(moved.conversation.turnUserId, secondId);
+    clock += GROUP_TURN_MS;
     const thirdToken = tokens[people.findIndex((person) => person.id === thirdId)] ?? '';
     const third = await patch(thirdToken, { name: 'المغرب' });
     assert.equal(third.status, 200);
     const round = await third.json() as { conversation: { turnUserId: string } };
-    assert.notEqual(round.conversation.turnUserId, thirdId);
-    assert.equal([holder, secondId].includes(round.conversation.turnUserId), true);
+    assert.equal(round.conversation.turnUserId, thirdId);
+    clock += GROUP_TURN_MS;
+    const restarted = await handle(new Request('http://127.0.0.1/api/home', { headers: headers(thirdToken) }));
+    const restartedBody = await restarted.json() as { conversations: Array<{ id: string; turnUserId: string }> };
+    const nextId = restartedBody.conversations.find((room) => room.id === group.conversation.id)!.turnUserId;
+    assert.notEqual(nextId, thirdId);
+    assert.equal([holder, secondId].includes(nextId), true);
   });
 
   it('gives ChatX the same turn as the other groups', async () => {
@@ -245,13 +275,16 @@ describe('group turn', () => {
     const saved = await renamed.json() as { conversation: { name: string; type: string; turnUserId: string; turnOpensAt: string } };
     assert.equal(saved.conversation.name, 'الساحة');
     assert.equal(saved.conversation.type, 'global');
-    assert.notEqual(saved.conversation.turnUserId, main?.turnUserId);
-    assert.ok(Date.parse(saved.conversation.turnOpensAt) >= clock + GROUP_TURN_MS);
-    assert.equal((await patch(saved.conversation.turnUserId === nora.id ? 'nora-token' : 'layla-token', 'مبكر')).status, 403);
-    const nextToken = saved.conversation.turnUserId === nora.id ? 'nora-token' : 'layla-token';
-    const nextName = saved.conversation.turnUserId === nora.id ? 'نورة' : 'ليلى';
+    assert.equal(saved.conversation.turnUserId, main?.turnUserId);
+    assert.equal(Date.parse(saved.conversation.turnOpensAt), clock);
+    assert.equal((await patch(holderToken, 'تعديل آخر')).status, 200);
+    assert.equal((await patch(otherToken, 'ممنوع')).status, 403);
+    clock += GROUP_TURN_MS;
+    await handle(new Request('http://127.0.0.1/api/home', { headers: { cookie: `chatx_session=${holderToken}` } }));
+    const nextToken = otherToken;
+    const nextName = nextToken === 'nora-token' ? 'نورة' : 'ليلى';
     const nextInbox = await inbox(nextToken);
-    assert.equal(nextInbox.notifications.some((item) => item.kind === 'signal' && item.preview.includes(`دور ${nextName}`) && item.preview.includes('في')), true);
+    assert.equal(nextInbox.notifications.some((item) => item.kind === 'signal' && item.preview.includes(`دور ${nextName}`)), true);
     const thread = await handle(new Request(`http://127.0.0.1/api/rooms/${GLOBAL_ROOM_ID}/messages`, { headers: { cookie: `chatx_session=${holderToken}` } }));
     const posted = await thread.json() as { messages: Array<{ text: string; event?: boolean }> };
     assert.equal(posted.messages.some((message) => message.event && message.text.includes('الساحة')), true);

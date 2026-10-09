@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState, type CSSProperties } from 'react';
+import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import { createPortal } from 'react-dom';
 import { IonContent, IonHeader, IonIcon, IonPage } from '@ionic/react';
 import { cameraOutline, pencilOutline } from 'ionicons/icons';
@@ -13,6 +13,7 @@ import { membersOf } from '../lib/conversation';
 import { connectionLabel } from '../lib/presence';
 import { canEditRoom, canTakeGroupTurn, roleLabel } from '../lib/roles';
 import { isServerId } from '../lib/home';
+import { startPolling } from '../lib/poll';
 import { readBanner, readPhoto } from '../lib/photo';
 import { useAuthStore } from '../stores/authStore';
 import { useChatStore } from '../stores/chatStore';
@@ -22,14 +23,17 @@ import type { User } from '../types/user';
 
 type GroupTab = 'members' | 'notify' | 'photos' | 'videos' | 'links';
 
-function turnSentence(name: string, mine: boolean, opensAt?: string) {
+function turnSentence(name: string, mine: boolean, now: number, opensAt?: string) {
   const opens = opensAt ? Date.parse(opensAt) : Number.NaN;
-  const waiting = Number.isFinite(opens) && opens > Date.now();
+  const waiting = Number.isFinite(opens) && opens > now;
+  const expires = opens + 7 * 24 * 60 * 60 * 1000;
+  if (Number.isFinite(expires) && now >= expires) return 'انتهى الدور — جارٍ تحديث الدور التالي';
+  const end = Number.isFinite(expires) ? new Intl.DateTimeFormat('ar', { day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit', numberingSystem: 'latn' }).format(expires) : '';
   const date = waiting ? new Intl.DateTimeFormat('ar', { day: 'numeric', month: 'long', numberingSystem: 'latn' }).format(opens) : '';
   if (mine && waiting) return `دورك في ${date}`;
-  if (mine) return 'دورك لتعديل الاسم والصورة';
+  if (mine) return `دورك لتعديل الاسم والصورة بحرية حتى ${end}`;
   if (waiting) return `دور ${name} في ${date}`;
-  return `دور ${name} لتعديل الاسم والصورة`;
+  return `دور ${name} لتعديل الاسم والصورة حتى ${end}`;
 }
 
 function memberCountLabel(count: number) {
@@ -57,6 +61,19 @@ export default function GroupProfilePage() {
   const [draftName, setDraftName] = useState('');
   const [draftBio, setDraftBio] = useState('');
   const [tab, setTab] = useState<GroupTab>('members');
+  const [now, setNow] = useState(Date.now);
+  useEffect(() => {
+    if (!isServerId(id)) return;
+    return startPolling(async () => { setNow(Date.now()); await useChatStore.getState().loadHome(); },
+      { active: () => window.location.pathname === `/group/${id}` });
+  }, [id]);
+  useEffect(() => {
+    const starts = Date.parse(conversation?.turnOpensAt ?? '');
+    const expires = starts + 7 * 24 * 60 * 60 * 1000;
+    if (!Number.isFinite(expires)) return;
+    const timer = window.setTimeout(() => setNow(Date.now()), Math.max(0, Math.min(2_147_483_647, expires - Date.now())));
+    return () => window.clearTimeout(timer);
+  }, [conversation?.turnOpensAt]);
 
   const members = useMemo(() => {
     if (!conversation || (conversation.type !== 'group' && conversation.type !== 'global')) return [];
@@ -78,7 +95,7 @@ export default function GroupProfilePage() {
   const isRoom = conversation?.type === 'group' || conversation?.type === 'global';
   const serverRoom = Boolean(conversation && isRoom && isServerId(conversation.id));
   const canEdit = conversation && serverRoom
-    ? canTakeGroupTurn(currentUser.id, conversation)
+    ? canTakeGroupTurn(currentUser.id, conversation, now)
     : Boolean(conversation && isRoom && canEditRoom(currentUser, conversation));
   const onlineCount = members.filter((user) => user.status === 'online').length;
   const groupName = conversation?.name ?? 'مجموعة';
@@ -115,7 +132,7 @@ export default function GroupProfilePage() {
         <NetworkStatusBanner />
         <PageNav title="ملف المجموعة" fallback={id ? `/chat/${id}` : '/home'} />
       </IonHeader>
-      <IonContent className="profile-page">
+      <IonContent className="profile-page group-profile-scroll">
         {!isRoom || !conversation ? (
           <EmptyState title="المجموعة غير موجودة" />
         ) : (
@@ -164,7 +181,7 @@ export default function GroupProfilePage() {
               />
               <h1>{groupName}</h1>
               {showTurn && conversation && (
-                <p className="group-turn">{turnSentence(turnHolder?.displayName ?? 'عضو', conversation.turnUserId === currentUser.id, conversation.turnOpensAt)}</p>
+                <p className="group-turn">{turnSentence(turnHolder?.displayName ?? 'عضو', conversation.turnUserId === currentUser.id, now, conversation.turnOpensAt)}</p>
               )}
               {conversation.bio ? (
                 <p className="group-bio">{conversation.bio}</p>

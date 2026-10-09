@@ -195,5 +195,8 @@ describe('home payload', () => {
     expect(canTakeGroupTurn(next, saved?.conversation ?? { participantIds: [] }, now)).toBe(false);
     expect(canTakeGroupTurn(user, saved?.conversation ?? { participantIds: [] }, now)).toBe(false);
     expect(canTakeGroupTurn(next, saved?.conversation ?? { participantIds: [] }, Date.parse('2026-10-15T12:00:00.000Z'))).toBe(true);
+    expect(canTakeGroupTurn(next, saved?.conversation ?? { participantIds: [] }, Date.parse('2026-10-22T11:59:59.999Z'))).toBe(true);
+    expect(canTakeGroupTurn(next, saved?.conversation ?? { participantIds: [] }, Date.parse('2026-10-22T12:00:00.000Z'))).toBe(false);
+    expect(canTakeGroupTurn('outsider', { participantIds: [user] }, now)).toBe(false);
   });
 });

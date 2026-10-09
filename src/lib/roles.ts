@@ -14,11 +14,12 @@ export function canEditRoom(user: { id: string; role: UserRole }, room: { adminI
 }
 
 export function canTakeGroupTurn(userId: string, room: { participantIds: string[]; turnUserId?: string; turnOpensAt?: string }, now = Date.now()) {
+  if (!room.participantIds.includes(userId)) return false;
   if (room.participantIds.length <= 1) return true;
   if (room.turnUserId !== userId) return false;
   if (!room.turnOpensAt) return true;
   const opens = Date.parse(room.turnOpensAt);
-  return Number.isFinite(opens) && opens <= now;
+  return Number.isFinite(opens) && opens <= now && now < opens + 7 * 24 * 60 * 60 * 1000;
 }
 
 export function roleLabel(role: UserRole) {

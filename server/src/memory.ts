@@ -1,6 +1,6 @@
 import { randomInt } from 'node:crypto';
 import { GLOBAL_ROOM_ID } from './home.ts';
-import { advanceGroupTurn } from './groupTurn.ts';
+import { resolveGroupTurn } from './groupTurn.ts';
 import { messageKind } from './inbox.ts';
 import type { AuthRepository, AuthUser, HomeRoom, InboxNotice, ProfilePatch, RoomMessage, RoomReader, SavedItem, StoredReaction } from './types.ts';
 
@@ -22,6 +22,22 @@ export function createMemoryRepository(): AuthRepository {
   const notices: Array<Omit<InboxNotice, 'conversationName' | 'deleted'> & { userId: string }> = [];
   const clearedAt = new Map<string, number>();
   const memberKey = (roomId: string, userId: string) => `${roomId}:${userId}`;
+  const syncTurn = (roomId: string, at: number) => {
+    const room = rooms.get(roomId);
+    if (!room || (room.kind !== 'group' && room.kind !== 'global')) return null;
+    const round = room.turnRound || 1;
+    const turn = resolveGroupTurn({ members: [...members.values()].filter((item) => item.roomId === roomId).map((item) => item.userId),
+      holderId: room.turnUserId ?? null, opensAt: room.turnOpensAt ?? at, round,
+      done: [...(passed.get(`${roomId}:${round}`) ?? [])], now: at, random: randomInt });
+    if (!turn) return null;
+    if (room.turnUserId !== turn.holderId || room.turnOpensAt !== turn.opensAt || room.turnRound !== turn.round) {
+      room.turnNoticeFor = undefined;
+      for (const key of passed.keys()) if (key.startsWith(`${roomId}:`)) passed.delete(key);
+    }
+    room.turnUserId = turn.holderId; room.turnOpensAt = turn.opensAt; room.turnRound = turn.round;
+    passed.set(`${roomId}:${turn.round}`, new Set(turn.done));
+    return turn;
+  };
 
   return {
     async findUserById(id) {
@@ -93,20 +109,13 @@ export function createMemoryRepository(): AuthRepository {
         members.set(memberKey(GLOBAL_ROOM_ID, userId), { roomId: GLOBAL_ROOM_ID, userId, lastReadAt: null, lastReadMessageId: null });
       }
     },
-    async listHome(userId) {
+    async listHome(userId, at) {
       const mine = [...members.values()].filter((member) => member.userId === userId);
       const home: HomeRoom[] = [];
       for (const member of mine) {
         const room = rooms.get(member.roomId);
         if (!room) continue;
-        if (room.kind === 'group' || room.kind === 'global') {
-          const ids = [...members.values()].filter((item) => item.roomId === room.id).map((item) => item.userId);
-          if (ids.length > 0 && (!room.turnUserId || !ids.includes(room.turnUserId))) {
-            room.turnUserId = ids[randomInt(ids.length)] ?? ids[0];
-            if (!room.turnOpensAt || room.turnOpensAt <= Date.now()) room.turnOpensAt = 0;
-            room.turnRound = room.turnRound || 1;
-          }
-        }
+        syncTurn(room.id, at?.getTime() ?? Date.now());
         const roomMessages = messages.filter((message) => message.roomId === room.id).sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
         const lastMessage = roomMessages.at(-1) ?? null;
         const unreadCount = roomMessages.filter((message) => (
@@ -163,29 +172,8 @@ export function createMemoryRepository(): AuthRepository {
     async updateRoom(roomId, userId, patch, at) {
       const room = rooms.get(roomId);
       if (!room || (room.kind !== 'group' && room.kind !== 'global') || !members.has(memberKey(roomId, userId))) return false;
-      const ids = [...members.values()].filter((item) => item.roomId === roomId).map((item) => item.userId);
-      const round = room.turnRound || 1;
-      const done = [...(passed.get(`${roomId}:${round}`) ?? [])];
-      let holder = room.turnUserId ?? null;
-      let opens = room.turnOpensAt ?? at.getTime();
-      if (ids.length > 1 && (!holder || !ids.includes(holder))) {
-        const pool = ids.filter((id) => !done.includes(id));
-        const use = pool.length ? pool : ids;
-        holder = use[randomInt(use.length)] ?? userId;
-        opens = room.turnOpensAt && room.turnOpensAt > at.getTime() ? room.turnOpensAt : at.getTime();
-      }
-      const next = advanceGroupTurn({
-        members: ids,
-        holderId: holder,
-        opensAt: opens,
-        round,
-        done,
-        actorId: userId,
-        now: at.getTime(),
-        changedIdentity: patch.name !== undefined || patch.avatar !== undefined || patch.banner !== undefined,
-        random: (length) => randomInt(length),
-      });
-      if (!next.ok) return false;
+      const next = syncTurn(roomId, at.getTime());
+      if (!next || next.holderId !== userId || at.getTime() < next.opensAt) return false;
       if (patch.name !== undefined) room.name = patch.name;
       if (patch.bio !== undefined) room.bio = patch.bio;
       if (patch.avatar !== undefined) room.avatarUrl = patch.avatar;

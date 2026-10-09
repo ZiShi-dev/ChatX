@@ -1,9 +1,31 @@
 import { randomInt } from 'node:crypto';
 import pg from 'pg';
 import { GLOBAL_ROOM_ID } from './home.ts';
-import { advanceGroupTurn } from './groupTurn.ts';
+import { GROUP_TURN_MS, resolveGroupTurn } from './groupTurn.ts';
 import { messageKind } from './inbox.ts';
 import type { AuthRepository, AuthRole, AuthUser, HomeRoom, InboxNotice, ProfilePatch, RoomKind, RoomMessage, SavedItem } from './types.ts';
+
+async function syncTurn(client: pg.PoolClient, roomId: string, at: Date) {
+  const result = await client.query<{ kind: string; turn_user_id: string | null; turn_opens_at: Date | null; turn_round: number }>(
+    'SELECT kind, turn_user_id, turn_opens_at, turn_round FROM rooms WHERE id = $1 FOR UPDATE', [roomId]);
+  const current = result.rows[0];
+  if (!current || !['group', 'global'].includes(current.kind)) return null;
+  const people = await client.query<{ user_id: string }>('SELECT user_id FROM room_members WHERE room_id = $1', [roomId]);
+  const round = current.turn_round || 1;
+  const done = await client.query<{ user_id: string }>('SELECT user_id FROM group_turn_done WHERE room_id = $1 AND round = $2', [roomId, round]);
+  const turn = resolveGroupTurn({ members: people.rows.map((row) => row.user_id), holderId: current.turn_user_id,
+    opensAt: current.turn_opens_at?.getTime() ?? at.getTime(), round, done: done.rows.map((row) => row.user_id), now: at.getTime(), random: randomInt });
+  if (!turn) return null;
+  if (current.turn_user_id !== turn.holderId || current.turn_opens_at?.getTime() !== turn.opensAt || current.turn_round !== turn.round) {
+    await client.query('UPDATE rooms SET turn_user_id = $2, turn_opens_at = $3, turn_round = $4, turn_notice_for = NULL WHERE id = $1',
+      [roomId, turn.holderId, new Date(turn.opensAt), turn.round]);
+    await client.query('DELETE FROM group_turn_done WHERE room_id = $1', [roomId]);
+    if (turn.done.length) await client.query(
+      'INSERT INTO group_turn_done (room_id, round, user_id) SELECT $1, $2, member_id FROM unnest($3::uuid[]) AS member_id ON CONFLICT DO NOTHING',
+      [roomId, turn.round, turn.done]);
+  }
+  return turn;
+}
 
 type UserRow = {
   id: string;
@@ -178,7 +200,7 @@ export function createPostgresRepository(pool: pg.Pool): AuthRepository {
         [GLOBAL_ROOM_ID, userId],
       );
     },
-    async listHome(userId) {
+    async listHome(userId, at = new Date()) {
       const result = await pool.query<{
         id: string;
         kind: RoomKind;
@@ -264,17 +286,16 @@ export function createPostgresRepository(pool: pg.Pool): AuthRepository {
       }));
       for (const room of rooms) {
         if ((room.kind !== 'group' && room.kind !== 'global') || room.participantIds.length === 0) continue;
-        if (room.turnUserId && room.participantIds.includes(room.turnUserId)) continue;
-        const holder = room.participantIds[randomInt(room.participantIds.length)];
-        if (!holder) continue;
-        await pool.query(
-          `UPDATE rooms SET turn_user_id = $2, turn_opens_at = COALESCE(turn_opens_at, '2020-01-01'), turn_round = GREATEST(turn_round, 1)
-           WHERE id = $1 AND kind IN ('group', 'global')
-             AND (turn_user_id IS NULL OR NOT EXISTS (SELECT 1 FROM room_members WHERE room_id = rooms.id AND user_id = rooms.turn_user_id))`,
-          [room.id, holder],
-        );
-        room.turnUserId = holder;
-        room.turnOpensAt = room.turnOpensAt ?? new Date('2020-01-01T00:00:00.000Z');
+        if (room.turnUserId && room.participantIds.includes(room.turnUserId) && room.turnOpensAt
+          && (room.participantIds.length === 1 || at.getTime() < room.turnOpensAt.getTime() + GROUP_TURN_MS)) continue;
+        const client = await pool.connect();
+        try {
+          await client.query('BEGIN');
+          const turn = await syncTurn(client, room.id, at);
+          await client.query('COMMIT');
+          if (turn) { room.turnUserId = turn.holderId; room.turnOpensAt = new Date(turn.opensAt); }
+        } catch (error) { await client.query('ROLLBACK'); throw error; }
+        finally { client.release(); }
       }
       return rooms;
     },
@@ -566,44 +587,10 @@ export function createPostgresRepository(pool: pg.Pool): AuthRepository {
           await client.query('ROLLBACK');
           return false;
         }
-        const room = await client.query<{ kind: string; turn_user_id: string | null; turn_opens_at: Date | null; turn_round: number }>(
-          'SELECT kind, turn_user_id, turn_opens_at, turn_round FROM rooms WHERE id = $1 FOR UPDATE',
-          [roomId],
-        );
-        const current = room.rows[0];
-        if (!current || (current.kind !== 'group' && current.kind !== 'global')) {
-          await client.query('ROLLBACK');
-          return false;
-        }
-        const people = await client.query<{ user_id: string }>('SELECT user_id FROM room_members WHERE room_id = $1', [roomId]);
-        const ids = people.rows.map((row) => row.user_id);
-        const round = current.turn_round > 0 ? current.turn_round : 1;
-        const doneRows = await client.query<{ user_id: string }>(
-          'SELECT user_id FROM group_turn_done WHERE room_id = $1 AND round = $2',
-          [roomId, round],
-        );
-        const done = doneRows.rows.map((row) => row.user_id);
-        let holder = current.turn_user_id;
-        let opens = current.turn_opens_at?.getTime() ?? at.getTime();
-        if (ids.length > 1 && (!holder || !ids.includes(holder))) {
-          const waiting = ids.filter((id) => !done.includes(id));
-          const poolIds = waiting.length ? waiting : ids;
-          holder = poolIds[randomInt(poolIds.length)] ?? userId;
-          opens = current.turn_opens_at && current.turn_opens_at.getTime() > at.getTime() ? current.turn_opens_at.getTime() : at.getTime();
-        }
-        const next = advanceGroupTurn({
-          members: ids,
-          holderId: holder,
-          opensAt: opens,
-          round,
-          done,
-          actorId: userId,
-          now: at.getTime(),
-          changedIdentity: patch.name !== undefined || patch.avatar !== undefined || patch.banner !== undefined,
-          random: (length) => randomInt(length),
-        });
-        if (!next.ok) {
-          await client.query('ROLLBACK');
+        const next = await syncTurn(client, roomId, at);
+        if (!next || next.holderId !== userId || at.getTime() < next.opensAt) {
+          // A rejected former holder must still commit the elapsed-time rotation.
+          await client.query('COMMIT');
           return false;
         }
         await client.query(
@@ -614,15 +601,6 @@ export function createPostgresRepository(pool: pg.Pool): AuthRepository {
            WHERE id = $1 AND kind IN ('group', 'global')`,
           [roomId, patch.name ?? null, patch.bio ?? null, patch.avatar !== undefined, patch.avatar ?? null, patch.banner !== undefined, patch.banner ?? null, next.holderId, new Date(next.opensAt), next.round],
         );
-        await client.query('DELETE FROM group_turn_done WHERE room_id = $1 AND round = $2', [roomId, next.round]);
-        if (next.done.length > 0) {
-          await client.query(
-            `INSERT INTO group_turn_done (room_id, round, user_id)
-             SELECT $1, $2, member_id FROM unnest($3::uuid[]) AS member_id
-             ON CONFLICT DO NOTHING`,
-            [roomId, next.round, next.done],
-          );
-        }
         await client.query('COMMIT');
         return true;
       } catch (error) {
