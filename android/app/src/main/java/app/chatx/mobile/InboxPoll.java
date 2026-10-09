@@ -22,6 +22,8 @@ import org.json.JSONObject;
 final class InboxPoll {
     private static final String CHANNEL = "chatx-messages";
     private static final int MAX_ALERTS = 3;
+    private static String validatedScope = "";
+    private static String validatedEtag = "";
 
     private InboxPoll() {}
 
@@ -102,12 +104,20 @@ final class InboxPoll {
     private static String request(String address, String cookie) {
         HttpURLConnection connection = null;
         try {
+            String scope = address + "\n" + cookie;
+            if (!scope.equals(validatedScope)) {
+                validatedScope = scope;
+                validatedEtag = "";
+            }
             connection = (HttpURLConnection) new URL(address).openConnection();
             connection.setRequestMethod("GET");
             connection.setRequestProperty("Cookie", cookie);
+            if (!validatedEtag.isEmpty()) connection.setRequestProperty("If-None-Match", validatedEtag);
             connection.setConnectTimeout(8000);
             connection.setReadTimeout(8000);
-            if (connection.getResponseCode() != 200) return null;
+            int status = connection.getResponseCode();
+            if (status == 304) return null;
+            if (status != 200) { validatedEtag = ""; return null; }
             InputStream stream = connection.getInputStream();
             ByteArrayOutputStream buffer = new ByteArrayOutputStream();
             byte[] chunk = new byte[4096];
@@ -116,7 +126,11 @@ final class InboxPoll {
                 if (buffer.size() > 200_000) return null;
                 buffer.write(chunk, 0, read);
             }
-            return buffer.toString(StandardCharsets.UTF_8.name());
+            String body = buffer.toString(StandardCharsets.UTF_8.name());
+            if (new JSONObject(body).optJSONArray("notifications") == null) return null;
+            String etag = connection.getHeaderField("ETag");
+            validatedEtag = etag == null ? "" : etag;
+            return body;
         } catch (Exception error) {
             return null;
         } finally {

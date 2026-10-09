@@ -239,7 +239,8 @@ async function publishImage(message: Message) {
     patchMessage(message.id, { status: 'failed' });
     return;
   }
-  const fitted = await fitChatImage(source);
+  // Preparation already applied the user's selected quality; preserve it on upload.
+  const fitted = await fitChatImage(source, 'original');
   const current = useChatStore.getState().messages.find((item) => item.id === message.id);
   if (!fitted || !current) {
     patchMessage(message.id, { status: 'failed' });
@@ -703,11 +704,19 @@ export const useChatStore = create<ChatState>((set, get) => ({
       if (!target) return false;
       if (previous && (previous.createdAt > target.createdAt || (previous.createdAt === target.createdAt && previous.id >= target.id))) return true;
       try {
-        await adminFetch(`/api/rooms/${conversationId}/read`, { method: 'POST', body: { messageId } });
+        const result = await adminFetch(`/api/rooms/${conversationId}/read`, { method: 'POST', body: { messageId } }) as { unreadCount?: number; unreadNotifications?: number } | null;
         if (owner !== useAuthStore.getState().currentUser.id) return false;
         set((state) => ({ readCursors: { ...state.readCursors, [conversationId]: { ...state.readCursors[conversationId], [useAuthStore.getState().currentUser.id]: messageId } } }));
-        await get().loadInbox();
-        await get().loadHome();
+        if (result && Number.isInteger(result.unreadCount) && result.unreadCount! >= 0 && Number.isInteger(result.unreadNotifications) && result.unreadNotifications! >= 0) {
+          set((state) => ({
+            conversations: state.conversations.map((room) => room.id === conversationId ? { ...room, unreadCount: result.unreadCount! } : room),
+            serverUnread: result.unreadNotifications!,
+          }));
+        } else {
+          // Compatibility with a server that has not received the smaller read response yet.
+          await get().loadInbox();
+          await get().loadHome();
+        }
         return true;
       } catch { set({ lastError: 'تعذر حفظ حالة القراءة. ستتم إعادة المحاولة عند عرض الرسالة.' }); return false; }
     }

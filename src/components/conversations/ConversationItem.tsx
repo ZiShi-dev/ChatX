@@ -2,6 +2,7 @@ import { useRef } from 'react';
 import { IonIcon } from '@ionic/react';
 import { banOutline, notificationsOffOutline } from 'ionicons/icons';
 import Avatar from '../common/Avatar';
+import EmojiText from '../common/EmojiText';
 import type { ConversationType } from '../../types/conversation';
 
 type ConversationItemProps = {
@@ -94,7 +95,7 @@ export default function ConversationItem({
         <span className="conversation-bottom">
           <span className={deleted ? 'conversation-preview is-deleted' : muted ? 'conversation-preview is-muted' : 'conversation-preview'}>
             {deleted && <IonIcon icon={banOutline} />}
-            {muted ?? preview}
+            <EmojiText text={muted ?? preview} />
           </span>
           {unread > 0 && <span className="unread-count">{unread}</span>}
         </span>

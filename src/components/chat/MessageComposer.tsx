@@ -7,6 +7,7 @@ import { addOutline, cameraOutline, checkmark, closeOutline, documentOutline, fo
 import PermissionDialog from '../common/PermissionDialog';
 import EmojiPanel from './EmojiPanel';
 import Avatar from '../common/Avatar';
+import EmojiText from '../common/EmojiText';
 import { membersOf } from '../../lib/conversation';
 import { activeMention, EVERYONE_HANDLE } from '../../lib/mention';
 import { clipFileName } from '../../lib/chatFile';
@@ -481,7 +482,7 @@ export default function MessageComposer({ conversationId }: MessageComposerProps
           <div className="edit-banner">
             <div className="edit-quote">
               <strong>الرد على {replyingAuthor?.displayName ?? 'عضو'}</strong>
-              <p>{messagePreview(replying, replying.senderId === 'me')}</p>
+              <p><EmojiText text={messagePreview(replying, replying.senderId === 'me')} /></p>
             </div>
             <button type="button" className="edit-close" aria-label="إلغاء الرد" onClick={() => cancelReply()}>
               <IonIcon icon={closeOutline} />
@@ -536,11 +537,12 @@ export default function MessageComposer({ conversationId }: MessageComposerProps
                 label="جودة الصورة"
                 original={attachments.find((item) => item.kind === 'image')?.size ?? 0}
                 expected={expectedImageSize(imageQuality)}
+                maximum
                 value={imageQuality}
                 options={[
                   { id: 'saver', label: 'توفير البيانات' },
                   { id: 'medium', label: 'متوسطة' },
-                  { id: 'original', label: 'أصلية' },
+                  { id: 'original', label: 'عالية' },
                 ]}
                 onChange={setImageQuality}
               />
@@ -633,7 +635,7 @@ export default function MessageComposer({ conversationId }: MessageComposerProps
             ref={fieldRef}
             className="composer-input"
             rows={1}
-            dir="auto"
+            dir="ltr"
             value={draft}
             placeholder="اكتب رسالة"
             enterKeyHint="send"
@@ -706,6 +708,7 @@ function QualityChoices<T extends string>({
   label,
   original,
   expected,
+  maximum = false,
   value,
   options,
   onChange,
@@ -713,6 +716,7 @@ function QualityChoices<T extends string>({
   label: string;
   original: number;
   expected: number;
+  maximum?: boolean;
   value: T;
   options: Array<{ id: T; label: string }>;
   onChange: (value: T) => void;
@@ -721,7 +725,7 @@ function QualityChoices<T extends string>({
     <div className="quality-block">
       <strong>{label}</strong>
       <p>الحجم الأصلي: {formatBytes(original)}</p>
-      <p>بعد الضغط: حوالي {formatBytes(expected)}</p>
+      <p>بعد الضغط: {maximum ? 'بحد أقصى' : 'حوالي'} {formatBytes(expected)}</p>
       <div className="setting-choices" role="radiogroup" aria-label={label}>
         {options.map((option) => (
           <button

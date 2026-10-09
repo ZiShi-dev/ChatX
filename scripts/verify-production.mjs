@@ -13,7 +13,7 @@ const messages = Array.from({ length: 1000 }, (_, index) => ({ id: `aaaaaaaa-aaa
 try {
   const context = await browser.newContext({ viewport: { width: 320, height: 568 }, permissions: ['notifications'] });
   const page = await context.newPage();
-  const errors = []; let imageRequests = 0; let rejectEdits = true;
+  const errors = []; const uploadedImages = []; let imageRequests = 0; let rejectEdits = true;
   page.on('pageerror', (error) => errors.push(error.message));
   await page.route('**/api/**', async (route) => {
     const request = route.request(); const url = new URL(request.url());
@@ -29,7 +29,8 @@ try {
     }
     if (url.pathname.endsWith('/messages') && request.method() === 'POST') {
       const input = request.postDataJSON();
-      const message = { id: input.id, conversationId: roomId, senderId: user.id, type: 'text', text: input.text, createdAt: new Date().toISOString(), deleted: false };
+      if (input.image) uploadedImages.push(input.image);
+      const message = { id: input.id, conversationId: roomId, senderId: user.id, type: input.image ? 'image' : 'text', text: input.text || '', fileSize: input.image ? Buffer.from(input.image.split(',')[1], 'base64').length : undefined, createdAt: new Date().toISOString(), deleted: false };
       if (!messages.some((item) => item.id === input.id)) messages.push(message);
       body = { message };
     }
@@ -41,6 +42,7 @@ try {
     if (url.pathname === '/api/notifications') body = { notifications: [], unreadCount: 0 };
     if (url.pathname === '/api/saved') body = { saved: [], hasMore: false };
     if (url.pathname === '/api/presence') body = { users: [] };
+    if (url.pathname.endsWith('/read')) body = { ok: true, unreadCount: 0, unreadNotifications: 0 };
     await route.fulfill({ json: body });
   });
   await page.goto(base);
@@ -96,6 +98,57 @@ try {
   for (let index = 0; index < 10; index += 1) await page.locator('.attach-remove').first().click();
   assert.equal(await page.locator('.attach-remove').count(), 0);
   console.log('PASS attachment selection caps at ten; previews use compressed thumbnails; removal works');
+  const detailedPng = await page.evaluate(() => {
+    const canvas = document.createElement('canvas'); canvas.width = 640; canvas.height = 480;
+    const context = canvas.getContext('2d'); const pixels = context.createImageData(640, 480);
+    let seed = 17;
+    for (let index = 0; index < pixels.data.length; index += 4) {
+      seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0;
+      pixels.data[index] = seed & 255; pixels.data[index + 1] = (seed >>> 8) & 255; pixels.data[index + 2] = (seed >>> 16) & 255; pixels.data[index + 3] = 255;
+    }
+    context.putImageData(pixels, 0, 0); return canvas.toDataURL('image/png').split(',')[1];
+  });
+  const detailedFile = { name: 'detailed.png', mimeType: 'image/png', buffer: Buffer.from(detailedPng, 'base64') };
+  for (const [label, limit] of [['توفير البيانات', 20_000], ['عالية', 60_000]]) {
+    const count = uploadedImages.length;
+    await page.locator('input[type=file]').first().setInputFiles(detailedFile);
+    await page.locator('.attach-thumb img').waitFor();
+    await page.getByRole('radio', { name: label, exact: true }).click();
+    const uploaded = page.waitForResponse((response) => response.request().method() === 'POST' && response.url().endsWith('/messages') && !!response.request().postDataJSON()?.image);
+    await page.locator('textarea').press('Enter');
+    await uploaded;
+    assert.equal(uploadedImages.length, count + 1);
+    assert.ok(Buffer.from(uploadedImages.at(-1).split(',')[1], 'base64').length <= limit);
+    await page.waitForFunction((id) => JSON.parse(localStorage.getItem(`chatx.chat.v1.${id}`) || '{}').messages?.every((message) => message.status === 'sent'), user.id);
+  }
+  assert.ok(Buffer.from(uploadedImages.at(-1).split(',')[1], 'base64').length > 20_000);
+  console.log('PASS detailed image upload caps at 20 kB in saver mode; high quality remains available up to 60 kB');
+  await page.getByRole('button', { name: 'إيموجي', exact: true }).click();
+  await page.getByRole('option', { name: '😀', exact: true }).locator('img').waitFor();
+  await page.waitForFunction(() => {
+    const grid = document.querySelector('.emoji-grid')?.getBoundingClientRect();
+    if (!grid) return false;
+    const visible = [...document.querySelectorAll('.emoji-grid .chat-emoji img')].filter((image) => {
+      const box = image.getBoundingClientRect(); return box.bottom > grid.top && box.top < grid.bottom;
+    });
+    return visible.length > 0 && visible.every((image) => image.complete && image.naturalWidth === 64);
+  });
+  await page.locator('.emoji-panel').screenshot({ path: 'docs/emoji-preview.png' });
+  await page.getByRole('option', { name: '😀', exact: true }).click();
+  assert.equal(await page.locator('textarea').inputValue(), '😀');
+  const emojiMessage = 'مرحبا 😀 ❤️‍🔥 👍🏽 👨‍👩‍👧‍👦';
+  await page.locator('textarea').fill(emojiMessage);
+  const emojiPosted = page.waitForResponse((response) => response.request().method() === 'POST' && response.url().endsWith('/messages') && response.request().postDataJSON()?.text === emojiMessage);
+  await page.locator('textarea').press('Enter');
+  await emojiPosted;
+  const emojiId = messages.at(-1).id;
+  const emojiBubble = page.locator(`#msg-${emojiId} .bubble-text`);
+  assert.equal(await emojiBubble.textContent(), emojiMessage);
+  assert.equal(await emojiBubble.locator('.chat-emoji img').count(), 3);
+  assert.ok(await emojiBubble.locator('.chat-emoji img').evaluateAll((images) => images.every((image) => image.getAttribute('src').startsWith('/assets/emoji/'))));
+  await emojiBubble.scrollIntoViewIfNeeded();
+  await page.waitForFunction((id) => [...document.querySelectorAll(`#msg-${id} .chat-emoji img`)].every((image) => image.complete && image.naturalWidth === 64), emojiId);
+  console.log('PASS local 3D emoji picker, Unicode send, toned/ZWJ rendering and intact unsupported sequences');
   await page.evaluate(() => {
     Object.defineProperty(navigator, 'onLine', { configurable: true, get: () => false });
     window.dispatchEvent(new Event('offline'));

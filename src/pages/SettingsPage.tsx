@@ -9,8 +9,8 @@ import { useSettingsStore } from '../stores/settingsStore';
 import type { ImageQuality, VideoQuality } from '../types/settings';
 
 const imageChoices: Array<{ value: ImageQuality; label: string; hint: string }> = [
-  { value: 'saver', label: 'صغيرة', hint: 'ملف أخف، مناسب للاتصال الضعيف.' },
-  { value: 'medium', label: 'متوسطة', hint: 'توازن بين الوضوح والحجم.' },
+  { value: 'saver', label: 'صغيرة', hint: 'حتى 20 KB للصورة، مناسب لباقات الإنترنت الصغيرة.' },
+  { value: 'medium', label: 'متوسطة', hint: 'توازن بين الوضوح والحجم، حتى 40 KB للصورة.' },
   { value: 'original', label: 'عالية', hint: 'وضوح أعلى، مع ضغط الصورة إلى 60 KB كحد أقصى.' },
 ];
 
@@ -80,7 +80,7 @@ export default function SettingsPage({ embedded = false }: SettingsPageProps) {
           <article className="setting-card">
             <div>
               <strong>توفير البيانات</strong>
-              <p>لا يُنزَّل شيء تلقائيًا. تضغط على الصورة أو الفيديو عندما تريد.</p>
+              <p>لا تُنزَّل الوسائط تلقائيًا. تضغط عندما تريد. تتباعد تحديثات القائمة والتنبيهات إلى 40 ثانية، وتبقى المحادثة المفتوحة كل 20 ثانية.</p>
             </div>
             <IonToggle checked={dataSaver} aria-label="توفير البيانات" onIonChange={(event) => setDataSaver(event.detail.checked)} />
           </article>
@@ -183,6 +183,11 @@ export default function SettingsPage({ embedded = false }: SettingsPageProps) {
               مسح الملفات المؤقتة
             </button>
           </article>
+        </section>
+        <section className="settings-block">
+          <h2>حقوق الإيموجي</h2>
+          <p className="settings-lead" dir="ltr">Fluent Emoji © Microsoft Corporation · MIT</p>
+          <a href="https://github.com/microsoft/fluentui-emoji" target="_blank" rel="noreferrer">مصدر الرسومات وترخيصها</a>
         </section>
     </>
   );

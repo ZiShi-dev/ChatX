@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { IonButton, IonIcon, IonModal } from '@ionic/react';
 import { alertCircleOutline, arrowUndoOutline, arrowUpOutline, atOutline, banOutline, bookmark, bookmarkOutline, checkmarkDoneOutline, checkmarkOutline, closeOutline, copyOutline, createOutline, documentOutline, downloadOutline, informationCircleOutline, peopleOutline, play, timeOutline, trashOutline } from 'ionicons/icons';
 import Avatar from '../common/Avatar';
+import EmojiText from '../common/EmojiText';
 import { conversationTitle, formatMessageTime, formatNotificationTime } from '../../lib/conversation';
 import { isServerId } from '../../lib/home';
 import { toSavedEntry } from '../../lib/saved';
@@ -196,7 +197,7 @@ function MessageText({ text, username, onOpenProfile }: { text: string; username
           );
         }
         return part.split(/(@[\p{L}\p{N}_]+)/gu).filter(Boolean).map((piece, pieceIndex) => {
-          if (!piece.startsWith('@')) return <span key={`${index}-${pieceIndex}`}>{piece}</span>;
+          if (!piece.startsWith('@')) return <span key={`${index}-${pieceIndex}`}><EmojiText text={piece} /></span>;
           const handle = piece.slice(1).toLowerCase();
           const person = users.find((user) => user.username.toLowerCase() === handle);
           const tone = handle === 'everyone' ? 'is-everyone' : handle === username.toLowerCase() ? 'is-direct' : '';
@@ -313,7 +314,7 @@ function ReplyQuote({ messageId }: { messageId: string }) {
     <span className="reply-wrap">
       <button type="button" className="reply-ref" onClick={jump} onPointerDown={(event) => event.stopPropagation()}>
         <strong>{author?.displayName ?? 'عضو'}</strong>
-        <em>{preview}</em>
+        <em><EmojiText text={preview} /></em>
       </button>
       {missing && <span className="reply-missing" role="status">الرسالة الأصلية أقدم من الرسائل المحملة</span>}
     </span>
@@ -460,7 +461,7 @@ function MessageBubble({ message, mine, showAuthor, group = false, direct = fals
                   aria-pressed={mineEmoji === emoji}
                   onClick={() => reactWith(emoji)}
                 >
-                  {emoji}
+                  <EmojiText text={emoji} />
                 </button>
               ))}
               <button type="button" className="reaction-more-toggle" aria-label="المزيد" aria-expanded={moreOpen} onClick={() => setMoreOpen((open) => !open)}>
@@ -750,7 +751,7 @@ function MessageBubble({ message, mine, showAuthor, group = false, direct = fals
             }}
           >
             {reactionGroups.map((group) => (
-              <span key={group.emoji}>{group.emoji}</span>
+              <span key={group.emoji}><EmojiText text={group.emoji} /></span>
             ))}
             {reactionTotal > 1 && <small>{reactionTotal}</small>}
           </button>
@@ -806,7 +807,7 @@ function MessageBubble({ message, mine, showAuthor, group = false, direct = fals
                         <strong>{own ? 'أنت' : person?.displayName ?? 'عضو'}</strong>
                         {own && <small>اضغط لإزالة التفاعل</small>}
                       </span>
-                      <em>{item.emoji}</em>
+                      <em><EmojiText text={item.emoji} /></em>
                     </button>
                   </li>
                 );

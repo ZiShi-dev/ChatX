@@ -2,6 +2,8 @@
 
 Les constats initiaux restent dans `AUDIT-2026-10-09.md`. Ce rapport décrit la correction du projet local ; aucun serveur de production n'a été modifié.
 
+La passe suivante sur l'économie de données, ses nouvelles limites photo et ses validations est détaillée dans [DONNEES-2026-10-09.md](DONNEES-2026-10-09.md).
+
 ## Fiabilité
 
 - Historique et favoris : pages de 30, curseurs stables (date et ID), chargement du message ciblé par un lien ancien. Les réactions SQL sont limitées aux messages de la page.

@@ -3,11 +3,27 @@ import { Capacitor } from '@capacitor/core';
 const HTTPS_ORIGIN = /^https:\/\/[A-Za-z0-9.-]+(?::[0-9]{1,5})?$/;
 let sessionVersion = 0;
 const activeRequests = new Set<AbortController>();
+const responseCache = new Map<string, { etag: string; body: string }>();
+const MAX_CACHE_CHARS = 3_000_000;
+
+function rememberResponse(path: string, etag: string | null, body: string) {
+  if (!etag || body.length > 2_000_000) return;
+  responseCache.delete(path);
+  responseCache.set(path, { etag, body });
+  let size = [...responseCache.values()].reduce((total, row) => total + row.body.length, 0);
+  while (responseCache.size > 16 || size > MAX_CACHE_CHARS) {
+    const first = responseCache.keys().next().value;
+    if (!first) break;
+    size -= responseCache.get(first)!.body.length;
+    responseCache.delete(first);
+  }
+}
 
 export function invalidateApiSession() {
   sessionVersion += 1;
   activeRequests.forEach((controller) => controller.abort());
   activeRequests.clear();
+  responseCache.clear();
 }
 
 function adminRequestUrl(path: string, native: boolean, origin: string | undefined) {
@@ -38,6 +54,8 @@ export async function adminFetch(path: string, init?: { method?: string; body?: 
   try {
     const method = (init?.method ?? 'GET').toUpperCase();
     const headers = new Headers();
+    const cached = method === 'GET' ? responseCache.get(path) : undefined;
+    if (cached) headers.set('if-none-match', cached.etag);
     if (init?.body) headers.set('content-type', 'application/json');
     if (method !== 'GET' && method !== 'HEAD') headers.set('x-chatx-request', '1');
     const response = await fetch(adminRequestUrl(path, Capacitor.isNativePlatform(), import.meta.env.VITE_API_ORIGIN), {
@@ -47,13 +65,19 @@ export async function adminFetch(path: string, init?: { method?: string; body?: 
       body: init?.body ? JSON.stringify(init.body) : undefined,
       signal: controller.signal,
     });
-    const data: unknown = await response.json().catch(() => null);
+    if (controller.signal.aborted) throw new AdminApiError('offline', 0);
+    if (version !== sessionVersion) throw new AdminApiError('account_changed', 0);
+    if (response.status === 304 && cached) return JSON.parse(cached.body) as unknown;
+    const body = await response.text();
+    let data: unknown = null;
+    try { data = JSON.parse(body); } catch { /* Invalid JSON remains unavailable to callers. */ }
     if (!response.ok) {
       const code = data && typeof data === 'object' && 'error' in data && typeof data.error === 'string' ? data.error : 'unavailable';
       throw new AdminApiError(code, response.status);
     }
     if (controller.signal.aborted) throw new AdminApiError('offline', 0);
     if (version !== sessionVersion) throw new AdminApiError('account_changed', 0);
+    if (method === 'GET' && data !== null) rememberResponse(path, response.headers.get('etag'), body);
     return data;
   } catch (error) {
     if (error instanceof AdminApiError) throw error;

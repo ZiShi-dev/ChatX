@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { startPolling } from './poll';
+import { useSettingsStore } from '../stores/settingsStore';
 
 describe('network polling', () => {
   let stop: (() => void) | undefined;
@@ -57,5 +58,18 @@ describe('network polling', () => {
     expect(task).toHaveBeenCalledTimes(1);
     await vi.advanceTimersByTimeAsync(1);
     expect(task).toHaveBeenCalledTimes(2);
+  });
+  it('halves secondary refreshes in economy mode while leaving message polling responsive', async () => {
+    const previous = useSettingsStore.getState().dataSaver;
+    useSettingsStore.setState({ dataSaver: true });
+    const secondary = vi.fn(async () => undefined);
+    const messages = vi.fn(async () => undefined);
+    stop = startPolling(secondary, { economy: true });
+    const stopMessages = startPolling(messages);
+    try {
+      await vi.advanceTimersByTimeAsync(40_000);
+      expect(secondary).toHaveBeenCalledTimes(2);
+      expect(messages).toHaveBeenCalledTimes(3);
+    } finally { stopMessages(); useSettingsStore.setState({ dataSaver: previous }); }
   });
 });

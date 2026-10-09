@@ -84,7 +84,7 @@ export default function HomePage() {
       const silent = !first;
       first = false;
       await run(silent);
-    }, { active: () => window.location.pathname === '/home' });
+    }, { active: () => window.location.pathname === '/home', economy: true });
     return () => {
       alive = false;
       stop();
@@ -179,16 +179,16 @@ export default function HomePage() {
               {renderConversation(globalChat)}
             </section>
           )}
-          {visible.length === 0 ? (
+          {visible.length === 0 && !showGlobal ? (
             <EmptyState title="لا توجد محادثات حتى الآن" />
-          ) : (
+          ) : visible.length > 0 ? (
             <section className="home-section">
               {showGlobal && <h2>المحادثات الأخيرة</h2>}
               <div className="home-list">
                 {visible.map((conversation) => renderConversation(conversation))}
               </div>
             </section>
-          )}
+          ) : null}
           </>
         )}
       </IonContent>

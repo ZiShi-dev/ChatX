@@ -3,6 +3,7 @@ import { IonContent, IonHeader, IonIcon, IonPage } from '@ionic/react';
 import { bookmark } from 'ionicons/icons';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import EmptyState from '../components/common/EmptyState';
+import EmojiText from '../components/common/EmojiText';
 import PageSkeleton from '../components/common/PageSkeleton';
 import NetworkStatusBanner from '../components/common/NetworkBanner';
 import PageNav from '../components/common/PageNav';
@@ -88,7 +89,7 @@ export default function SavedPage() {
                       <span>{item.conversationName}</span>
                       <span className="kind-pill">{KIND[item.type]}</span>
                     </span>
-                    <span className="inbox-preview">{item.preview}</span>
+                    <span className="inbox-preview"><EmojiText text={item.preview} /></span>
                   </span>
                 </button>
                 <button type="button" className="saved-drop" aria-label="إلغاء الحفظ" onClick={() => remove(currentUser.id, item.messageId)}>

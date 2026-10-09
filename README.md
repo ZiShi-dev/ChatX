@@ -56,9 +56,17 @@ Les migrations sont appliquées au démarrage du serveur. `src/data` garde les d
 
 Les messages sont paginés par 30, avec un cache local séparé par compte : 300 messages récents et 40 envois en attente au maximum, dans une limite de 1,8 million de caractères JSON. Les pièces jointes en attente sont persistées après préparation ; ne pas fermer pendant cette préparation. Le DOM affiche au maximum 120 bulles avec navigation entre fenêtres. Les lectures sont enregistrées explicitement depuis les messages visibles.
 
-## Mode debug
+## Économie de données
 
-Le panneau تصحيح (Online, Slow, Offline, envoi en échec, vu simulé) n’existe qu’en `npm run dev`. Il est absent du build de production.
+Le mode économie est activé par défaut. Les médias se téléchargent sur demande ; les listes et notifications visibles se rafraîchissent toutes les 40 secondes, la conversation ouverte et la présence toutes les 20 secondes. Les réponses JSON inchangées utilisent une validation ETag sans nouveau contenu à transférer. Le cache de validation reste en mémoire, limité à 16 réponses et 3 millions de caractères, puis est vidé au changement de compte. Les confirmations de lecture renvoient de petits compteurs sans recharger immédiatement les profils.
+
+La qualité photo reste indépendante de la puissance du téléphone : plafonds JPEG de 20/40/60 kB selon le réglage. Le transfert JSON/base64 et les en-têtes ajoutent des octets à ces tailles. Les médias reçus peuvent utiliser le cache HTTP privé, séparé selon le cookie de session. Le panneau de simulation a été supprimé.
+
+Voir [la vérification de l'économie de données](docs/DONNEES-2026-10-09.md).
+
+## Emojis
+
+Les emojis des messages, réactions et sélecteur utilisent des illustrations Fluent 3D locales sous licence MIT, identiques sur les appareils pour les caractères couverts. Le texte envoyé reste Unicode ; les caractères hors du paquet et le clavier natif gardent leur rendu système. Les 1 035 images optimisées occupent environ 1,75 Mo et sont embarquées dans l'APK, sans CDN. Voir [la solution, la licence et les vérifications](docs/EMOJIS-2026-10-09.md).
 
 ## Vérifier
 

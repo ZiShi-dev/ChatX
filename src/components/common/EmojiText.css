@@ -1,0 +1,28 @@
+.chat-emoji {
+  display: inline-block;
+  position: relative;
+  width: 1.18em;
+  height: 1.18em;
+  vertical-align: -.22em;
+  line-height: 1.18;
+  white-space: nowrap;
+}
+
+/* Keep the original Unicode text selectable and accessible beneath the illustration. */
+.chat-emoji > span {
+  display: inline-block;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  color: transparent;
+}
+
+.chat-emoji > img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+  pointer-events: none;
+  user-select: none;
+}

@@ -68,7 +68,7 @@ export function useInboxAlerts() {
     };
 
     // Android's native watcher already checks notifications in the background.
-    const stop = startPolling(tick, { background: !Capacitor.isNativePlatform() });
+    const stop = startPolling(tick, { background: !Capacitor.isNativePlatform(), economy: true });
     return () => {
       stopped = true;
       stop();

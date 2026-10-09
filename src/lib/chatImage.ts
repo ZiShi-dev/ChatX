@@ -45,8 +45,9 @@ function drawJpeg(image: HTMLImageElement, edge: number, quality: number) {
 }
 
 export async function fitChatImage(source: string, qualityLevel: 'saver' | 'medium' | 'original' = 'saver'): Promise<{ url: string; bytes: number; width: number; height: number } | null> {
+  const byteLimit = qualityLevel === 'saver' ? 20_000 : qualityLevel === 'medium' ? 40_000 : IMAGE_BYTES_MAX;
   const ready = readyJpeg(source);
-  if (ready) return { url: source, bytes: ready, width: 0, height: 0 };
+  if (ready && ready <= byteLimit) return { url: source, bytes: ready, width: 0, height: 0 };
   const image = await loadImage(source);
   if (!image || image.naturalWidth * image.naturalHeight > 24_000_000) return null;
   let edge = qualityLevel === 'saver' ? 640 : qualityLevel === 'medium' ? 800 : 960;
@@ -54,7 +55,7 @@ export async function fitChatImage(source: string, qualityLevel: 'saver' | 'medi
   for (let attempt = 0; attempt < 6; attempt += 1) {
     const drawn = drawJpeg(image, edge, quality);
     const bytes = drawn ? readyJpeg(drawn.url) : null;
-    if (drawn && bytes) return { url: drawn.url, bytes, width: drawn.width, height: drawn.height };
+    if (drawn && bytes && bytes <= byteLimit) return { url: drawn.url, bytes, width: drawn.width, height: drawn.height };
     edge = Math.round(edge * 0.75);
     quality = Math.max(0.45, quality - 0.08);
   }

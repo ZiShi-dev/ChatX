@@ -28,9 +28,9 @@ export function messagePreview(message?: Message, mine = false) {
 }
 
 export function expectedImageSize(quality: ImageQuality) {
-  if (quality === 'saver') return 420 * KB;
-  if (quality === 'medium') return 1.2 * MB;
-  return 4.8 * MB;
+  if (quality === 'saver') return 20_000;
+  if (quality === 'medium') return 40_000;
+  return 60_000;
 }
 
 export function expectedVideoSize(quality: VideoQuality) {

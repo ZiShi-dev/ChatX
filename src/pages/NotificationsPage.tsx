@@ -5,6 +5,7 @@ import { alertOutline, arrowUndoOutline, atOutline, chatbubbleOutline, checkmark
 import { useNavigate } from 'react-router-dom';
 import Avatar from '../components/common/Avatar';
 import EmptyState from '../components/common/EmptyState';
+import EmojiText from '../components/common/EmojiText';
 import PageSkeleton from '../components/common/PageSkeleton';
 import NetworkStatusBanner from '../components/common/NetworkBanner';
 import PageNav from '../components/common/PageNav';
@@ -83,7 +84,7 @@ const NotificationRow = memo(function NotificationRow({
             </span>
           )}
         </span>
-        <span className="inbox-preview" dir="auto">{item.count > 1 ? `${item.count} رسائل · ${item.preview}` : item.preview}</span>
+        <span className="inbox-preview" dir="auto"><EmojiText text={item.count > 1 ? `${item.count} رسائل · ${item.preview}` : item.preview} /></span>
       </span>
     </button>
   );

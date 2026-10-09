@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { EMOJI_GROUPS } from '../../lib/emojiCatalog';
+import EmojiText from '../common/EmojiText';
 
 type EmojiPanelProps = {
   selected?: string;
@@ -12,20 +13,6 @@ export default function EmojiPanel({ selected, onPick }: EmojiPanelProps) {
 
   return (
     <div className="emoji-panel">
-      <div className="emoji-tabs" role="tablist" aria-label="أنواع الإيموجي">
-        {EMOJI_GROUPS.map((item) => (
-          <button
-            key={item.id}
-            type="button"
-            role="tab"
-            aria-selected={item.id === group.id}
-            className={item.id === group.id ? 'is-on' : undefined}
-            onClick={() => setGroupId(item.id)}
-          >
-            {item.label}
-          </button>
-        ))}
-      </div>
       <div className="emoji-grid" role="listbox" aria-label={group.label}>
         {group.emojis.map((emoji, index) => (
           <button
@@ -37,7 +24,22 @@ export default function EmojiPanel({ selected, onPick }: EmojiPanelProps) {
             aria-label={emoji}
             onClick={() => onPick(emoji)}
           >
-            {emoji}
+            <EmojiText text={emoji} />
+          </button>
+        ))}
+      </div>
+      <div className="emoji-tabs" role="tablist" aria-label="أنواع الإيموجي">
+        {EMOJI_GROUPS.map((item) => (
+          <button
+            key={item.id}
+            type="button"
+            role="tab"
+            aria-selected={item.id === group.id}
+            aria-label={item.label}
+            className={item.id === group.id ? 'is-on' : undefined}
+            onClick={() => setGroupId(item.id)}
+          >
+            <EmojiText text={item.emojis[0]} />
           </button>
         ))}
       </div>
