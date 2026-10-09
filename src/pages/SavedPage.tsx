@@ -12,6 +12,7 @@ import { savedFor } from '../lib/saved';
 import { useAuthStore } from '../stores/authStore';
 import { useSavedStore } from '../stores/savedStore';
 import type { MessageType } from '../types/message';
+import './SavedPage.css';
 
 const KIND: Record<MessageType, string> = {
   text: 'نص',
@@ -58,8 +59,8 @@ export default function SavedPage() {
         <NetworkStatusBanner />
         <PageNav title="المحفوظات" fallback={room ? `/chat/${room}` : '/home'} />
       </IonHeader>
-      <IonContent className="inbox-page">
-        <p className="inbox-lead">الرسائل التي تحفظها تبقى لك، من المجموعات والمحادثات الخاصة.</p>
+      <IonContent className="inbox-page saved-page">
+        <p className="inbox-lead saved-lead">الرسائل التي تحفظها تبقى لك، من المجموعات والمحادثات الخاصة.</p>
         {error && <p role="alert">{error}</p>}
         {room && (
           <div className="inbox-filters" role="tablist" aria-label="نطاق المحفوظات">
