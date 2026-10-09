@@ -8,7 +8,7 @@ import { cleanBanner, cleanBio } from '../src/profile.ts';
 import { hashSession } from '../src/session.ts';
 import type { AuthUser } from '../src/types.ts';
 
-const jpeg = 'data:image/jpeg;base64,/9j/AAAA';
+import { jpegUrl as jpeg } from './jpegFixture.ts';
 
 function testDeps(): Deps {
   return {

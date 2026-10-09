@@ -24,10 +24,21 @@ export function createRateLimiter(options: RateOptions) {
   for (const [key, until] of Object.entries(options.initial?.cooledUntil ?? {})) {
     if (typeof until === 'number' && Number.isFinite(until)) cooledUntil.set(key, until);
   }
-  const changed = () => options.onChange?.({
+  const prune = () => {
+    const at = options.now();
+    for (const [key, times] of failures) {
+      const recent = times.filter(time => at - time < options.windowMs).slice(-options.limit);
+      if (recent.length) failures.set(key, recent); else failures.delete(key);
+    }
+    for (const [key, until] of cooledUntil) if (until <= at) cooledUntil.delete(key);
+    while (failures.size > 2048) failures.delete(failures.keys().next().value!);
+    while (cooledUntil.size > 2048) cooledUntil.delete(cooledUntil.keys().next().value!);
+  };
+  prune();
+  const changed = () => { prune(); options.onChange?.({
     failures: Object.fromEntries(failures),
     cooledUntil: Object.fromEntries(cooledUntil),
-  });
+  }); };
 
   return {
     check(key: string) {
@@ -47,9 +58,9 @@ export function createRateLimiter(options: RateOptions) {
       changed();
     },
     succeed(key: string) {
-      failures.delete(key);
-      cooledUntil.delete(key);
-      changed();
+      const hadFailures = failures.delete(key);
+      const hadCooldown = cooledUntil.delete(key);
+      if (hadFailures || hadCooldown) changed();
     },
   };
 }

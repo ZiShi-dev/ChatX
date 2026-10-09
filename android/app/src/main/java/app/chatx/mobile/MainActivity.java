@@ -23,6 +23,9 @@ public class MainActivity extends BridgeActivity {
         registerPlugin(StorageAccessPlugin.class);
         registerPlugin(InboxWatchPlugin.class);
         super.onCreate(savedInstanceState);
+        getBridge().getWebView().getSettings().setAllowFileAccess(false);
+        getBridge().getWebView().getSettings().setAllowContentAccess(false);
+        getBridge().getWebView().getSettings().setMixedContentMode(android.webkit.WebSettings.MIXED_CONTENT_NEVER_ALLOW);
     }
 
     @Override

@@ -29,6 +29,7 @@ async function syncTurn(client: pg.PoolClient, roomId: string, at: Date) {
 }
 
 type UserRow = {
+  google_sub: string | null;
   id: string;
   email: string;
   display_name: string;
@@ -39,7 +40,7 @@ type UserRow = {
   avatar: string | null;
 };
 
-const USER_COLUMNS = 'id, email, display_name, username, role, bio, banner, avatar';
+const USER_COLUMNS = 'id, email, display_name, username, role, bio, banner, avatar, google_sub';
 
 function byteSizeOf(value: unknown, max: number) {
   const size = typeof value === 'number' ? value : typeof value === 'string' ? Number(value) : NaN;
@@ -77,6 +78,7 @@ function mapUser(row: UserRow): AuthUser {
     bio: row.bio ?? '',
     bannerUrl: row.banner,
     avatarUrl: row.avatar,
+    googleSub: row.google_sub,
   };
 }
 
@@ -85,12 +87,20 @@ function isUnique(error: unknown) {
 }
 
 export function createPool(databaseUrl: string) {
-  return new pg.Pool({ connectionString: databaseUrl, max: 10 });
+  return new pg.Pool({ connectionString: databaseUrl, max: 10, connectionTimeoutMillis:5000, idleTimeoutMillis:30000, statement_timeout:10000, idle_in_transaction_session_timeout:10000 });
 }
 
 export function createPostgresRepository(pool: pg.Pool): AuthRepository {
   return {
     ...createLowBandwidthRepository(pool),
+    async findUserByGoogleSub(sub) {
+      const result=await pool.query<UserRow>(`SELECT ${USER_COLUMNS} FROM users WHERE google_sub=$1`,[sub]);
+      return result.rows[0]?mapUser(result.rows[0]):null;
+    },
+    async bindGoogleSub(id,sub) {
+      try {return !!(await pool.query('UPDATE users SET google_sub=$2 WHERE id=$1 AND role=\'member\' AND (google_sub IS NULL OR google_sub=$2)',[id,sub])).rowCount;}
+      catch(error){if(isUnique(error))return false;throw error;}
+    },
     async findUserById(id) {
       const result = await pool.query<UserRow>(
         `SELECT ${USER_COLUMNS} FROM users WHERE id = $1`,
@@ -107,9 +117,9 @@ export function createPostgresRepository(pool: pg.Pool): AuthRepository {
     },
     async insertUser(user) {
       await pool.query(
-        `INSERT INTO users (id, email, display_name, username, role, password_hash, totp_enabled)
-         VALUES ($1, $2, $3, $4, 'member', null, false)`,
-        [user.id, user.email, user.displayName, user.username],
+        `INSERT INTO users (id, email, display_name, username, role, password_hash, totp_enabled, google_sub)
+         VALUES ($1, $2, $3, $4, 'member', null, false, $5)`,
+        [user.id, user.email, user.displayName, user.username,user.googleSub??null],
       );
     },
     async renameMember(id, displayName) {

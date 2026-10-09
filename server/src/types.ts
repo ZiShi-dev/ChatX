@@ -1,6 +1,7 @@
 export type AuthRole = 'creator' | 'admin' | 'member';
 
 export type AuthUser = {
+  googleSub?: string | null;
   id: string;
   email: string;
   displayName: string;
@@ -19,6 +20,8 @@ export type ProfilePatch = {
 };
 
 export interface AuthRepository {
+  findUserByGoogleSub(sub:string):Promise<AuthUser | null>;
+  bindGoogleSub(id:string,sub:string):Promise<boolean>;
   readRoomSync(roomId: string, userId: string, cursor: string | null): Promise<RoomSync | null>;
   beginUpload(upload: Upload, at: Date): Promise<Upload | null>;
   readUpload(roomId: string, ownerId: string, id: string, at: Date): Promise<Upload | null>;

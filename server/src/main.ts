@@ -4,7 +4,8 @@ import { createServer as createHttpsServer } from 'node:https';
 import type { TLSSocket } from 'node:tls';
 import { createLimiter } from './authService.ts';
 import { loadConfig } from './config.ts';
-import { createApi } from './http.ts';
+import { createApi, securityHeaders } from './http.ts';
+import { configureHttpServer, proxyClientAddress } from './transportSecurity.ts';
 import { clientRequestHeaders } from './requestHeaders.ts';
 import { migrate } from './migrate.ts';
 import { createPool, createPostgresRepository } from './postgres.ts';
@@ -21,17 +22,7 @@ function externalHttps(req: IncomingMessage, trustProxy: boolean) {
   if (!trustProxy) return false;
   const forwarded = req.headers['x-forwarded-proto'];
   const value = Array.isArray(forwarded) ? forwarded[0] : forwarded;
-  return value?.split(',')[0]?.trim() === 'https';
-}
-
-function clientAddress(req: IncomingMessage, trustProxy: boolean) {
-  if (trustProxy) {
-    const header = req.headers['x-forwarded-for'];
-    const value = Array.isArray(header) ? header[0] : header;
-    const ip = value?.split(',')[0]?.trim();
-    if (ip) return ip.slice(0, 64);
-  }
-  return req.socket.remoteAddress?.slice(0, 64) || 'local';
+  return value?.split(',').at(-1)?.trim() === 'https';
 }
 
 function bodyLimit(url: string | undefined) {
@@ -49,10 +40,10 @@ async function readBody(req: IncomingMessage) {
   const chunks: Buffer[] = [];
   let total = 0;
   const limit = bodyLimit(req.url);
-  for await (const chunk of req) {
+  for await (const chunk of req.iterator({ destroyOnReturn: false })) {
     const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
     total += buffer.length;
-    if (total > limit) return null;
+    if (total > limit) { req.resume(); return null; }
     chunks.push(buffer);
   }
   return Buffer.concat(chunks);
@@ -64,7 +55,7 @@ async function writeResponse(res: ServerResponse, response: Response, encrypted:
     if (key === 'set-cookie') return;
     res.setHeader(key, value);
   });
-  if (encrypted) res.setHeader('strict-transport-security', 'max-age=86400');
+  if (encrypted) res.setHeader('strict-transport-security', 'max-age=31536000');
   const cookies = response.headers.getSetCookie();
   if (cookies.length) res.setHeader('set-cookie', cookies);
   res.end(Buffer.from(await response.arrayBuffer()));
@@ -90,31 +81,36 @@ try {
     try {
       const body = await readBody(req);
       if (!body) {
-        res.statusCode = 400;
-        res.end('{"error":"invalid_credentials"}');
+        const headers = new Headers();securityHeaders(headers);headers.set('cache-control','no-store');headers.set('content-type','application/json');
+        await writeResponse(res,new Response('{"error":"payload_too_large"}',{status:413,headers}),externalHttps(req,config.trustProxy));
         return;
       }
       const headers = clientRequestHeaders(req.headers);
-      headers.set('x-chatx-client', clientAddress(req, config.trustProxy));
+      headers.set('x-chatx-client', proxyClientAddress(req, config.trustProxy));
       headers.set('x-chatx-secure', externalHttps(req, config.trustProxy) ? '1' : '0');
       const request = new Request(`http://127.0.0.1${req.url ?? '/'}`, {
         method: req.method,
         headers,
         body: !body.length || req.method === 'GET' || req.method === 'HEAD' ? undefined : new Uint8Array(body).buffer,
       });
-      await writeResponse(res, await handle(request), Boolean((req.socket as TLSSocket).encrypted));
+      await writeResponse(res, await handle(request), externalHttps(req,config.trustProxy));
     } catch {
       if (res.headersSent) return;
-      res.statusCode = 500;
-      res.end('{"error":"unavailable"}');
+      const headers = new Headers();
+      securityHeaders(headers);
+      headers.set('cache-control', 'no-store');
+      headers.set('content-type', 'application/json');
+      await writeResponse(res, new Response('{"error":"unavailable"}', { status: 500, headers }), externalHttps(req, config.trustProxy));
     }
   };
   const localServer = createHttpServer(onRequest);
+  configureHttpServer(localServer);
   const bindHost = process.env.CHATX_BIND === '0.0.0.0' ? '0.0.0.0' : '127.0.0.1';
   localServer.listen(config.port, bindHost);
   const tlsServer = config.tlsCertPath && config.tlsKeyPath
     ? createHttpsServer({ cert: readFileSync(config.tlsCertPath), key: readFileSync(config.tlsKeyPath) }, onRequest)
     : null;
+  if(tlsServer)configureHttpServer(tlsServer);
   tlsServer?.listen(config.tlsPort, '0.0.0.0');
   const shutdown = () => {
     localServer.close();

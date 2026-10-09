@@ -12,6 +12,7 @@ type Jwk = { kid?: unknown; kty?: unknown; alg?: unknown; n?: unknown; e?: unkno
 const CERTS_URL = 'https://www.googleapis.com/oauth2/v3/certs';
 const ISSUERS = new Set(['accounts.google.com', 'https://accounts.google.com']);
 let cachedKeys: { expiresAt: number; keys: Map<string, KeyObject> } | null = null;
+let pendingKeys:Promise<Map<string,KeyObject>> | null = null;
 
 function jsonPart(part: string): unknown {
   return JSON.parse(Buffer.from(part, 'base64url').toString('utf8'));
@@ -34,7 +35,11 @@ export function readGoogleIdentity(claims: unknown, clientId: string, now: numbe
   const expiresAt = typeof data.exp === 'number' ? data.exp * 1000 : 0;
   const emailVerified = data.email_verified === true || data.email_verified === 'true';
   if (!ISSUERS.has(text(data.iss)) || !audienceMatches(data.aud, clientId)) return null;
-  if (!emailVerified || !email.includes('@') || !sub || expiresAt <= now) return null;
+  if (!emailVerified || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || email.length>254 || !sub || sub.length>255 || !Number.isFinite(expiresAt) || expiresAt <= now) return null;
+  if(data.azp!==undefined && data.azp!==clientId)return null;
+  if(Array.isArray(data.aud) && data.aud.length>1 && data.azp!==clientId)return null;
+  if(data.iat!==undefined && (typeof data.iat!=='number' || !Number.isFinite(data.iat) || data.iat*1000>now+60000))return null;
+  if(data.nbf!==undefined && (typeof data.nbf!=='number' || !Number.isFinite(data.nbf) || data.nbf*1000>now+60000))return null;
   const name = text(data.name).replace(/[\u0000-\u001f]/g, '').slice(0, 40);
   const picture = text(data.picture);
   return {
@@ -47,7 +52,12 @@ export function readGoogleIdentity(claims: unknown, clientId: string, now: numbe
 
 async function googleKeys(now: number) {
   if (cachedKeys && cachedKeys.expiresAt > now) return cachedKeys.keys;
-  const response = await fetch(CERTS_URL);
+  if(pendingKeys)return pendingKeys;
+  pendingKeys=fetchGoogleKeys(now).finally(()=>{pendingKeys=null;});
+  return pendingKeys;
+}
+async function fetchGoogleKeys(now:number) {
+  const response = await fetch(CERTS_URL,{signal:AbortSignal.timeout(5000)});
   if (!response.ok) throw new Error('google certs unavailable');
   const payload: unknown = await response.json();
   const keys = new Map<string, KeyObject>();

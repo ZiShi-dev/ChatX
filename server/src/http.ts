@@ -1,4 +1,5 @@
 import { compressJson } from './compression.ts';
+import { createRequestBudget } from './requestBudget.ts';
 import { handleTransfer } from './transfer.ts';
 import { createHash } from 'node:crypto';
 import {
@@ -24,7 +25,7 @@ const DEV_HTTP_ORIGIN = /^http:\/\/(localhost|127\.0\.0\.1|10(?:\.\d{1,3}){3}|19
 
 function trustedOrigin(origin: string, deps: Deps) {
   if (origin === NATIVE_APP_ORIGIN || origin === deps.config.corsOrigin) return true;
-  return DEV_HTTP_ORIGIN.test(origin);
+  return deps.config.allowDevOrigins && DEV_HTTP_ORIGIN.test(origin);
 }
 
 function statusFor(error: string) {
@@ -83,7 +84,7 @@ function json(body: unknown, status = 200, extra?: { retryAfter?: number }) {
   return new Response(JSON.stringify(body), { status, headers });
 }
 
-function securityHeaders(headers: Headers) {
+export function securityHeaders(headers: Headers) {
   headers.set('content-security-policy', "default-src 'none'; frame-ancestors 'none'");
   headers.set('x-frame-options', 'DENY');
   headers.set('x-content-type-options', 'nosniff');
@@ -102,7 +103,7 @@ function secureRequest(request: Request) {
 async function readBody(request: Request, limit: number) {
   if (request.method === 'GET' || request.method === 'HEAD') return {};
   const text = await request.text();
-  if (text.length > limit) return null;
+  if (Buffer.byteLength(text, 'utf8') > limit) return null;
   if (!text) return {};
   try {
     const data: unknown = JSON.parse(text);
@@ -146,7 +147,7 @@ async function route(deps: Deps, request: Request) {
     securityHeaders(headers);
     return new Response(null, { status: 204, headers });
   }
-  if (request.method === 'GET' && path === '/api/health') return json({ ok: true, groupTurnPolicy: 'weekly-v3-direct', networkPolicy: 'durable-delta-v1' });
+  if (request.method === 'GET' && path === '/api/health') return json({ ok: true, groupTurnPolicy: 'weekly-v3-direct', networkPolicy: 'durable-delta-v1', securityPolicy:'bounded-api-v1' });
   const groupTurn = path.match(/^\/api\/rooms\/([0-9a-f-]{36})\/turn$/i);
   if (groupTurn && request.method === 'GET') {
     const result = await readGroupTurn(deps, readCookie(request.headers.get('cookie'), 'chatx_session'), groupTurn[1]!);
@@ -187,6 +188,8 @@ async function route(deps: Deps, request: Request) {
     if (!result.ok) return failure(deps, result.error);
     if (result.step === 'ready') {
       const response = json({ step: result.step, user: result.user });
+      const previous = readCookie(request.headers.get('cookie'), 'chatx_session');
+      if(previous)await deps.repo.deleteSession(hashSession(previous));
       response.headers.append('set-cookie', sessionCookie(result.sessionToken, secureRequest(request)));
       return response;
     }
@@ -196,6 +199,8 @@ async function route(deps: Deps, request: Request) {
     const result = await acceptGoogle(deps, { credential: body.credential, displayName: body.displayName, ip });
     if (!result.ok) return failure(deps, result.error);
     const response = json({ step: result.step, user: result.user });
+    const previous = readCookie(request.headers.get('cookie'), 'chatx_session');
+    if(previous)await deps.repo.deleteSession(hashSession(previous));
     response.headers.append('set-cookie', sessionCookie(result.sessionToken, secureRequest(request)));
     return response;
   }
@@ -368,7 +373,13 @@ async function route(deps: Deps, request: Request) {
 }
 
 export function createApi(deps: Deps) {
+  const budget = createRequestBudget(deps.now);
   return async (request: Request) => {
+    const mutating = ['POST','PATCH','DELETE'].includes(request.method);
+    const origin = request.headers.get('origin');
+    if(mutating && (request.headers.get('x-chatx-request') !== '1' || origin !== null && !trustedOrigin(origin,deps))) return withCors(request,failure(deps,'forbidden'),allowedOrigin(origin,deps));
+    const retryAfter = budget(request,clientIp(request));
+    if(retryAfter)return withCors(request,json({error:'rate_limited'},429,{retryAfter}),allowedOrigin(origin,deps));
     // Always authorize and build the current representation before validating it.
     let response = await route(deps, request);
     if (request.method === 'GET' && response.status === 200 && response.headers.get('content-type')?.startsWith('application/json')) {

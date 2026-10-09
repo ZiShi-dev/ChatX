@@ -42,6 +42,8 @@ export function createMemoryRepository(): AuthRepository {
   };
 
   return {
+    async findUserByGoogleSub(sub) { const user=[...users.values()].find((user)=>user.googleSub===sub);return user?copyUser(user):null; },
+    async bindGoogleSub(id,sub) {const user=users.get(id);if(!user || user.role!=='member' || user.googleSub && user.googleSub!==sub || [...users.values()].some((other)=>other.id!==id&&other.googleSub===sub))return false;user.googleSub=sub;return true;},
     async deleteUpload(roomId, ownerId, id) { const row = uploads.get(id); if (row?.roomId === roomId && row.ownerId === ownerId) uploads.delete(id); },
     async readRoomSync(roomId, userId, cursor) {
       if (!members.has(memberKey(roomId, userId))) return null;

@@ -8,7 +8,7 @@ import { hashSession } from '../src/session.ts';
 import type { AuthUser } from '../src/types.ts';
 
 const now = Date.parse('2026-10-08T12:00:00.000Z');
-const jpeg = Buffer.from([0xff, 0xd8, 0xff, 0xd9]);
+import { jpegBytes as jpeg } from './jpegFixture.ts';
 const image = `data:image/jpeg;base64,${jpeg.toString('base64')}`;
 
 function testDeps(): Deps {

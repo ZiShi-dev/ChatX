@@ -62,9 +62,18 @@ async function googleIdentity(deps: Deps, credential: unknown) {
   }
 }
 
-export async function resumeMember(deps: Deps, email: string) {
-  const users = await deps.repo.listUsers();
-  const existing = users.find((user) => user.email.toLowerCase() === email.toLowerCase());
+async function googleMember(deps:Deps,email:string,sub:string):Promise<AuthUser | 'forbidden' | null> {
+  const bound=await deps.repo.findUserByGoogleSub(sub);
+  if(bound)return bound;
+  const existing=(await deps.repo.listUsers()).find((user)=>user.email.toLowerCase()===email.toLowerCase());
+  if(!existing)return null;
+  if(!await deps.repo.bindGoogleSub(existing.id,sub))return 'forbidden';
+  return {...existing,googleSub:sub};
+}
+
+export async function resumeMember(deps: Deps, email: string, sub?:string) {
+  const existing = sub ? await googleMember(deps,email,sub) : (await deps.repo.listUsers()).find((user) => user.email.toLowerCase() === email.toLowerCase());
+  if(existing==='forbidden')return {ok:false as const,error:'forbidden' as const};
   if (!existing) return { ok: true as const, step: 'profile' as const };
   if (existing.role !== 'member') return { ok: false as const, error: 'forbidden' as const };
   return { ok: true as const, step: 'ready' as const, user: publicUser(existing), sessionToken: await openSession(deps, existing.id) };
@@ -75,7 +84,7 @@ export async function previewGoogle(deps: Deps, input: { credential?: unknown; i
   if (limit) return limit;
   const checked = await googleIdentity(deps, input.credential);
   if (!checked.ok) return checked.error === 'unavailable' ? checked : reject(deps, input.ip);
-  const resumed = await resumeMember(deps, checked.identity.email);
+  const resumed = await resumeMember(deps, checked.identity.email,checked.identity.sub);
   if (!resumed.ok) return resumed;
   deps.rateLimit.succeed(input.ip);
   if (resumed.step === 'ready') return resumed;
@@ -90,7 +99,8 @@ export async function acceptGoogle(deps: Deps, input: { credential?: unknown; di
   const displayName = cleanName(input.displayName) || cleanName(checked.identity.name);
   if (displayName.length < 2) return { ok: false as const, error: 'invalid_credentials' as const };
   const users = await deps.repo.listUsers();
-  const existing = users.find((user) => user.email.toLowerCase() === checked.identity.email);
+  const existing = await googleMember(deps,checked.identity.email,checked.identity.sub);
+  if(existing==='forbidden')return {ok:false as const,error:'forbidden' as const};
   if (existing && existing.role !== 'member') return { ok: false as const, error: 'forbidden' as const };
   if (existing) {
     if (existing.displayName !== displayName) {
@@ -115,6 +125,7 @@ export async function acceptGoogle(deps: Deps, input: { credential?: unknown; di
     bio: '',
     bannerUrl: null,
     avatarUrl: null,
+    googleSub:checked.identity.sub,
   };
   try {
     await deps.repo.insertUser(user);

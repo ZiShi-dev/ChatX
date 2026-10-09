@@ -1,4 +1,5 @@
 export type AppConfig = {
+  allowDevOrigins: boolean;
   trustProxy: boolean;
   corsOrigin: string | null;
   port: number;
@@ -24,9 +25,16 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
   const tlsKeyPath = env.CHATX_TLS_KEY?.trim() || null;
   if (Boolean(tlsCertPath) !== Boolean(tlsKeyPath)) throw new Error('CHATX_TLS_CERT and CHATX_TLS_KEY must be set together');
   const tlsPort = Number(env.CHATX_TLS_PORT ?? '8443');
+  const corsOrigin = env.CHATX_CORS_ORIGIN?.trim() || null;
+  if (corsOrigin) {
+    const parsed = new URL(corsOrigin);
+    if (!['https:', 'http:'].includes(parsed.protocol) || parsed.origin !== corsOrigin || parsed.username || parsed.password) throw new Error('CHATX_CORS_ORIGIN must be an exact HTTP(S) origin');
+    if (env.NODE_ENV === 'production' && parsed.protocol !== 'https:') throw new Error('Production CORS origin must use HTTPS');
+  }
   return {
+    allowDevOrigins: env.NODE_ENV !== 'production',
     trustProxy: env.CHATX_TRUST_PROXY === 'true',
-    corsOrigin: env.CHATX_CORS_ORIGIN?.trim() || null,
+    corsOrigin,
     port: Number.isInteger(port) && port > 0 ? port : 8787,
     tlsCertPath,
     tlsKeyPath,

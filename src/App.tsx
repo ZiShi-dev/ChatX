@@ -1,11 +1,10 @@
 import { installOfflineShell } from './lib/offlineShell';
 import { lazy, Suspense, useEffect, type ReactElement } from 'react';
-import { Navigate, Route, useNavigate } from 'react-router-dom';
+import { BrowserRouter, Navigate, Route, Routes, useNavigate } from 'react-router-dom';
 import { App as CapApp } from '@capacitor/app';
 import { Capacitor } from '@capacitor/core';
 import { StatusBar, Style } from '@capacitor/status-bar';
 import { IonApp, IonRouterOutlet, setupIonicReact } from '@ionic/react';
-import { IonReactRouter } from '@ionic/react-router';
 import AppErrorBoundary from './components/common/AppErrorBoundary';
 import StartupScreen from './components/common/StartupScreen';
 import { NotificationPermissionDialog } from './components/common/NotificationPermission';
@@ -87,10 +86,11 @@ function AppRoutes() {
   const page = (element: ReactElement, kind: SkeletonKind) => <Suspense fallback={<PageSkeleton kind={kind} />}>{guard(element)}</Suspense>;
 
   return (
-    <IonReactRouter>
+    <BrowserRouter>
       <NativeChrome />
       <NotificationPermissionDialog />
       <IonRouterOutlet>
+        <Routes>
         <Route path="/activation" element={activated ? <Navigate to="/home" replace /> : <ActivationPage />} />
         <Route path="/home" element={guard(<HomePage />)} />
         <Route path="/chat/:id/media" element={page(<DirectMediaPage />, 'media')} />
@@ -105,8 +105,10 @@ function AppRoutes() {
         <Route path="/settings" element={page(<SettingsPage />, 'settings')} />
         <Route path="/admin/*" element={<Navigate to={activated ? '/home' : '/activation'} replace />} />
         <Route path="/" element={<Navigate to={activated ? '/home' : '/activation'} replace />} />
+        <Route path="*" element={<Navigate to={activated ? '/home' : '/activation'} replace />} />
+        </Routes>
       </IonRouterOutlet>
-    </IonReactRouter>
+    </BrowserRouter>
   );
 }
 

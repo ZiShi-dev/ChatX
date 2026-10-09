@@ -110,6 +110,18 @@ it('verifies PostgreSQL migrations, cursor SQL and transaction rollback', { skip
     const repo = createPostgresRepository(pool);
     await verifyGroupRotation(repo);
     await verifyLowBandwidth(repo);
+    const five = Array.from({ length: 5 }, () => user(randomUUID()));
+    await Promise.all(five.map(person => repo.insertUser(person)));
+    await repo.createRoom({ id: randomUUID(), kind: 'group', creatorId: five[0].id, memberIds: five.slice(1).map(person => person.id), name: 'Five people', at: now });
+    await Promise.all(five.map(async person => {
+      assert.equal(await repo.bindGoogleSub(person.id, person.id), true);
+      assert.equal((await repo.findUserByGoogleSub(person.id))?.id, person.id);
+      await repo.createSession(hashSession(person.id), person.id, new Date(now.getTime() + 60000));
+      assert.equal((await repo.findSessionUser(hashSession(person.id), now))?.id, person.id);
+      assert.ok((await repo.listHome(person.id, now)).length > 0);
+      assert.deepEqual(await repo.listSaved(person.id, 30), []);
+    }));
+    assert.equal(await repo.bindGoogleSub(five[0].id, five[1].id), false);
     const { alice, bob, roomId } = await verify(repo);
     const message: RoomMessage = { id: randomUUID(), roomId, senderId: alice.id, text: '', createdAt: now, deleted: false };
     await pool.query(`CREATE FUNCTION fail_image() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'test failure'; END $$`);

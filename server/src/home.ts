@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { safeJpeg } from './jpeg.ts';
 import type { Deps } from './authService.ts';
 import { hashSession } from './session.ts';
 import type { AuthUser, HomeRoom, RoomMessage, StoredReaction } from './types.ts';
@@ -45,7 +46,7 @@ export function decodeChatImage(value: unknown): Uint8Array | null | false {
   if (data.length % 4 === 1 || !/^[A-Za-z0-9+/]+={0,2}$/.test(data)) return false;
   const bytes = Buffer.from(data, 'base64');
   if (bytes.length < 3 || bytes.length > IMAGE_BYTES_MAX) return false;
-  if (bytes[0] !== 0xff || bytes[1] !== 0xd8 || bytes[2] !== 0xff) return false;
+  if (!safeJpeg(bytes)) return false;
   return bytes;
 }
 

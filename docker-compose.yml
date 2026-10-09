@@ -16,6 +16,14 @@ services:
   api:
     build: ./server
     restart: unless-stopped
+    read_only: true
+    tmpfs:
+      - /tmp:size=16m,mode=1777
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    pids_limit: 128
     environment:
       DATABASE_URL: postgres://chatx:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}@db:5432/chatx
       GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
