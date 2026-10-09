@@ -11,7 +11,7 @@ export function hashSession(token: string) {
 }
 
 export function sessionCookie(token: string, secure: boolean, maxAge = SESSION_SECONDS) {
-  const parts = [`chatx_session=${token}`, 'HttpOnly', 'SameSite=Lax', 'Path=/', `Max-Age=${maxAge}`];
+  const parts = [`chatx_session=${token}`, 'HttpOnly', 'Path=/', `Max-Age=${maxAge}`, secure ? 'SameSite=None' : 'SameSite=Lax'];
   if (secure) parts.push('Secure');
   return parts.join('; ');
 }

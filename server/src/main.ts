@@ -15,6 +15,14 @@ function safeMessage(error: unknown) {
   return error.message;
 }
 
+function externalHttps(req: IncomingMessage, trustProxy: boolean) {
+  if ((req.socket as TLSSocket).encrypted) return true;
+  if (!trustProxy) return false;
+  const forwarded = req.headers['x-forwarded-proto'];
+  const value = Array.isArray(forwarded) ? forwarded[0] : forwarded;
+  return value?.split(',')[0]?.trim() === 'https';
+}
+
 function clientAddress(req: IncomingMessage, trustProxy: boolean) {
   if (trustProxy) {
     const header = req.headers['x-forwarded-for'];
@@ -93,7 +101,7 @@ try {
       if (typeof contentType === 'string') headers.set('content-type', contentType);
       if (req.headers['x-chatx-request'] === '1') headers.set('x-chatx-request', '1');
       headers.set('x-chatx-client', clientAddress(req, config.trustProxy));
-      headers.set('x-chatx-secure', (req.socket as TLSSocket).encrypted ? '1' : '0');
+      headers.set('x-chatx-secure', externalHttps(req, config.trustProxy) ? '1' : '0');
       const request = new Request(`http://127.0.0.1${req.url ?? '/'}`, {
         method: req.method,
         headers,
