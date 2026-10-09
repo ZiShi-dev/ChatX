@@ -1,6 +1,7 @@
 import { Capacitor } from '@capacitor/core';
 import { reportNetworkFailure, reportNetworkSuccess } from '../stores/networkStore';
 import { syncServerClock } from './serverClock';
+import { retryAfterMs } from './retry';
 
 const HTTPS_ORIGIN = /^https:\/\/[A-Za-z0-9.-]+(?::[0-9]{1,5})?$/;
 let sessionVersion = 0;
@@ -26,6 +27,7 @@ export function invalidateApiSession() {
   activeRequests.forEach((controller) => controller.abort());
   activeRequests.clear();
   responseCache.clear();
+  inFlightReads.clear();
 }
 
 function adminRequestUrl(path: string, native: boolean, origin: string | undefined) {
@@ -38,16 +40,29 @@ function adminRequestUrl(path: string, native: boolean, origin: string | undefin
 export class AdminApiError extends Error {
   readonly code: string;
   readonly status: number;
+  readonly retryAfter: number;
 
-  constructor(code: string, status: number) {
+  constructor(code: string, status: number, retryAfter = 0) {
     super(code);
     this.name = 'AdminApiError';
     this.code = code;
     this.status = status;
+    this.retryAfter = retryAfter;
   }
 }
 
-export async function adminFetch(path: string, init?: { method?: string; body?: unknown }) {
+type RequestOptions = { method?: string; body?: unknown; binary?: Uint8Array };
+const inFlightReads = new Map<string, Promise<unknown>>();
+export async function adminFetch(path: string, init?: RequestOptions) {
+  if ((init?.method ?? 'GET').toUpperCase() !== 'GET') return performFetch(path, init);
+  let promise = inFlightReads.get(path);
+  if (!promise) {
+    promise = performFetch(path, init).finally(() => { if (inFlightReads.get(path) === promise) inFlightReads.delete(path); });
+    inFlightReads.set(path, promise);
+  }
+  return JSON.parse(JSON.stringify(await promise)) as unknown;
+}
+async function performFetch(path: string, init?: RequestOptions) {
   if (navigator.onLine === false) throw new AdminApiError('offline', 0);
   const controller = new AbortController();
   const version = sessionVersion;
@@ -63,12 +78,13 @@ export async function adminFetch(path: string, init?: { method?: string; body?: 
     const cached = method === 'GET' ? responseCache.get(path) : undefined;
     if (cached) headers.set('if-none-match', cached.etag);
     if (init?.body) headers.set('content-type', 'application/json');
+    if (init?.binary) headers.set('content-type', 'application/octet-stream');
     if (method !== 'GET' && method !== 'HEAD') headers.set('x-chatx-request', '1');
     const response = await fetch(adminRequestUrl(path, Capacitor.isNativePlatform(), import.meta.env.VITE_API_ORIGIN), {
       method,
       credentials: 'include',
       headers,
-      body: init?.body ? JSON.stringify(init.body) : undefined,
+      body: init?.binary ? new Uint8Array(init.binary).buffer : init?.body ? JSON.stringify(init.body) : undefined,
       signal: controller.signal,
     });
     if (controller.signal.aborted) throw new AdminApiError('offline', 0);
@@ -81,7 +97,7 @@ export async function adminFetch(path: string, init?: { method?: string; body?: 
     reportNetworkSuccess(Date.now() - started);
     if (!response.ok) {
       const code = data && typeof data === 'object' && 'error' in data && typeof data.error === 'string' ? data.error : 'unavailable';
-      throw new AdminApiError(code, response.status);
+      throw new AdminApiError(code, response.status, retryAfterMs(response.headers.get('retry-after')));
     }
     if (controller.signal.aborted) throw new AdminApiError('offline', 0);
     if (version !== sessionVersion) throw new AdminApiError('account_changed', 0);

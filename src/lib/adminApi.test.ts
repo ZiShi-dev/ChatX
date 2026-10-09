@@ -10,6 +10,24 @@ afterEach(() => {
 });
 
 describe('API reliability', () => {
+  it('shares concurrent GET transport while returning separate mutable results', async () => {
+    let resolve!: (response: Response) => void;
+    const fetchMock = vi.fn(() => new Promise<Response>((done) => { resolve = done; }));
+    vi.stubGlobal('fetch', fetchMock);
+    const first = adminFetch('/api/home');
+    const second = adminFetch('/api/home');
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    resolve(new Response('{"name":"Alice"}'));
+    const [a,b] = await Promise.all([first,second]) as Array<{name:string}>;
+    a.name = 'changed';
+    expect(b.name).toBe('Alice');
+  });
+  it('preserves a server retry deadline without automatically repeating the request', async () => {
+    const fetchMock = vi.fn(async () => new Response('{"error":"limited"}', { status: 429, headers: {'retry-after':'12'} }));
+    vi.stubGlobal('fetch', fetchMock);
+    await expect(adminFetch('/api/home')).rejects.toMatchObject({status:429,retryAfter:12000});
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
   it('synchronizes the server clock even when the response body is reused from a 304', async () => {
     vi.stubGlobal('fetch', vi.fn()
       .mockResolvedValueOnce(new Response('{"ok":true}', { headers: { etag: '"v1"', date: 'Fri, 09 Oct 2026 12:00:00 GMT' } }))

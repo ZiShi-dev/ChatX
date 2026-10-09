@@ -16,18 +16,35 @@ type Connection = EventTarget & { effectiveType?: string; saveData?: boolean };
 
 let transportFailed = false;
 let checkRecovery: (() => void) | undefined;
+let slowResponses = 0;
+let fastResponses = 0;
+let recoveryStarted = 0;
+let degraded = false;
+
+export function resetNetworkMeasurements() {
+  slowResponses = fastResponses = recoveryStarted = 0;
+  degraded = transportFailed = false;
+}
 
 export function reportNetworkFailure(stalled = false) {
   transportFailed = true;
+  fastResponses = 0;
+  if (stalled) degraded = true;
   useNetworkStore.getState().setNetwork(stalled && navigator.onLine !== false ? 'slow' : 'offline');
   checkRecovery?.();
 }
 
-export function reportNetworkSuccess(elapsed: number) {
+export function reportNetworkSuccess(elapsed: number, useful = true) {
   transportFailed = false;
   const connection = (navigator as Navigator & { connection?: Connection }).connection;
+  if (useful) {
+    if (elapsed > 3000) { slowResponses++; fastResponses = 0; if (slowResponses >= 3) degraded = true; }
+    else { slowResponses = 0; if (elapsed < 1500) { if (!fastResponses) recoveryStarted = Date.now(); fastResponses++; }
+      else fastResponses = 0; }
+    if (fastResponses >= 3 && Date.now() - recoveryStarted >= 10_000) degraded = false;
+  }
   useNetworkStore.getState().setNetwork(navigator.onLine === false ? 'offline'
-    : elapsed >= 5000 || ['slow-2g', '2g'].includes(connection?.effectiveType ?? '') ? 'slow' : 'online');
+    : degraded || ['slow-2g', '2g'].includes(connection?.effectiveType ?? '') || connection?.saveData ? 'slow' : 'online');
 }
 
 export function observeNetwork() {
@@ -49,21 +66,24 @@ export function observeNetwork() {
       const response = await fetch(`${origin}/api/health`, { cache: 'no-store', signal: request.signal });
       if (response.ok && !stopped && !request.signal.aborted) {
         attempts = 0;
-        reportNetworkSuccess(Date.now() - started);
+        reportNetworkSuccess(Date.now() - started, false);
       }
     } catch { /* Keep recovery checks small and bounded while disconnected. */ }
     finally {
       window.clearTimeout(timeout);
       controller = undefined;
-      if (!stopped && transportFailed) timer = window.setTimeout(() => void probe(), Math.min(30_000, 5000 * 2 ** Math.min(attempts++, 3)));
+      if (!stopped && transportFailed) {
+        const delay = [5000, 10_000, 20_000, 60_000][Math.min(attempts++, 3)]!;
+        timer = window.setTimeout(() => void probe(), Math.round(delay * (0.8 + Math.random() * 0.4)));
+      }
     }
   };
   checkRecovery = () => {
     if (timer === undefined && !controller) timer = window.setTimeout(() => { timer = undefined; void probe(); }, 1000);
   };
   const sync = () => {
-    const slow = connection?.effectiveType === 'slow-2g' || connection?.effectiveType === '2g';
-    useNetworkStore.getState().setNetwork(navigator.onLine === false ? 'offline' : transportFailed || slow ? 'slow' : 'online');
+    const slow = degraded || connection?.saveData || connection?.effectiveType === 'slow-2g' || connection?.effectiveType === '2g';
+    useNetworkStore.getState().setNetwork(navigator.onLine === false ? 'offline' : transportFailed ? 'offline' : slow ? 'slow' : 'online');
     if (navigator.onLine !== false && transportFailed) { window.clearTimeout(timer); timer = undefined; void probe(); }
   };
   sync();

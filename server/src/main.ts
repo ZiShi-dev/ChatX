@@ -36,6 +36,7 @@ function clientAddress(req: IncomingMessage, trustProxy: boolean) {
 
 function bodyLimit(url: string | undefined) {
   const path = url?.split('?')[0] ?? '';
+  if (/^\/api\/rooms\/[0-9a-f-]{36}\/uploads\/[0-9a-f-]{36}$/.test(path)) return 32_768;
   if (path === '/api/profile') return 280_000;
   if (/^\/api\/rooms\/[0-9a-f-]{36}$/i.test(path)) return 280_000;
   if (/^\/api\/rooms\/[0-9a-f-]{36}\/messages\/[0-9a-f-]{36}$/i.test(path)) return 24_000;
@@ -99,7 +100,7 @@ try {
       const request = new Request(`http://127.0.0.1${req.url ?? '/'}`, {
         method: req.method,
         headers,
-        body: !body.length || req.method === 'GET' || req.method === 'HEAD' ? undefined : body.toString('utf8'),
+        body: !body.length || req.method === 'GET' || req.method === 'HEAD' ? undefined : new Uint8Array(body).buffer,
       });
       await writeResponse(res, await handle(request), Boolean((req.socket as TLSSocket).encrypted));
     } catch {

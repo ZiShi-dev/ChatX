@@ -1,3 +1,4 @@
+import { installOfflineShell } from './lib/offlineShell';
 import { lazy, Suspense, useEffect, type ReactElement } from 'react';
 import { Navigate, Route, useNavigate } from 'react-router-dom';
 import { App as CapApp } from '@capacitor/app';
@@ -79,6 +80,7 @@ function NativeChrome() {
 function AppRoutes() {
   const activated = useAuthStore((state) => state.activated);
   useEffect(observeNetwork, []);
+  useEffect(installOfflineShell, []);
   usePresenceSync();
   useInboxAlerts();
   const guard = (element: ReactElement) => (activated ? element : <Navigate to="/activation" replace />);

@@ -1,3 +1,5 @@
+import { offlineShell } from './scripts/offlineShell';
+import { legacyCsp } from './scripts/legacyCsp';
 /// <reference types="vitest" />
 
 import { createHash } from 'node:crypto'
@@ -29,7 +31,7 @@ function documentCsp(): Plugin {
           "style-src 'self' 'unsafe-inline' https://accounts.google.com/gsi/style",
           "img-src 'self' data: blob: https://lh3.googleusercontent.com",
           "media-src 'self' blob: data:",
-          "connect-src 'self' https:",
+          "connect-src 'self' https: blob:",
           "font-src 'self' data:",
         ].join('; ');
         return html.replace('<head>', `<head>\n    <meta http-equiv="Content-Security-Policy" content="${policy}" />`);
@@ -51,7 +53,9 @@ export default defineConfig({
   plugins: [
     react(),
     legacy(),
+    legacyCsp(),
     documentCsp(),
+    offlineShell(),
   ],
   test: {
     globals: true,

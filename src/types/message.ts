@@ -47,4 +47,8 @@ export interface Message {
   replyToId?: string;
   reactions?: MessageReaction[];
   event?: boolean;
+  sendAttempts?: number;
+  retryAt?: number;
+  retryable?: boolean;
+  prepared?: boolean;
 }

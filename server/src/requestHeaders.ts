@@ -2,7 +2,7 @@ import type { IncomingHttpHeaders } from 'node:http';
 
 export function clientRequestHeaders(incoming: IncomingHttpHeaders) {
   const headers = new Headers();
-  for (const name of ['cookie', 'origin', 'content-type', 'if-none-match']) {
+  for (const name of ['cookie', 'origin', 'content-type', 'if-none-match', 'accept-encoding']) {
     const value = incoming[name];
     if (typeof value === 'string') headers.set(name, value);
   }

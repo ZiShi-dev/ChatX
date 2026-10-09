@@ -1,3 +1,4 @@
+import { createLowBandwidthRepository } from './lowBandwidth.ts';
 import { randomInt } from 'node:crypto';
 import pg from 'pg';
 import { GLOBAL_ROOM_ID } from './home.ts';
@@ -89,6 +90,7 @@ export function createPool(databaseUrl: string) {
 
 export function createPostgresRepository(pool: pg.Pool): AuthRepository {
   return {
+    ...createLowBandwidthRepository(pool),
     async findUserById(id) {
       const result = await pool.query<UserRow>(
         `SELECT ${USER_COLUMNS} FROM users WHERE id = $1`,

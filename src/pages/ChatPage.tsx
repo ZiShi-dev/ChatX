@@ -96,7 +96,7 @@ export default function ChatPage() {
   }, [searching, searchQuery, thread.length]);
 
   useEffect(() => {
-    setReady(false);
+    setReady(useChatStore.getState().fullRooms.includes(id));
     setNotice('');
     let alive = true;
     const wait = new Promise((resolve) => window.setTimeout(resolve, 220));

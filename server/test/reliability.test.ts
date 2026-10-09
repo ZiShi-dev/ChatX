@@ -1,3 +1,4 @@
+import { verifyLowBandwidth } from './lowBandwidthCases.ts';
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import { it } from 'node:test';
@@ -108,6 +109,7 @@ it('verifies PostgreSQL migrations, cursor SQL and transaction rollback', { skip
     await migrate(pool);
     const repo = createPostgresRepository(pool);
     await verifyGroupRotation(repo);
+    await verifyLowBandwidth(repo);
     const { alice, bob, roomId } = await verify(repo);
     const message: RoomMessage = { id: randomUUID(), roomId, senderId: alice.id, text: '', createdAt: now, deleted: false };
     await pool.query(`CREATE FUNCTION fail_image() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'test failure'; END $$`);

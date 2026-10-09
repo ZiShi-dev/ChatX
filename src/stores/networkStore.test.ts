@@ -1,10 +1,11 @@
 import { afterEach, expect, it, vi } from 'vitest';
-import { observeNetwork, reportNetworkFailure, reportNetworkSuccess, useNetworkStore } from './networkStore';
+import { resetNetworkMeasurements, observeNetwork, reportNetworkFailure, reportNetworkSuccess, useNetworkStore } from './networkStore';
 
-afterEach(() => { vi.useRealTimers(); vi.unstubAllGlobals(); reportNetworkSuccess(0); });
+afterEach(() => { vi.useRealTimers(); vi.unstubAllGlobals(); vi.restoreAllMocks(); resetNetworkMeasurements(); reportNetworkSuccess(0); });
 
 it('recovers while the phone still claims to be online, without reopening the app', async () => {
   vi.useFakeTimers();
+  vi.spyOn(Math, 'random').mockReturnValue(0.5);
   vi.stubGlobal('navigator', { onLine: true });
   const request = vi.fn().mockRejectedValueOnce(new Error('network lost')).mockResolvedValueOnce({ ok: true });
   vi.stubGlobal('fetch', request);
@@ -42,4 +43,13 @@ it('uses the available connection estimate without polling the Internet', () => 
   connection.effectiveType = '4g'; connection.dispatchEvent(new Event('change'));
   expect(useNetworkStore.getState().network).toBe('online');
   stop();
+});
+
+it('keeps degraded quality until useful responses prove sustained recovery', () => {
+  vi.useFakeTimers(); vi.stubGlobal('navigator', { onLine: true });
+  for(let i=0;i<3;i++) reportNetworkSuccess(3500);
+  expect(useNetworkStore.getState().network).toBe('slow');
+  reportNetworkSuccess(1,false); expect(useNetworkStore.getState().network).toBe('slow');
+  reportNetworkSuccess(500); reportNetworkSuccess(500); vi.advanceTimersByTime(10000); reportNetworkSuccess(500);
+  expect(useNetworkStore.getState().network).toBe('online');
 });

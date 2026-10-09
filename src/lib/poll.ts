@@ -15,7 +15,7 @@ export function startPolling(task: () => Promise<unknown>, options: { active?: (
     window.clearTimeout(timer);
     running = true;
     try {
-      if (navigator.onLine !== false && (options.background || document.visibilityState !== 'hidden') && (options.active?.() ?? true)) {
+      if (navigator.onLine !== false && useNetworkStore.getState().network !== 'offline' && (options.background || document.visibilityState !== 'hidden') && (options.active?.() ?? true)) {
         await task();
       }
     } catch {

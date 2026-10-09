@@ -1,14 +1,16 @@
-import { randomInt } from 'node:crypto';
+import { randomInt, randomUUID } from 'node:crypto';
 import { GLOBAL_ROOM_ID } from './home.ts';
 import { resolveGroupTurn } from './groupTurn.ts';
 import { messageKind } from './inbox.ts';
-import type { AuthRepository, AuthUser, HomeRoom, InboxNotice, ProfilePatch, RoomMessage, RoomReader, SavedItem, StoredReaction } from './types.ts';
+import type { AuthRepository, Upload, AuthUser, HomeRoom, InboxNotice, ProfilePatch, RoomMessage, RoomReader, SavedItem, StoredReaction } from './types.ts';
 
 function copyUser(user: AuthUser): AuthUser {
   return { ...user, bio: user.bio ?? '', bannerUrl: user.bannerUrl ?? null, avatarUrl: user.avatarUrl ?? null };
 }
 
 export function createMemoryRepository(): AuthRepository {
+  const uploads = new Map<string, Upload>();
+  const journals = new Map<string, { epoch: string; revision: number; signatures: Map<string, string>; changes: Array<{ revision: number; messageId?: string; readerId?: string }> }>();
   const users = new Map<string, AuthUser>();
   const sessions = new Map<string, { userId: string; expiresAt: number; lastSeenAt: number; presence: 'online' | 'away' }>();
   const rooms = new Map<string, { id: string; kind: 'global' | 'group' | 'private'; name: string | null; createdAt: number; pairKey: string | null; adminId?: string; bio?: string; avatarUrl?: string | null; bannerUrl?: string | null; turnUserId?: string; turnOpensAt?: number; turnRound?: number; turnNoticeFor?: string }>();
@@ -40,6 +42,48 @@ export function createMemoryRepository(): AuthRepository {
   };
 
   return {
+    async deleteUpload(roomId, ownerId, id) { const row = uploads.get(id); if (row?.roomId === roomId && row.ownerId === ownerId) uploads.delete(id); },
+    async readRoomSync(roomId, userId, cursor) {
+      if (!members.has(memberKey(roomId, userId))) return null;
+      let journal = journals.get(roomId);
+      if (!journal) { journal = { epoch: randomUUID(), revision: 0, signatures: new Map(), changes: [] }; journals.set(roomId, journal); }
+      const current = new Map<string, string>();
+      for (const message of messages.filter((m) => m.roomId === roomId)) {
+        const key = 'm:' + message.id; current.set(key, JSON.stringify([message, [...reactions.values()].filter((r) => r.messageId === message.id)]));
+      }
+      for (const member of members.values()) if (member.roomId === roomId && member.lastReadMessageId) current.set('r:' + member.userId, JSON.stringify(member));
+      for (const key of new Set([...current.keys(), ...journal.signatures.keys()])) if (current.get(key) !== journal.signatures.get(key)) {
+        journal.changes.push({ revision: ++journal.revision, ...(key.startsWith('m:') ? { messageId: key.slice(2) } : { readerId: key.slice(2) }) });
+      }
+      journal.signatures = current; journal.changes = journal.changes.slice(-1000);
+      const [epoch, raw] = (cursor ?? '').split('.'); const previous = Number(raw);
+      const reset = !cursor || epoch !== journal.epoch || !Number.isSafeInteger(previous) || previous > journal.revision || previous < Math.max(0, journal.revision - 1000);
+      const changes = reset ? [] : journal.changes.filter((c) => c.revision > previous).slice(0,50);
+      const next = reset ? journal.revision : changes.at(-1)?.revision ?? previous;
+      const ids = changes.flatMap((c) => c.messageId ? [c.messageId] : []);
+      const selected = messages.filter((m) => m.roomId === roomId && (reset || ids.includes(m.id))).sort((a,b) => a.createdAt.getTime()-b.createdAt.getTime() || a.id.localeCompare(b.id));
+      const page = reset ? selected.slice(-30) : selected;
+      return { historyHasMore: reset && selected.length > 30, messages: page.map((m) => ({...m})), reactions: [...reactions.values()].filter((r) => page.some((m) => m.id === r.messageId)),
+        readers: [...members.values()].filter((m) => m.roomId === roomId && m.lastReadMessageId && (reset || changes.some((c) => c.readerId === m.userId)))
+          .map((m) => ({ userId: m.userId, messageId: m.lastReadMessageId!, readAt: new Date(m.lastReadAt!) })),
+        cursor: journal.epoch+'.'+next, reset, hasMore: next < journal.revision, removedIds: [...new Set(ids)].filter((id) => !page.some((m) => m.id === id)) };
+    },
+    async beginUpload(upload, at) {
+      if (!members.has(memberKey(upload.roomId, upload.ownerId))) return null;
+      for (const [id,row] of uploads) if (row.expiresAt <= at) uploads.delete(id);
+      const old=uploads.get(upload.id);
+      if (old) return old.ownerId === upload.ownerId && old.roomId === upload.roomId && old.sha256 === upload.sha256 && old.size === upload.size && old.kind === upload.kind && old.name === upload.name && old.replyToId === upload.replyToId ? {...old} : null;
+      if ([...uploads.values()].filter((u) => u.ownerId === upload.ownerId).length >= 40) return null;
+      uploads.set(upload.id, {...upload}); return {...upload};
+    },
+    async readUpload(roomId, ownerId, id, at) {
+      const row=uploads.get(id); return row && row.roomId === roomId && row.ownerId === ownerId && row.expiresAt > at && members.has(memberKey(roomId,ownerId)) ? {...row} : null;
+    },
+    async appendUpload(roomId, ownerId, id, offset, bytes, at) {
+      const row=uploads.get(id);
+      if (!row || row.roomId !== roomId || row.ownerId !== ownerId || row.expiresAt <= at || !members.has(memberKey(roomId,ownerId)) || row.bytes.length !== offset || offset+bytes.length > row.size) return null;
+      row.bytes=new Uint8Array(Buffer.concat([row.bytes,bytes])); return {...row};
+    },
     async findUserById(id) {
       const user = users.get(id);
       return user ? copyUser(user) : null;
@@ -194,11 +238,11 @@ export function createMemoryRepository(): AuthRepository {
       const existing = messages.find((item) => item.id === message.id);
       if (existing) {
         if (existing.roomId !== message.roomId || existing.senderId !== message.senderId) return 'invalid';
-        if (image?.byteLength && !images.has(message.id)) {
+        if (!existing.deleted && image?.byteLength && !images.has(message.id)) {
           images.set(message.id, image);
           existing.imageSize = image.byteLength;
         }
-        if (file?.bytes.byteLength && !files.has(message.id)) {
+        if (!existing.deleted && file?.bytes.byteLength && !files.has(message.id)) {
           files.set(message.id, file);
           existing.fileName = file.name;
           existing.fileBytes = file.bytes.byteLength;

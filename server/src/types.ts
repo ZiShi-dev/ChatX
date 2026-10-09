@@ -19,6 +19,11 @@ export type ProfilePatch = {
 };
 
 export interface AuthRepository {
+  readRoomSync(roomId: string, userId: string, cursor: string | null): Promise<RoomSync | null>;
+  beginUpload(upload: Upload, at: Date): Promise<Upload | null>;
+  readUpload(roomId: string, ownerId: string, id: string, at: Date): Promise<Upload | null>;
+  appendUpload(roomId: string, ownerId: string, id: string, offset: number, bytes: Uint8Array, at: Date): Promise<Upload | null>;
+  deleteUpload(roomId: string, ownerId: string, id: string): Promise<void>;
   findUserById(id: string): Promise<AuthUser | null>;
   listUsers(): Promise<AuthUser[]>;
   insertUser(user: AuthUser): Promise<void>;
@@ -53,6 +58,9 @@ export interface AuthRepository {
   listSaved(userId: string, limit: number, beforeId?: string): Promise<SavedItem[]>;
   setSaved(userId: string, messageId: string, saved: boolean, at: Date): Promise<'ok' | 'missing'>;
 }
+
+export type RoomSync = { historyHasMore: boolean; messages: RoomMessage[]; reactions: StoredReaction[]; readers: RoomReader[]; removedIds: string[]; cursor: string; reset: boolean; hasMore: boolean };
+export type Upload = { id: string; roomId: string; ownerId: string; kind: 'image' | 'file'; name: string; size: number; sha256: string; replyToId: string | null; bytes: Uint8Array; expiresAt: Date };
 
 export type RoomKind = 'global' | 'group' | 'private';
 

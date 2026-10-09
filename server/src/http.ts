@@ -1,3 +1,5 @@
+import { compressJson } from './compression.ts';
+import { handleTransfer } from './transfer.ts';
 import { createHash } from 'node:crypto';
 import {
   acceptGoogle,
@@ -9,10 +11,10 @@ import {
   updateOwnProfile,
   type Deps,
 } from './authService.ts';
-import { openRoom, postRoomMessage, readHome, readGroupTurn, readRoomFile, readRoomImage, readRoomMessages, setRoomReaction, markRoomSeen, changeMessage, updateRoomProfile } from './home.ts';
+import { messageView, openRoom, postRoomMessage, readHome, readGroupTurn, readRoomFile, readRoomImage, readRoomMessages, setRoomReaction, markRoomSeen, changeMessage, updateRoomProfile } from './home.ts';
 import { keepMessage, readSaved } from './saved.ts';
 import { clearInbox, markInboxRead, readInbox } from './inbox.ts';
-import { clearSessionCookie, readCookie, sessionCookie } from './session.ts';
+import { clearSessionCookie, hashSession, readCookie, sessionCookie } from './session.ts';
 
 const PROFILE_BODY_LIMIT = 280_000;
 const MESSAGE_BODY_LIMIT = 400_000;
@@ -125,7 +127,7 @@ function withCors(request: Request, response: Response, origin: string | null) {
   const headers = new Headers(response.headers);
   headers.set('access-control-allow-origin', origin);
   headers.set('access-control-allow-credentials', 'true');
-  headers.set('access-control-expose-headers', 'etag, date');
+  headers.set('access-control-expose-headers', 'etag, date, retry-after');
   headers.append('vary', 'Origin');
   if (request.headers.get('access-control-request-private-network') === 'true') {
     headers.set('access-control-allow-private-network', 'true');
@@ -144,7 +146,7 @@ async function route(deps: Deps, request: Request) {
     securityHeaders(headers);
     return new Response(null, { status: 204, headers });
   }
-  if (request.method === 'GET' && path === '/api/health') return json({ ok: true, groupTurnPolicy: 'weekly-v3-direct' });
+  if (request.method === 'GET' && path === '/api/health') return json({ ok: true, groupTurnPolicy: 'weekly-v3-direct', networkPolicy: 'durable-delta-v1' });
   const groupTurn = path.match(/^\/api\/rooms\/([0-9a-f-]{36})\/turn$/i);
   if (groupTurn && request.method === 'GET') {
     const result = await readGroupTurn(deps, readCookie(request.headers.get('cookie'), 'chatx_session'), groupTurn[1]!);
@@ -152,6 +154,25 @@ async function route(deps: Deps, request: Request) {
     return json(result);
   }
 
+  const transfer = path.match(/^\/api\/rooms\/([0-9a-f-]{36})\/uploads\/([0-9a-f-]{36})(\/complete)?$/i);
+  if (transfer && (request.method === 'POST' || request.method === 'PATCH')) {
+    const origin = request.headers.get('origin');
+    if (request.headers.get('x-chatx-request') !== '1' || (origin !== null && !trustedOrigin(origin, deps))) return failure(deps, 'forbidden');
+    const result = await handleTransfer(deps, request, transfer[1]!, transfer[2]!, Boolean(transfer[3]));
+    const { status, ...payload } = result; return json(payload, status);
+  }
+  const sync = path.match(/^\/api\/rooms\/([0-9a-f-]{36})\/sync$/i);
+  if (sync && request.method === 'GET') {
+    const token = readCookie(request.headers.get('cookie'), 'chatx_session');
+    const user = token ? await deps.repo.findSessionUser(hashSession(token), new Date(deps.now())) : null;
+    if (!user || user.role !== 'member') return failure(deps, 'invalid_credentials');
+    const cursor = new URL(request.url).searchParams.get('cursor');
+    if (cursor && cursor.length > 80) return json({error:'invalid_cursor'}, 400);
+    const result = await deps.repo.readRoomSync(sync[1]!, user.id, cursor);
+    if (!result) return failure(deps, 'not_found');
+    return json({ ...result, messages: result.messages.map((message) => messageView(message, result.reactions)), reactions: undefined,
+      readers: result.readers.map((reader) => ({ ...reader, readAt: reader.readAt.toISOString() })) });
+  }
   const body = await readBody(request, requestBodyLimit(path));
   if (!body) return failure(deps, 'invalid_credentials');
   const mutating = request.method === 'POST' || request.method === 'PATCH' || request.method === 'DELETE';
@@ -359,6 +380,7 @@ export function createApi(deps: Deps) {
         ? new Response(null, { status: 304, headers })
         : new Response(body, { status: 200, headers });
     }
+    response = await compressJson(response, request.headers.get('accept-encoding'));
     return withCors(request, response, allowedOrigin(request.headers.get('origin'), deps));
   };
 }

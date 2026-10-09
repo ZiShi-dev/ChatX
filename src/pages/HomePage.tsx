@@ -68,7 +68,7 @@ export default function HomePage() {
       setNotice('تعذر الاتصال.');
     }
     const run = async (silent: boolean) => {
-      if (!silent) setReady(false);
+      if (!silent) setReady(useChatStore.getState().conversations.length > 0);
       const result = await loadHome();
       if (!silent) {
         await useSavedStore.getState().load().catch(() => undefined);

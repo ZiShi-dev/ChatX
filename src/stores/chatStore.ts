@@ -1,3 +1,5 @@
+import { uploadResumable } from '../lib/resumableUpload';
+import { readRoomSync, mergeRoomDelta } from '../lib/roomSync';
 import { create } from 'zustand';
 import { MESSAGE_PAGE_SIZE, NOTIFICATIONS_PAGE_SIZE, READ_DELAY_MS, READ_STAGGER_MS } from '../constants/chat';
 import { CONVERSATIONS, GLOBAL_CHAT_ID } from '../data/conversations';
@@ -14,7 +16,7 @@ import { loadChatSnapshot, saveChatSnapshot, releaseMedia } from '../lib/chatCac
 import { mergeRoomWindow } from '../lib/chatWindow';
 import { prepareMedia } from '../lib/mediaPreparation';
 import { fitChatImage, jpegDataUrl } from '../lib/chatImage';
-import { bytesToBase64, FILE_BYTES_MAX } from '../lib/chatFile';
+import { bytesToBase64, FILE_BYTES_MAX, localMediaBytes } from '../lib/chatFile';
 import { ORIGINAL_IMAGE_SIZE, ORIGINAL_VIDEO_SIZE, expectedImageSize, expectedVideoSize } from '../lib/media';
 import { isPrivateBetween } from '../lib/conversation';
 import { canEditRoom } from '../lib/roles';
@@ -35,11 +37,17 @@ import { useSettingsStore } from './settingsStore';
 import { useUserStore } from './userStore';
 import { preserveCurrentTurn, readGroupTurnPayload } from '../lib/groupTurn';
 import { syncServerClock } from '../lib/serverClock';
+import { saveOutgoing, loadOutgoing, removeOutgoing, saveReceivedMedia, readReceivedMedia, clearReceivedMedia } from '../lib/durableChat';
+import { createOutgoingScheduler } from '../lib/outgoingScheduler';
+import { retryDelay, retryableStatus } from '../lib/retry';
 
 const PAGE_SIZE = MESSAGE_PAGE_SIZE;
 const readTimers = new Map<string, number[]>();
 const timers = new Map<string, number[]>();
 const preparing = new Set<string>();
+let outgoingReady = false;
+const roomSyncCursors = new Map<string,string>();
+const roomSyncPending = new Map<string,Promise<boolean>>();
 
 type ChatState = {
   conversations: Conversation[];
@@ -231,9 +239,7 @@ async function publishText(message: Message) {
       },
     });
     patchMessage(message.id, { status: 'sent', uploadProgress: undefined });
-  } catch {
-    patchMessage(message.id, { status: 'failed', uploadProgress: undefined });
-  }
+  } catch (error) { throw error; }
 }
 
 async function publishImage(message: Message) {
@@ -242,35 +248,17 @@ async function publishImage(message: Message) {
     patchMessage(message.id, { status: 'failed' });
     return;
   }
-  // Preparation already applied the user's selected quality; preserve it on upload.
-  const fitted = await fitChatImage(source, 'original');
   const current = useChatStore.getState().messages.find((item) => item.id === message.id);
-  if (!fitted || !current) {
-    patchMessage(message.id, { status: 'failed' });
-    return;
-  }
-  patchMessage(message.id, {
-    media: {
-      fileName: current.media?.fileName ?? 'photo.jpg',
-      fileSize: fitted.bytes,
-      localPreviewUrl: fitted.url,
-      state: 'cached',
-      ...(fitted.width > 0 && fitted.height > 0 ? { width: fitted.width, height: fitted.height } : {}),
-    },
-  });
+  if (!current?.media) throw new Error('invalid_image');
   try {
-    await adminFetch(`/api/rooms/${message.conversationId}/messages`, {
-      method: 'POST',
-      body: {
-        id: message.id,
-        image: fitted.url,
-        ...(message.replyToId && isServerId(message.replyToId) ? { replyToId: message.replyToId } : {}),
-      },
-    });
+    const bytes = await localMediaBytes(source);
+    await uploadResumable({ roomId: message.conversationId, id: message.id, kind: 'image', name: 'photo.jpg', bytes, replyToId: message.replyToId },
+      (uploadProgress) => patchMessage(message.id, { uploadProgress }), yieldToTexts, () => {
+        const current = useChatStore.getState().messages.find((item) => item.id === message.id);
+        return !current || current.status === 'failed' || current.senderId !== useAuthStore.getState().currentUser.id;
+      });
     patchMessage(message.id, { status: 'sent', uploadProgress: undefined });
-  } catch {
-    patchMessage(message.id, { status: 'failed', uploadProgress: undefined });
-  }
+  } catch (error) { throw error; }
 }
 
 async function pullServerImage(message: Message) {
@@ -281,7 +269,11 @@ async function pullServerImage(message: Message) {
     media: { ...message.media, state: 'downloading' },
   });
   try {
-    const blob = await adminFetchBlob(`/api/rooms/${message.conversationId}/messages/${message.id}/image`);
+    const owner = useAuthStore.getState().currentUser.id;
+    const cached = await readReceivedMedia(owner, message.id).catch(() => null);
+    const blob = cached ?? await adminFetchBlob(`/api/rooms/${message.conversationId}/messages/${message.id}/image`);
+    if (owner !== useAuthStore.getState().currentUser.id) return;
+    void saveReceivedMedia(owner, message.id, blob).catch(() => undefined);
     const url = jpegDataUrl(new Uint8Array(await blob.arrayBuffer()));
     const current = useChatStore.getState().messages.find((item) => item.id === message.id);
     if (!url || !current?.media) {
@@ -297,7 +289,7 @@ async function pullServerImage(message: Message) {
       downloadProgress: undefined,
       media: { ...current.media, localPreviewUrl: url, fileSize: blob.size, state: 'cached' },
     });
-    useSettingsStore.getState().addUsage('images', blob.size);
+    if (!cached) useSettingsStore.getState().addUsage('images', blob.size);
   } catch {
     const current = useChatStore.getState().messages.find((item) => item.id === message.id);
     patchMessage(message.id, {
@@ -305,6 +297,19 @@ async function pullServerImage(message: Message) {
       downloadProgress: undefined,
       media: current?.media ? { ...current.media, state: 'remote' } : undefined,
     });
+  }
+}
+
+async function yieldToTexts() {
+  if (useNetworkStore.getState().network === 'online' && !useSettingsStore.getState().dataSaver) return;
+  const pending = useChatStore.getState().messages.filter((message) => message.type === 'text' && isServerId(message.conversationId)
+    && message.status === 'pending' && (message.retryAt ?? 0) <= Date.now() && !preparing.has(message.id)
+    && !useChatStore.getState().messages.some((other) => other.type === 'text' && other.conversationId === message.conversationId
+      && (preparing.has(other.id) || other.status === 'pending' && other.createdAt < message.createdAt)))
+    .sort((a,b) => a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id)).slice(0,5);
+  for (const message of pending) {
+    if (useNetworkStore.getState().network === 'offline') return;
+    await prepareAndSend(message);
   }
 }
 
@@ -316,21 +321,16 @@ async function publishFile(message: Message) {
     return;
   }
   try {
-    const response = await fetch(source);
-    if (!response.ok) throw new Error('read');
-    const bytes = new Uint8Array(await response.arrayBuffer());
+    const bytes = await localMediaBytes(source);
     if (bytes.byteLength < 1 || bytes.byteLength > FILE_BYTES_MAX) {
       patchMessage(message.id, { status: 'failed' });
       return;
     }
-    await adminFetch(`/api/rooms/${message.conversationId}/messages`, {
-      method: 'POST',
-      body: {
-        id: message.id,
-        file: { name, data: bytesToBase64(bytes) },
-        ...(message.replyToId && isServerId(message.replyToId) ? { replyToId: message.replyToId } : {}),
-      },
-    });
+    await uploadResumable({ roomId: message.conversationId, id: message.id, kind: 'file', name, bytes, replyToId: message.replyToId },
+      (uploadProgress) => patchMessage(message.id, { uploadProgress }), yieldToTexts, () => {
+        const current = useChatStore.getState().messages.find((item) => item.id === message.id);
+        return !current || current.status === 'failed' || current.senderId !== useAuthStore.getState().currentUser.id;
+      });
     const current = useChatStore.getState().messages.find((item) => item.id === message.id);
     patchMessage(message.id, {
       status: 'sent',
@@ -344,9 +344,7 @@ async function publishFile(message: Message) {
         ...(current?.media?.height ? { height: current.media.height } : {}),
       },
     });
-  } catch {
-    patchMessage(message.id, { status: 'failed', uploadProgress: undefined });
-  }
+  } catch (error) { throw error; }
 }
 
 async function pullServerFile(message: Message) {
@@ -357,7 +355,11 @@ async function pullServerFile(message: Message) {
     media: { ...message.media, state: 'downloading' },
   });
   try {
-    const blob = await adminFetchBlob(`/api/rooms/${message.conversationId}/messages/${message.id}/file`);
+    const owner = useAuthStore.getState().currentUser.id;
+    const cached = await readReceivedMedia(owner, message.id).catch(() => null);
+    const blob = cached ?? await adminFetchBlob(`/api/rooms/${message.conversationId}/messages/${message.id}/file`);
+    if (owner !== useAuthStore.getState().currentUser.id) return;
+    void saveReceivedMedia(owner, message.id, blob).catch(() => undefined);
     if (blob.size < 1 || blob.size > FILE_BYTES_MAX) throw new Error('size');
     const current = useChatStore.getState().messages.find((item) => item.id === message.id);
     if (!current?.media) return;
@@ -366,7 +368,7 @@ async function pullServerFile(message: Message) {
       downloadProgress: undefined,
       media: { ...current.media, localPreviewUrl: URL.createObjectURL(blob), fileSize: blob.size, state: 'cached' },
     });
-    useSettingsStore.getState().addUsage('other', blob.size);
+    if (!cached) useSettingsStore.getState().addUsage('other', blob.size);
   } catch {
     const current = useChatStore.getState().messages.find((item) => item.id === message.id);
     patchMessage(message.id, {
@@ -387,7 +389,9 @@ function appendMessage(message: Message) {
     ),
   }));
   if (isServerId(message.conversationId)) {
-    void prepareAndSend(message);
+    patchMessage(message.id, { status: 'pending' });
+    if (useNetworkStore.getState().network === 'offline') void prepareAndSend({ ...message, status: 'pending' });
+    else outgoing.wake();
     return;
   }
   if (message.status !== 'sent' && message.status !== 'failed') scheduleDelivery(message.id);
@@ -398,7 +402,7 @@ function persistChat() {
   const state = useChatStore.getState();
   saveChatSnapshot(me, {
     conversations: state.conversations.filter((room) => room.participantIds.includes(me)),
-    messages: state.messages,
+    messages: state.messages.map((message) => message.status !== 'sent' && message.media ? { ...message, media: { ...message.media, localPreviewUrl: undefined } } : message),
     users: useUserStore.getState().users,
   });
 }
@@ -408,7 +412,7 @@ async function prepareAndSend(message: Message) {
   preparing.add(message.id);
   const owner = useAuthStore.getState().currentUser.id;
   try {
-    if (message.type === 'image') {
+    if (message.type === 'image' && !message.prepared) {
       const source = message.media?.localPreviewUrl;
       const fitted = source ? await prepareMedia(() => fitChatImage(source, useSettingsStore.getState().imageQuality)) : null;
       if (!fitted || !message.media) throw new Error('invalid_image');
@@ -428,20 +432,72 @@ async function prepareAndSend(message: Message) {
     if (owner !== useAuthStore.getState().currentUser.id || !useAuthStore.getState().activated) return;
     const ready = useChatStore.getState().messages.find((item) => item.id === message.id);
     if (!ready) return;
+    await saveOutgoing(owner, { ...ready, prepared: true });
+    patchMessage(message.id, { prepared: true });
     persistChat();
     if (useNetworkStore.getState().network === 'offline' || ready.status === 'failed') return;
-    patchMessage(message.id, { status: 'sending' });
+    patchMessage(message.id, { status: 'sending', prepared: true });
     if (serverText(ready)) await publishText(ready);
     else if (serverImage(ready)) await publishImage(ready);
     else if (serverFile(ready)) await publishFile(ready);
     else throw new Error('unsupported_media');
-  } catch {
+    await removeOutgoing(owner, message.id);
+  } catch (error) {
     if (owner !== useAuthStore.getState().currentUser.id) return;
-    patchMessage(message.id, { status: 'failed', uploadProgress: undefined });
-    useChatStore.setState({ lastError: 'تعذر تجهيز أو حفظ الرسالة. تحقق من حجم الملف والمساحة المتاحة ثم أعد المحاولة.' });
+    const current = useChatStore.getState().messages.find((item) => item.id === message.id);
+    if (!current || current.status === 'sent' || error instanceof AdminApiError && error.code === 'cancelled') return;
+    const temporary = error instanceof AdminApiError && retryableStatus(error.status) && error.code !== 'account_changed';
+    const attempts = (current.sendAttempts ?? 0) + 1;
+    const patch: Partial<Message> = { status: temporary && attempts < 5 ? 'pending' : 'failed', uploadProgress: undefined,
+      retryable: temporary, sendAttempts: attempts, retryAt: temporary ? Date.now() + retryDelay(attempts, error instanceof AdminApiError ? error.retryAfter : 0) : undefined };
+    patchMessage(message.id, patch);
+    try { await saveOutgoing(owner, { ...current, ...patch }); } catch { useChatStore.setState({ lastError: 'تعذر حفظ الرسالة محليًا. تحقق من المساحة المتاحة ثم أعد المحاولة.' }); }
+    if (!temporary) useChatStore.setState({ lastError: 'تعذر تجهيز أو إرسال الرسالة. تحقق من الملف أو صلاحية الوصول ثم أعد المحاولة.' });
   } finally {
     preparing.delete(message.id);
+    outgoing.wake();
   }
+}
+
+async function syncRoom(conversationId: string): Promise<boolean> {
+  const existing = roomSyncPending.get(conversationId); if (existing) return existing;
+  const owner = useAuthStore.getState().currentUser.id;
+  const promise = (async () => {
+    try {
+      // Bound one foreground drain; further pages continue on the next refresh.
+      for (let page = 0; page < 10; page++) {
+        const cursor = roomSyncCursors.get(conversationId);
+        const payload = await adminFetch(`/api/rooms/${conversationId}/sync${cursor ? '?cursor='+encodeURIComponent(cursor) : ''}`);
+        if (owner !== useAuthStore.getState().currentUser.id || !useAuthStore.getState().activated) return false;
+        const delta = readRoomSync(payload, conversationId); if (!delta) return false;
+        const state = useChatStore.getState();
+        const incoming = delta.messages.map((message) => {
+          const previous = state.messages.find((item) => item.id === message.id);
+          return previous?.media?.localPreviewUrl && message.media && !message.deletedForEveryone
+            ? { ...message, media: { ...message.media, localPreviewUrl: previous.media.localPreviewUrl, state: 'cached' as const } } : message;
+        });
+        const cursors = { ...(delta.reset ? {} : state.readCursors[conversationId]) };
+        const times = { ...(delta.reset ? {} : state.readTimes[conversationId]) };
+        for (const reader of delta.readers) { cursors[reader.userId] = reader.messageId; times[reader.userId] = reader.readAt; }
+        useChatStore.setState({
+          messages: delta.reset ? mergeRoomWindow(state.messages, incoming, conversationId, 'latest') : mergeRoomDelta(state.messages, incoming, delta.removedIds, conversationId),
+          fullRooms: [...new Set([...state.fullRooms, conversationId])],
+          roomHasMore: delta.reset ? { ...state.roomHasMore, [conversationId]: delta.historyHasMore } : state.roomHasMore,
+          readCursors: { ...state.readCursors, [conversationId]: cursors }, readTimes: { ...state.readTimes, [conversationId]: times },
+          conversations: state.conversations.map((room) => {
+            const latest = [...state.messages.filter((message) => message.conversationId === conversationId && !incoming.some((row) => row.id === message.id)), ...incoming]
+              .sort((a,b) => a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id)).at(-1);
+            return room.id === conversationId && latest ? { ...room, lastMessageId: latest.id } : room;
+          }),
+        });
+        for (const message of incoming) if (message.senderId === owner) void removeOutgoing(owner, message.id).catch(() => undefined);
+        roomSyncCursors.set(conversationId, delta.cursor);
+        if (!delta.hasMore) return true;
+      }
+      return true;
+    } catch { return false; }
+  })().finally(() => { if (roomSyncPending.get(conversationId) === promise) roomSyncPending.delete(conversationId); });
+  roomSyncPending.set(conversationId, promise); return promise;
 }
 
 function accountRoom(conversationId: string) {
@@ -615,20 +671,18 @@ export const useChatStore = create<ChatState>((set, get) => ({
     const network = useNetworkStore.getState().network;
     patchMessage(messageId, { status: network === 'offline' ? 'pending' : 'sending', uploadProgress: undefined });
     if (network === 'offline') return;
-    if (isServerId(message.conversationId)) void prepareAndSend({ ...message, status: 'sending' });
+    if (isServerId(message.conversationId)) { patchMessage(message.id, { status: 'pending', sendAttempts: 0, retryAt: undefined, retryable: false }); outgoing.wake(); }
     else scheduleDelivery(messageId);
   },
   cancelMessage: (messageId) => {
     clearTimers(messageId);
-    patchMessage(messageId, { status: 'failed', uploadProgress: undefined });
+    patchMessage(messageId, { status: 'failed', retryable: false, retryAt: undefined, uploadProgress: undefined });
+    const cancelled = get().messages.find((item) => item.id === messageId);
+    if (cancelled && isServerId(cancelled.conversationId)) void saveOutgoing(useAuthStore.getState().currentUser.id, cancelled).catch(() => undefined);
   },
   downloadMedia: (messageId) => {
     const message = get().messages.find((item) => item.id === messageId);
     if (!message?.media || message.media.state === 'cached' || message.media.state === 'downloading') return;
-    if (useNetworkStore.getState().network === 'offline') {
-      patchMessage(messageId, { downloadFailed: true });
-      return;
-    }
     if (isServerId(message.conversationId) && message.type === 'image') {
       void pullServerImage(message);
       return;
@@ -930,20 +984,10 @@ export const useChatStore = create<ChatState>((set, get) => ({
     }));
   },
   flushOutgoing: () => {
-    get()
-      .messages.filter((message) => message.status === 'pending')
-      .forEach((message, index) => {
-        window.setTimeout(() => {
-          if (isServerId(message.conversationId)) {
-            const current = get().messages.find((item) => item.id === message.id);
-            if (!current || current.status !== 'pending') return;
-            patchMessage(message.id, { status: 'sending' });
-            void prepareAndSend({ ...current, status: 'sending' });
-            return;
-          }
-          scheduleDelivery(message.id);
-        }, index * 280);
-      });
+    set((state) => ({ messages: state.messages.map((message) => message.status === 'failed' && message.retryable
+      ? { ...message, status: 'pending', sendAttempts: 0, retryAt: undefined } : message) }));
+    outgoing.wake();
+    for (const message of get().messages) if (!isServerId(message.conversationId) && message.status === 'pending') scheduleDelivery(message.id);
   },
   loadInbox: async (before) => {
     const me = useAuthStore.getState().currentUser.id;
@@ -1016,6 +1060,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
   },
   loadRoom: async (conversationId, page) => {
     if (!isServerId(conversationId)) return true;
+    if (!page) return syncRoom(conversationId);
     const owner = useAuthStore.getState().currentUser.id;
     try {
       const params = new URLSearchParams();
@@ -1071,6 +1116,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
     }
   },
   resetMediaCache: () => {
+    void clearReceivedMedia(useAuthStore.getState().currentUser.id).catch(() => undefined);
     releaseMedia(get().messages.filter((message) => message.status === 'sent'));
     set((state) => ({
       messages: state.messages.map((message) =>
@@ -1191,11 +1237,14 @@ export const useChatStore = create<ChatState>((set, get) => ({
 useNetworkStore.subscribe((state, previous) => {
   if (state.network === previous.network) return;
   if (state.network === 'offline') useChatStore.getState().pauseOutgoing();
-  else useChatStore.getState().flushOutgoing();
+  else if (previous.network === 'offline') useChatStore.getState().flushOutgoing();
+  else outgoing.wake();
 });
 
 let cacheTimer: number | undefined;
 function switchChatAccount() {
+  outgoingReady = false;
+  roomSyncCursors.clear(); roomSyncPending.clear();
   window.clearTimeout(cacheTimer);
   for (const id of timers.keys()) clearTimers(id);
   for (const id of readTimers.keys()) clearReadTimers(id);
@@ -1212,9 +1261,29 @@ function switchChatAccount() {
     editingId: null, replyingTo: null, lastError: '',
   });
   useUserStore.setState({ users: snapshot?.users ?? [auth.currentUser] });
-  if (auth.activated && useNetworkStore.getState().network !== 'offline') useChatStore.getState().flushOutgoing();
+  if (auth.activated) void loadOutgoing(auth.currentUser.id).then((durable) => {
+    if (useAuthStore.getState().currentUser.id !== auth.currentUser.id || !useAuthStore.getState().activated) return;
+    useChatStore.setState((state) => {
+      const confirmed = new Set(state.messages.filter((message) => message.status === 'sent').map((message) => message.id));
+      const queued = durable.filter((message) => !confirmed.has(message.id));
+      for (const message of durable) if (confirmed.has(message.id)) void removeOutgoing(auth.currentUser.id, message.id).catch(() => undefined);
+      return { messages: [...state.messages.filter((message) => !queued.some((row) => row.id === message.id)), ...queued] };
+    });
+    outgoingReady = true;
+    useChatStore.getState().flushOutgoing();
+  }).catch(() => {
+    if (useAuthStore.getState().currentUser.id !== auth.currentUser.id || !useAuthStore.getState().activated) return;
+    useChatStore.setState({ lastError: 'تعذر فتح التخزين المحلي. الرسائل الجديدة لن تُرسل حتى يمكن حفظها.' });
+  });
 }
 
+const outgoing = createOutgoingScheduler({
+  pending: () => useChatStore.getState().messages.filter((message) => isServerId(message.conversationId) && message.status === 'pending'
+    && !useChatStore.getState().messages.some((other) => other.conversationId === message.conversationId && (other.type === 'text') === (message.type === 'text') && preparing.has(other.id))),
+  available: () => outgoingReady && useAuthStore.getState().activated && useNetworkStore.getState().network !== 'offline',
+  concurrency: () => useNetworkStore.getState().network === 'slow' || useSettingsStore.getState().dataSaver ? 1 : 2,
+  send: async (id) => { const message = useChatStore.getState().messages.find((item) => item.id === id); if (message) await prepareAndSend(message); },
+});
 switchChatAccount();
 useAuthStore.subscribe((state, previous) => {
   if (state.currentUser.id === previous.currentUser.id && state.activated === previous.activated) return;
@@ -1222,6 +1291,7 @@ useAuthStore.subscribe((state, previous) => {
   switchChatAccount();
 });
 useChatStore.subscribe((state, previous) => {
+  if (state.messages !== previous.messages) outgoing.wake();
   if (!useAuthStore.getState().activated || (state.messages === previous.messages && state.conversations === previous.conversations)) return;
   window.clearTimeout(cacheTimer);
   cacheTimer = window.setTimeout(() => {
