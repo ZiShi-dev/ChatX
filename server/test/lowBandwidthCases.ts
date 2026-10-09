@@ -5,6 +5,7 @@ import { createLimiter } from '../src/authService.ts';
 import { loadConfig } from '../src/config.ts';
 import { hashSession } from '../src/session.ts';
 import type { AuthRepository, AuthUser } from '../src/types.ts';
+import { jpegBytes } from './jpegFixture.ts';
 
 export async function verifyLowBandwidth(repo: AuthRepository) {
   let now = Date.parse('2026-10-09T12:00:00Z');
@@ -60,6 +61,19 @@ export async function verifyLowBandwidth(repo: AuthRepository) {
   const corrupt = randomUUID(); await request(`/uploads/${corrupt}`,'POST',{...init,sha256:'0'.repeat(64)});
   await request(`/uploads/${corrupt}?offset=0`,'PATCH',bytes);
   assert.equal((await request(`/uploads/${corrupt}/complete`,'POST',{})).status,400);
+  const imageId = randomUUID();
+  const imagePath = `/uploads/${imageId}`;
+  const imageInit = { kind: 'image', name: 'photo.jpg', size: jpegBytes.length, sha256: createHash('sha256').update(jpegBytes).digest('hex') };
+  assert.equal((await request(imagePath, 'POST', imageInit)).status, 200);
+  assert.equal((await request(`${imagePath}?offset=0`, 'PATCH', new Uint8Array(jpegBytes))).status, 200);
+  const imageComplete = await request(`${imagePath}/complete`, 'POST', {});
+  assert.equal(imageComplete.status, 200);
+  assert.equal((await imageComplete.json()).message.type, 'image');
+  const imageDownload = await request(`/messages/${imageId}/image`, 'GET', undefined, bob.id);
+  assert.equal(imageDownload.status, 200);
+  assert.equal(imageDownload.headers.get('content-type'), 'image/jpeg');
+  assert.deepEqual(Buffer.from(await imageDownload.arrayBuffer()), jpegBytes);
+  assert.equal((await request(`/messages/${imageId}/image`, 'GET', undefined, stranger.id)).status, 404);
   const expired = randomUUID(); await request(`/uploads/${expired}`,'POST',init);
   now += 86_400_001;
   assert.equal((await request(`/uploads/${expired}?offset=0`,'PATCH',bytes)).status,404);
