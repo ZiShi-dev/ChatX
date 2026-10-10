@@ -1,0 +1,6 @@
+.bubble-stack .bubble-mention,
+.bubble-stack .reply-ref {
+  touch-action: pan-y;
+  -webkit-user-select: none;
+  user-select: none;
+}

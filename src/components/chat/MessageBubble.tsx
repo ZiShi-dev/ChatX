@@ -1,5 +1,6 @@
 import MediaViewer from './MediaViewer';
 import './MessageMedia.css';
+import './MentionGesture.css';
 import { memo, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { IonIcon, IonModal } from '@ionic/react';
@@ -603,6 +604,16 @@ function MessageBubble({ message, mine, showAuthor, group = false, direct = fals
         if (!canOpenMenu) return;
         event.preventDefault();
         openMenu();
+      }}
+      onPointerDownCapture={(event) => {
+        const target = event.target;
+        if (!canReply || event.button !== 0 || !(target instanceof Element) || !target.closest('.bubble-mention, .reply-ref')) return;
+        // Start on interactive references before their handlers consume the event.
+        event.stopPropagation();
+        clearHold();
+        suppressClick.current = false;
+        drag.current = { x: event.clientX, y: event.clientY, pointerId: event.pointerId, active: true, locked: false };
+        holdTimer.current = window.setTimeout(openMenu, 480);
       }}
       onPointerDown={(event) => {
         if (!canReply || event.button !== 0) return;
