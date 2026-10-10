@@ -54,6 +54,18 @@ self.addEventListener('activate',event=>event.waitUntil((async()=>{
   await Promise.all(keys.filter(key=>(key.startsWith('chatx-shell-')&&!shells.slice(-2).includes(key))||(key.startsWith('chatx-static-')&&key!==RUNTIME)).map(key=>caches.delete(key)));
   await self.clients.claim();
 })()));
+self.addEventListener('notificationclick',event=>{
+  event.notification.close();
+  const id=event.notification.data?.conversationId;
+  if(typeof id!=='string'||! /^[a-zA-Z0-9-]+$/.test(id))return;
+  const target=new URL('/chat/'+encodeURIComponent(id),self.location.origin).href;
+  event.waitUntil((async()=>{
+    const windows=await self.clients.matchAll({type:'window',includeUncontrolled:true});
+    const client=windows.find(item=>new URL(item.url).origin===self.location.origin);
+    if(client){await client.navigate(target);await client.focus();}
+    else await self.clients.openWindow(target);
+  })());
+});
 self.addEventListener('fetch',event=>{
   const request=event.request,url=new URL(request.url);
   if(request.method!=='GET'||url.origin!==self.location.origin||url.pathname.startsWith('/api/'))return;

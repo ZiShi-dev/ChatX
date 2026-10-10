@@ -105,3 +105,12 @@ describe('network polling', () => {
     } finally { stopMessages(); useSettingsStore.setState({ dataSaver: previous }); }
   });
 });
+
+it('allows prompt background inbox refresh without overlapping requests', async () => {
+  vi.useFakeTimers();
+  vi.spyOn(document, 'visibilityState', 'get').mockReturnValue('hidden');
+  const task = vi.fn(async () => 'ok');
+  const stop = startPolling(task, { background: true, backgroundInterval: () => 5000 });
+  try { await vi.advanceTimersByTimeAsync(5000); expect(task).toHaveBeenCalledTimes(2); }
+  finally { stop(); vi.useRealTimers(); vi.restoreAllMocks(); }
+});

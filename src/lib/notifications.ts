@@ -1,6 +1,7 @@
 import { Capacitor } from '@capacitor/core';
 import { LocalNotifications } from '@capacitor/local-notifications';
 import { useMuteStore } from '../stores/muteStore';
+import { useSettingsStore } from '../stores/settingsStore';
 
 export type ChatKind = 'group' | 'private';
 export type ChatNotificationPermission = 'granted' | 'denied' | 'prompt';
@@ -94,12 +95,17 @@ export async function notifyChatMessage(input: {
   tag?: string;
   mention?: boolean | 'mention' | 'everyone' | 'reply' | 'signal' | 'message' | 'reaction';
 }) {
-  if (input.conversationId && useMuteStore.getState().blocks(input.conversationId, input.mention)) return;
+  const blocked = () => {
+    const kind = typeof input.mention === 'string' ? input.mention : input.mention ? 'mention' : 'message';
+    return Boolean(input.conversationId && (useMuteStore.getState().blocks(input.conversationId, input.mention) || useSettingsStore.getState().notifyTypes[kind] === false));
+  };
+  if (blocked()) return;
   const permission = known ?? (await readChatNotificationPermission());
-  if (permission !== 'granted') return;
+  if (permission !== 'granted' || blocked()) return;
 
   if (Capacitor.isNativePlatform()) {
     await ensureAndroidChannel();
+    if (blocked()) return;
     await LocalNotifications.schedule({
       notifications: [
         {
@@ -117,6 +123,13 @@ export async function notifyChatMessage(input: {
     return;
   }
 
+  // Mobile browsers require persistent notifications from a service worker.
+  const registration = 'serviceWorker' in navigator ? await navigator.serviceWorker.getRegistration().catch(() => undefined) : undefined;
+  if (blocked()) return;
+  if (registration?.active) {
+    await registration.showNotification(input.title, { body: input.body, tag: input.tag || input.conversationId || 'chatx', data: { conversationId: input.conversationId } });
+    return;
+  }
   const notification = new Notification(input.title, {
     body: input.body,
     tag: input.tag || input.conversationId || 'chatx',

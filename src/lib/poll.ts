@@ -4,7 +4,7 @@ import { useNetworkStore } from '../stores/networkStore';
 import { constrainedDevice } from './deviceBudget';
 
 /** Schedule after completion so a slow connection never stacks requests. */
-export function startPolling(task: () => Promise<unknown>, options: { active?: () => boolean; background?: boolean; immediate?: boolean; economy?: boolean; interval?: () => number } = {}) {
+export function startPolling(task: () => Promise<unknown>, options: { active?: () => boolean; background?: boolean; immediate?: boolean; economy?: boolean; backgroundInterval?: () => number; interval?: () => number } = {}) {
   let stopped = false;
   let running = false;
   let recoveredWhileRunning = false;
@@ -12,7 +12,7 @@ export function startPolling(task: () => Promise<unknown>, options: { active?: (
   let failures = 0;
   let retryAfter = 0;
   const delay = () => {
-    const base = document.visibilityState === 'hidden' ? 60_000
+    const base = document.visibilityState === 'hidden' ? options.backgroundInterval?.() ?? 60_000
       : options.economy && constrainedDevice() ? 60_000
       : options.economy && (useSettingsStore.getState().dataSaver || useNetworkStore.getState().network === 'slow') ? 40_000 : options.interval?.() ?? PRESENCE_BEAT_MS;
     return Math.max(retryAfter - Date.now(), failures ? Math.min(120000, base * 2 ** Math.min(failures, 3)) : base);

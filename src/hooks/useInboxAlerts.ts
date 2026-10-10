@@ -46,12 +46,12 @@ export function useInboxAlerts() {
 
     const inspect = () => {
       if (stopped || useAuthStore.getState().currentUser.id !== userId) return;
-      const items = presentInbox(
-        useChatStore.getState().serverInbox.slice(0, 30),
+      const items = useChatStore.getState().serverInbox.slice(0, 100).flatMap(item => presentInbox(
+        [item],
         useMuteStore.getState().mutes,
         useSettingsStore.getState().notifyTypes,
-      );
-      const fresh = items.filter(item => item.unread && !item.suppressed && !known.has(inboxAlertKey(item)));
+      ));
+      const fresh = items.filter(item => !item.suppressed && !known.has(inboxAlertKey(item)));
       items.forEach((item) => known.add(inboxAlertKey(item)));
       while (known.size > 300) known.delete(known.values().next().value!);
       if (!primed) {
@@ -62,16 +62,13 @@ export function useInboxAlerts() {
       }
       const users = useUserStore.getState().users;
       const hidden = document.visibilityState === 'hidden';
-      fresh.filter(item => hidden || !watching(item.conversationId)).slice(0, 3).reverse().forEach((item) => {
-        if (!hidden && watching(item.conversationId)) {
-          notified.add(item.id);
-          return;
-        }
+      fresh.reverse().forEach((item) => {
+        if (hidden && !item.unread) return;
         notified.add(item.id);
         const sender = users.find((user) => user.id === item.senderId);
         const alert = liveAlertText(item, sender?.displayName);
         if (!hidden) {
-          useLiveInbox.getState().push({ key: inboxAlertKey(item), conversationId: item.conversationId, messageId: item.id, title: alert.title, body: alert.body });
+          useLiveInbox.getState().push({ key: inboxAlertKey(item), conversationId: item.conversationId, messageId: item.id, kind: item.kind, title: alert.title, body: alert.body });
           return;
         }
         void notifyChatMessage({
@@ -92,12 +89,17 @@ export function useInboxAlerts() {
     };
     const unsubscribe = useChatStore.subscribe((state, previous) => { if (state.serverInbox !== previous.serverInbox) inspect(); });
 
+    const unsubscribeMutes = useMuteStore.subscribe((state, previous) => { if (state.mutes !== previous.mutes) rememberPhoneWatch(); });
+    const unsubscribeSettings = useSettingsStore.subscribe((state, previous) => { if (state.notifyTypes !== previous.notifyTypes) rememberPhoneWatch(); });
+
     // Android's native watcher checks the inbox once the app leaves the screen.
-    const stop = startPolling(tick, { background: !Capacitor.isNativePlatform(), interval: () => constrainedDevice() || useSettingsStore.getState().dataSaver || useNetworkStore.getState().network === 'slow' ? 15_000 : 5_000 });
+    const stop = startPolling(tick, { background: !Capacitor.isNativePlatform(), backgroundInterval: () => constrainedDevice() || useSettingsStore.getState().dataSaver || useNetworkStore.getState().network === 'slow' ? 15_000 : 5_000, interval: () => constrainedDevice() || useSettingsStore.getState().dataSaver || useNetworkStore.getState().network === 'slow' ? 15_000 : 5_000 });
     return () => {
       stopped = true;
       stop();
       unsubscribe();
+      unsubscribeMutes();
+      unsubscribeSettings();
       useLiveInbox.getState().clear();
       notified.clear();
       if (Capacitor.isNativePlatform()) {

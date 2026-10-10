@@ -1,21 +1,30 @@
 import { useEffect } from 'react';
-import { useLocation, useNavigate } from 'react-router-dom';
-import { useLiveInbox, watchingRoom } from '../../lib/liveInbox';
+import { useNavigate } from 'react-router-dom';
+import { useLiveInbox } from '../../lib/liveInbox';
+import { useMuteStore, roomAllows } from '../../stores/muteStore';
+import { useSettingsStore } from '../../stores/settingsStore';
 import EmojiText from './EmojiText';
 import './LiveInboxBanner.css';
 export default function LiveInboxBanner() {
   const notices = useLiveInbox(state => state.notices);
   const dismiss = useLiveInbox(state => state.dismiss);
-  const notice = notices[notices.length - 1];
-  const location = useLocation(); const navigate = useNavigate();
+  const mutes = useMuteStore(state => state.mutes);
+  const types = useSettingsStore(state => state.notifyTypes);
+  const allowed = notices.filter(item => types[item.kind ?? 'message'] !== false && roomAllows(mutes, item.conversationId, item.kind ?? 'message'));
+  const notice = allowed[0];
+  const navigate = useNavigate();
+  useEffect(() => {
+    notices.forEach(item => {
+      if (types[item.kind ?? 'message'] === false || !roomAllows(mutes, item.conversationId, item.kind ?? 'message')) dismiss(item.key);
+    });
+  }, [notices, mutes, types, dismiss]);
   useEffect(() => {
     if (!notice) return;
-    if (watchingRoom(location.pathname, notice.conversationId)) { dismiss(notice.key); return; }
     const timer = window.setTimeout(() => dismiss(notice.key), 6500);
     return () => window.clearTimeout(timer);
-  }, [notice, dismiss, location.pathname]);
+  }, [notice, dismiss]);
   if (!notice) return null;
-  return <aside className="live-inbox-banner" aria-label="رسالة جديدة" dir="rtl">
+  return <aside className="live-inbox-banner" aria-label="إشعار جديد" dir="rtl">
     <button className="live-inbox-open" type="button" onClick={() => { dismiss(notice.key); navigate(`/chat/${notice.conversationId}?at=${encodeURIComponent(notice.messageId)}`); }}>
       <span role="status"><strong>{notice.title}</strong><span><EmojiText text={notice.body} /></span></span>
     </button>

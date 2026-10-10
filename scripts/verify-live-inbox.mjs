@@ -72,12 +72,18 @@ try {
   const message = { id: randomUUID(), roomId: privateId, senderId: bob.id, text: 'Private live message', createdAt: new Date(), deleted: false };
   await repo.addRoomMessage(message); await repo.notifyRoomMessage(message);
   const banner = page.locator('.live-inbox-banner');
-  await banner.waitFor({ timeout: 22000 });
+  await banner.filter({ hasText: 'Private live message' }).waitFor({ timeout: 22000 });
   assert.ok((await banner.innerText()).includes('Private live message'));
   assert.ok(page.url().includes(groupId));
   assert.equal((await repo.listNotifications(alice.id, 30, null)).find(item => item.messageId === message.id)?.read, false);
   await page.locator('.live-inbox-open').click();
   await page.waitForURL(`**/chat/${privateId}?at=${message.id}`);
+  await page.waitForTimeout(500);
+  const second = { ...message, id: randomUUID(), text: 'Current chat live message', createdAt: new Date() };
+  await repo.addRoomMessage(second); await repo.notifyRoomMessage(second);
+  await banner.waitFor({ timeout: 22000 });
+  assert.ok((await banner.innerText()).includes('Current chat live message'));
+  await page.getByRole('button', { name: 'إخفاء الإشعار' }).click();
   assert.deepEqual(errors, []);
   console.log('PASS repeated emoji picks, cursor/keyboard stability, private recent emoji, and live private banner from a group without premature reads; CPU 6x');
 } finally { await browser.close(); }
