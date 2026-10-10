@@ -39,8 +39,8 @@ it('shows peer name color and font without styling the bubble', () => {
   );
   const author = container.querySelector('button.bubble-author')!;
   expect(author.className).toContain('has-user-display');
+  expect(author.className).toContain('is-name-font-classic');
   expect((author as HTMLElement).style.color).toMatch(/165,\s*107,\s*122|#a56b7a/i);
-  expect((author as HTMLElement).style.fontFamily).toContain('Georgia');
   expect(container.querySelector('.bubble.has-user-display')).toBeNull();
 });
 

@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { Capacitor } from '@capacitor/core';
-import { getApiOrigin, nativeNeedsApiOrigin } from '../lib/apiOrigin';
+import { apiFetchOrigin } from '../lib/apiFetchOrigin';
+import { nativeNeedsApiOrigin } from '../lib/apiOrigin';
 import type { NetworkState } from '../types/settings';
 
 type NetworkStore = {
@@ -31,11 +32,16 @@ export function resetNetworkMeasurements() {
 }
 
 export function reportNetworkFailure(stalled = false) {
+  if (nativeNeedsApiOrigin()) return;
   if (typeof document !== 'undefined' && (document.visibilityState === 'hidden' || Date.now() < resumeGraceUntil)) return;
+  if (stalled && navigator.onLine !== false) {
+    degraded = true;
+    useNetworkStore.getState().setNetwork('slow');
+    return;
+  }
   transportFailed = true;
   fastResponses = 0;
-  if (stalled) degraded = true;
-  useNetworkStore.getState().setNetwork(stalled && navigator.onLine !== false ? 'slow' : 'offline');
+  useNetworkStore.getState().setNetwork(navigator.onLine === false ? 'offline' : 'offline');
   checkRecovery?.();
 }
 
@@ -67,8 +73,11 @@ export function observeNetwork() {
     const timeout = window.setTimeout(() => request.abort(), 5000);
     const started = Date.now();
     try {
-      const origin = Capacitor.isNativePlatform() ? (import.meta.env.VITE_API_ORIGIN ?? '').trim().replace(/\/$/, '') : '';
-      const response = await fetch(`${origin}/api/health`, { cache: 'no-store', signal: request.signal });
+      const url = Capacitor.isNativePlatform()
+        ? (() => { const origin = apiFetchOrigin(); return origin ? `${origin}/api/health` : ''; })()
+        : '/api/health';
+      if (!url) return;
+      const response = await fetch(url, { cache: 'no-store', signal: request.signal });
       if (response.ok && !stopped && !request.signal.aborted) {
         attempts = 0;
         reportNetworkSuccess(Date.now() - started, false);

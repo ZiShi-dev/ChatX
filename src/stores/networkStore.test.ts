@@ -1,7 +1,14 @@
 import { afterEach, expect, it, vi } from 'vitest';
 import { resetNetworkMeasurements, observeNetwork, reportNetworkFailure, reportNetworkSuccess, useNetworkStore } from './networkStore';
 
-afterEach(() => { vi.useRealTimers(); vi.unstubAllGlobals(); vi.restoreAllMocks(); resetNetworkMeasurements(); reportNetworkSuccess(0); });
+afterEach(() => {
+  vi.useRealTimers();
+  vi.unstubAllGlobals();
+  vi.restoreAllMocks();
+  resetNetworkMeasurements();
+  reportNetworkSuccess(0);
+  localStorage.removeItem('chatx.apiOrigin');
+});
 
 it('recovers while the phone still claims to be online, without reopening the app', async () => {
   vi.useFakeTimers();

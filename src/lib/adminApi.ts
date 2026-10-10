@@ -1,10 +1,9 @@
-import { Capacitor } from '@capacitor/core';
-import { getApiOrigin, nativeNeedsApiOrigin } from './apiOrigin';
+import { nativeNeedsApiOrigin } from './apiOrigin';
+import { nativeApiPath } from './apiFetchOrigin';
 import { reportNetworkFailure, reportNetworkSuccess } from '../stores/networkStore';
 import { syncServerClock } from './serverClock';
 import { retryAfterMs } from './retry';
 
-const HTTPS_ORIGIN = /^https:\/\/[A-Za-z0-9.-]+(?::[0-9]{1,5})?$/;
 let sessionVersion = 0;
 const activeRequests = new Set<AbortController>();
 const responseCache = new Map<string, { etag: string; body: string }>();
@@ -31,13 +30,6 @@ export function invalidateApiSession() {
   responseCache.clear();
   inFlightReads.clear();
   readCooldowns.clear();
-}
-
-function adminRequestUrl(path: string, native: boolean, origin: string | undefined) {
-  if (!native) return path;
-  const base = origin?.trim().replace(/\/$/, '') ?? '';
-  if (!HTTPS_ORIGIN.test(base)) return path;
-  return `${base}${path}`;
 }
 
 export class AdminApiError extends Error {
@@ -68,13 +60,19 @@ export async function adminFetch(path: string, init?: RequestOptions) {
   }
   return JSON.parse(JSON.stringify(await promise)) as unknown;
 }
+function shouldMarkTransportDown(error: unknown) {
+  if (error instanceof AdminApiError) return error.code === 'offline' || error.status === 0;
+  return true;
+}
+
 async function performFetch(path: string, init?: RequestOptions) {
+  if (nativeNeedsApiOrigin()) throw new AdminApiError('no_server', 0);
   if (navigator.onLine === false) throw new AdminApiError('offline', 0);
   const controller = new AbortController();
   const version = sessionVersion;
   activeRequests.add(controller);
   const started = Date.now();
-  const slowTimer = init?.hold ? undefined : window.setTimeout(() => reportNetworkFailure(true), 5000);
+  const slowTimer = init?.hold ? undefined : window.setTimeout(() => reportNetworkFailure(true), 12_000);
   const onOffline = () => { reportNetworkFailure(); controller.abort(); };
   const onCallerAbort = () => controller.abort();
   init?.signal?.addEventListener('abort', onCallerAbort);
@@ -89,7 +87,7 @@ async function performFetch(path: string, init?: RequestOptions) {
     if (init?.body) headers.set('content-type', 'application/json');
     if (init?.binary) headers.set('content-type', 'application/octet-stream');
     if (method !== 'GET' && method !== 'HEAD') headers.set('x-chatx-request', '1');
-    const response = await fetch(adminRequestUrl(path, Capacitor.isNativePlatform(), import.meta.env.VITE_API_ORIGIN), {
+    const response = await fetch(nativeApiPath(path), {
       method,
       credentials: 'include',
       headers,
@@ -118,7 +116,7 @@ async function performFetch(path: string, init?: RequestOptions) {
     if (method === 'GET' && data !== null) rememberResponse(path, response.headers.get('etag'), body);
     return data;
   } catch (error) {
-    if (!init?.signal?.aborted && version === sessionVersion && (!(error instanceof AdminApiError) || error.code === 'offline')) reportNetworkFailure();
+    if (!init?.signal?.aborted && version === sessionVersion && shouldMarkTransportDown(error)) reportNetworkFailure();
     if (error instanceof AdminApiError) throw error;
     throw new AdminApiError('offline', 0);
   } finally {
@@ -137,7 +135,7 @@ export async function adminFetchBlob(path: string) {
   activeRequests.add(controller);
   const timer = window.setTimeout(() => controller.abort(), 60_000);
   try {
-    const response = await fetch(adminRequestUrl(path, Capacitor.isNativePlatform(), import.meta.env.VITE_API_ORIGIN), {
+    const response = await fetch(nativeApiPath(path), {
       credentials: 'include',
       signal: controller.signal,
     });

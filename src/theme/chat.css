@@ -1814,11 +1814,48 @@ ion-content.chat-scroll::part(scroll) {
 }
 
 .bubble-author.has-user-display {
+  color: var(--author-name-color, var(--chatx-accent-soft));
+  font-size: 12px;
   font-weight: 700;
 }
 
 button.bubble-author.has-user-display {
-  color: var(--author-display-color, inherit);
+  color: var(--author-name-color, var(--chatx-accent-soft));
+  font-size: 12px;
+  font-weight: 700;
+  font-style: normal;
+  line-height: 1.3;
+}
+
+.bubble-author.is-name-font-system,
+button.bubble-author.is-name-font-system {
+  font-family: inherit;
+}
+
+.bubble-author.is-name-font-clear,
+button.bubble-author.is-name-font-clear,
+.profile-font-grid button.is-name-font-clear {
+  font-family: "ChatX Tajawal", Tahoma, sans-serif;
+}
+
+.bubble-author.is-name-font-rounded,
+button.bubble-author.is-name-font-rounded,
+.profile-font-grid button.is-name-font-rounded {
+  font-family: "ChatX Cairo", Tahoma, sans-serif;
+}
+
+.bubble-author.is-name-font-classic,
+button.bubble-author.is-name-font-classic,
+.profile-font-grid button.is-name-font-classic {
+  font-family: "ChatX Amiri", Georgia, serif;
+}
+
+.profile-font-grid button.is-name-font-system {
+  font-family: inherit;
+}
+
+.profile-font-grid button[class*="is-name-font-"] {
+  font-weight: 700;
 }
 
 .profile-style-block {
@@ -1826,6 +1863,14 @@ button.bubble-author.has-user-display {
   flex-direction: column;
   gap: 8px;
   margin-top: 8px;
+}
+
+.profile-name-colors {
+  gap: 10px;
+}
+
+.profile-name-colors .profile-hex {
+  margin: 0;
 }
 
 .profile-style-title {
@@ -1884,8 +1929,7 @@ button.bubble-author.has-user-display {
   border-radius: 12px;
   background: var(--chatx-surface);
   color: inherit;
-  font: inherit;
-  font-size: 14px;
+  font-size: 15px;
 }
 
 .profile-font-grid button.is-on {

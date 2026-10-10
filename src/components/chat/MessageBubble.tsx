@@ -338,8 +338,8 @@ function PersonButton({ user, onOpen }: { user: User; onOpen?: (user: User) => v
 }
 
 function PersonName({ user, onOpen }: { user: User; onOpen?: (user: User) => void }) {
-  const look = displayNameStyleForUser(user.color, user.messageFont);
-  const className = ['bubble-author', look.className].join(' ');
+  const look = displayNameStyleForUser(user.color, user.messageFont ?? 'system');
+  const className = ['bubble-author', look.className].filter(Boolean).join(' ');
   if (!onOpen) return <p className={className} style={look.style}>{user.displayName}</p>;
   return (
     <button

@@ -37,9 +37,10 @@ describe('directory payloads', () => {
       messageFont: 'classic',
     });
     expect(readDirectoryUsers({ users: [{ ...user, color: '#ffffff', messageFont: 'comic' }] })?.[0]).toMatchObject({
-      color: expect.stringMatching(/^#[0-9a-f]{6}$/),
+      color: '#ffffff',
+      messageFont: 'system',
     });
-    expect(readDirectoryUsers({ users: [{ ...user, messageFont: 'system' }] })?.[0]).not.toHaveProperty('messageFont');
+    expect(readDirectoryUsers({ users: [{ ...user, messageFont: 'classic' }] })?.[0]?.messageFont).toBe('classic');
   });
 
   it('accepts a long invite and rejects a short one', () => {

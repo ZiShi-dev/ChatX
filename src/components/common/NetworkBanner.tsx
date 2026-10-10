@@ -1,7 +1,7 @@
 import { useEffect } from 'react';
 import { IonToolbar } from '@ionic/react';
 import { nativeNeedsApiOrigin } from '../../lib/apiOrigin';
-import { offlineBannerLabel } from '../../lib/queue';
+import { offlineBannerLabel, serverBannerLabel } from '../../lib/queue';
 import { useChatStore } from '../../stores/chatStore';
 import { useNetworkStore } from '../../stores/networkStore';
 import { useSavedStore } from '../../stores/savedStore';
@@ -27,7 +27,7 @@ export default function NetworkStatusBanner() {
   if (nativeNeedsApiOrigin()) {
     return (
       <IonToolbar className="network-toolbar setup">
-        <p className="network-banner" role="status">لم يُضبط عنوان الخادم. افتح الإعدادات → الخادم.</p>
+        <p className="network-banner" role="status">تعذر الاتصال بالخادم. راجع المسؤول أو أعد تثبيت التطبيق.</p>
       </IonToolbar>
     );
   }
@@ -54,9 +54,13 @@ export default function NetworkStatusBanner() {
 
   if (network === 'online') return null;
   const offline = network === 'offline';
+  const deviceOffline = typeof navigator !== 'undefined' && navigator.onLine === false;
+  const bannerText = offline
+    ? deviceOffline ? offlineBannerLabel(pending) : serverBannerLabel(pending)
+    : 'الاتصال ضعيف';
   return (
     <IonToolbar className={offline ? 'network-toolbar' : 'network-toolbar slow'}>
-      <p className="network-banner">{offline ? offlineBannerLabel(pending) : 'الاتصال ضعيف'}</p>
+      <p className="network-banner">{bannerText}</p>
     </IonToolbar>
   );
 }

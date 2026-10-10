@@ -44,7 +44,7 @@ export function readDirectoryUser(value: unknown): User | null {
     status: 'offline',
     bio,
     color,
-    ...(messageFont !== 'system' ? { messageFont } : {}),
+    messageFont,
     ...(avatarUrl ? { avatarUrl } : {}),
     ...(bannerUrl ? { bannerUrl } : {}),
   };

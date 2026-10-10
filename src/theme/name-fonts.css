@@ -1,0 +1,24 @@
+/* Display-name fonts (OFL, bundled for offline use). Weight 700 only — names use font-weight: 700. */
+@font-face {
+  font-family: "ChatX Tajawal";
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url("/fonts/tajawal-700.woff2") format("woff2");
+}
+
+@font-face {
+  font-family: "ChatX Cairo";
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url("/fonts/cairo-700.woff2") format("woff2");
+}
+
+@font-face {
+  font-family: "ChatX Amiri";
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url("/fonts/amiri-700.woff2") format("woff2");
+}

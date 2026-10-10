@@ -9,7 +9,7 @@ import Avatar from '../components/common/Avatar';
 import { connectionLabel, getUserPresence } from '../lib/presence';
 import { roleLabel } from '../lib/roles';
 import { readBanner, readPhoto } from '../lib/photo';
-import { displayNameStyleForUser, fontLabel, MESSAGE_FONT_OPTIONS, USER_COLOR_OPTIONS } from '../lib/userStyle';
+import { displayNameFontClass, fontLabel, MESSAGE_FONT_OPTIONS, normalizeUserColorInput, USER_COLOR_OPTIONS } from '../lib/userStyle';
 import type { MessageFontId } from '../types/user';
 import { useAuthStore } from '../stores/authStore';
 
@@ -40,7 +40,6 @@ export default function ProfilePage({ embedded = false, onShowSettings, scrollHo
   const [draftColor, setDraftColor] = useState(currentUser.color);
   const [draftFont, setDraftFont] = useState<MessageFontId>(currentUser.messageFont ?? 'system');
   const [saveError, setSaveError] = useState('');
-  const previewName = displayNameStyleForUser(draftColor, draftFont);
 
   useEffect(() => {
     if (!scrollHold) return;
@@ -258,7 +257,31 @@ export default function ProfilePage({ embedded = false, onShowSettings, scrollHo
               </label>
               <div className="profile-style-block">
                 <span className="profile-style-title">لون الاسم</span>
-                <p className="profile-style-hint">يظهر اسمك بهذا اللون فوق رسائلك في المجموعات، للجميع.</p>
+                <p className="profile-style-hint">اختر أي لون، مثل مظهر التطبيق. يظهر اسمك في المجموعات للجميع.</p>
+                <div className="look-colors profile-name-colors">
+                  <label className="look-color">
+                    لونك
+                    <span className="look-chip" style={{ background: draftColor }}>
+                      <input
+                        type="color"
+                        aria-label="لون الاسم"
+                        value={draftColor}
+                        onChange={(event) => setDraftColor(event.target.value.toLowerCase())}
+                      />
+                    </span>
+                  </label>
+                  <label className="group-name profile-hex">
+                    <span>رمز اللون</span>
+                    <input
+                      dir="ltr"
+                      maxLength={7}
+                      value={draftColor}
+                      aria-label="رمز اللون"
+                      onChange={(event) => setDraftColor(normalizeUserColorInput(event.target.value, draftColor))}
+                    />
+                  </label>
+                </div>
+                <p className="profile-style-hint">ألوان سريعة</p>
                 <div className="profile-color-grid" role="listbox" aria-label="لون الاسم">
                   {USER_COLOR_OPTIONS.map((color) => (
                     <button
@@ -277,7 +300,7 @@ export default function ProfilePage({ embedded = false, onShowSettings, scrollHo
               </div>
               <div className="profile-style-block">
                 <span className="profile-style-title">خط الاسم</span>
-                <p className="profile-style-hint">نفس الخط لاسمك في المحادثات. نص الرسالة يبقى بخط التطبيق.</p>
+                <p className="profile-style-hint">نفس الخط لاسمك في المجموعات. نص الرسالة يبقى بخط التطبيق.</p>
                 <div className="profile-font-grid" role="listbox" aria-label="خط الاسم">
                   {MESSAGE_FONT_OPTIONS.map((font) => (
                     <button
@@ -285,19 +308,12 @@ export default function ProfilePage({ embedded = false, onShowSettings, scrollHo
                       type="button"
                       role="option"
                       aria-selected={draftFont === font.id}
-                      className={draftFont === font.id ? 'is-on' : undefined}
-                      style={{ fontFamily: font.family }}
+                      className={[draftFont === font.id ? 'is-on' : '', displayNameFontClass(font.id)].filter(Boolean).join(' ')}
                       onClick={() => setDraftFont(font.id)}
                     >
                       {font.label}
                     </button>
                   ))}
-                </div>
-                <div className="profile-style-preview">
-                  <span className={`bubble-author ${previewName.className}`} style={previewName.style} dir="auto">
-                    {displayName.trim() || currentUser.displayName}
-                  </span>
-                  <p className="profile-style-preview-msg">مثال على شكل الاسم فوق الرسالة.</p>
                 </div>
               </div>
               {saveError ? <p className="form-error">{saveError}</p> : null}

@@ -45,7 +45,7 @@ describe('known account', () => {
 describe('profile', () => {
   it('keeps a short bio and a jpeg banner', () => {
     assert.equal(cleanAccentColor('#4d7ea8').ok, true);
-    assert.equal(cleanAccentColor('#ffffff').ok, false);
+    assert.equal(cleanAccentColor('#ffffff').ok, true);
     assert.equal(cleanMessageFont('classic').ok, true);
     assert.equal(cleanMessageFont('comic').ok, false);
     assert.equal(cleanBio('  مرحبا\u0000 '), 'مرحبا');
@@ -168,10 +168,19 @@ describe('profile', () => {
     assert.equal(account.user.color, '#c4893a');
     assert.equal(account.user.messageFont, 'rounded');
 
-    const rejected = await handle(new Request('http://127.0.0.1/api/profile', {
+    const custom = await handle(new Request('http://127.0.0.1/api/profile', {
       method: 'PATCH',
       headers: { 'content-type': 'application/json', 'x-chatx-request': '1', cookie: `chatx_session=${token}` },
       body: JSON.stringify({ color: '#ffffff' }),
+    }));
+    assert.equal(custom.status, 200);
+    const customBody = await custom.json() as { user: { color?: string } };
+    assert.equal(customBody.user.color, '#ffffff');
+
+    const rejected = await handle(new Request('http://127.0.0.1/api/profile', {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json', 'x-chatx-request': '1', cookie: `chatx_session=${token}` },
+      body: JSON.stringify({ color: 'red' }),
     }));
     assert.equal(rejected.status, 401);
   });

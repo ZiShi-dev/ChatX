@@ -54,9 +54,11 @@ describe('authStore user style', () => {
     expect(useAuthStore.getState().currentUser).toMatchObject({ color: '#a56b7a', messageFont: 'clear' });
   });
 
-  it('rejects invalid palette colors in the optimistic patch', async () => {
-    vi.spyOn(adminApi, 'adminFetch').mockResolvedValue({ user: baseUser });
+  it('accepts any hex color in the optimistic patch', async () => {
+    vi.spyOn(adminApi, 'adminFetch').mockResolvedValue({
+      user: { ...baseUser, color: '#ffffff' },
+    });
     await useAuthStore.getState().saveAccountProfile({ color: '#ffffff' });
-    expect(useAuthStore.getState().currentUser.color).toBe('#3d9b84');
+    expect(useAuthStore.getState().currentUser.color).toBe('#ffffff');
   });
 });

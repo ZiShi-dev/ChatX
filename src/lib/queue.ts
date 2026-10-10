@@ -15,3 +15,10 @@ export function offlineBannerLabel(pending: number) {
   if (pending === 2) return 'لا يوجد اتصال — رسالتان في انتظار الإرسال';
   return `لا يوجد اتصال — ${pending} رسائل في انتظار الإرسال`;
 }
+
+export function serverBannerLabel(pending: number) {
+  if (pending <= 0) return 'تعذر الوصول إلى الخادم. تحقق من الشبكة ثم أعد المحاولة.';
+  if (pending === 1) return 'تعذر الوصول إلى الخادم — رسالة واحدة في الانتظار';
+  if (pending === 2) return 'تعذر الوصول إلى الخادم — رسالتان في الانتظار';
+  return `تعذر الوصول إلى الخادم — ${pending} رسائل في الانتظار`;
+}
