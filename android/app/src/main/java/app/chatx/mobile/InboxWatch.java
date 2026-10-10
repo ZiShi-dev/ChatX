@@ -43,7 +43,7 @@ final class InboxWatch {
         if (!prefs(context).getBoolean("armed", false)) return;
         AlarmManager alarms = (AlarmManager) context.getSystemService(Context.ALARM_SERVICE);
         if (alarms == null) return;
-        long at = System.currentTimeMillis() + INTERVAL_MS;
+        long at = System.currentTimeMillis() + Math.max(INTERVAL_MS, prefs(context).getLong("retryAt", 0) - System.currentTimeMillis());
         PendingIntent intent = broadcast(context);
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
             alarms.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, at, intent);

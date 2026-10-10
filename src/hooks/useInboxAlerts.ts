@@ -1,7 +1,6 @@
 import { useEffect } from 'react';
 import { inboxAlertKey, liveAlertText, useLiveInbox, watchingRoom } from '../lib/liveInbox';
-import { constrainedDevice } from '../lib/deviceBudget';
-import { useNetworkStore } from '../stores/networkStore';
+import { createNotificationCadence } from '../lib/notificationCadence';
 import { Capacitor } from '@capacitor/core';
 import { startPolling } from '../lib/poll';
 import { isServerId } from '../lib/home';
@@ -41,6 +40,7 @@ export function useInboxAlerts() {
   useEffect(() => {
     if (!activated || !isServerId(userId)) return;
     const known = new Set<string>();
+    const cadence = createNotificationCadence();
     let primed = false;
     let stopped = false;
 
@@ -84,7 +84,11 @@ export function useInboxAlerts() {
     };
     const tick = async () => {
       const result = await useChatStore.getState().loadInbox();
-      if (result === 'ok') inspect();
+      if (result === 'ok') {
+        const state = useChatStore.getState();
+        cadence.observe(state.serverInbox, state.serverUnread);
+        inspect();
+      }
       return result;
     };
     const unsubscribe = useChatStore.subscribe((state, previous) => { if (state.serverInbox !== previous.serverInbox) inspect(); });
@@ -93,7 +97,7 @@ export function useInboxAlerts() {
     const unsubscribeSettings = useSettingsStore.subscribe((state, previous) => { if (state.notifyTypes !== previous.notifyTypes) rememberPhoneWatch(); });
 
     // Android's native watcher checks the inbox once the app leaves the screen.
-    const stop = startPolling(tick, { background: !Capacitor.isNativePlatform(), backgroundInterval: () => constrainedDevice() || useSettingsStore.getState().dataSaver || useNetworkStore.getState().network === 'slow' ? 15_000 : 5_000, interval: () => constrainedDevice() || useSettingsStore.getState().dataSaver || useNetworkStore.getState().network === 'slow' ? 15_000 : 5_000 });
+    const stop = startPolling(tick, { background: !Capacitor.isNativePlatform(), backgroundInterval: () => cadence.delay(true), interval: () => cadence.delay() });
     return () => {
       stopped = true;
       stop();

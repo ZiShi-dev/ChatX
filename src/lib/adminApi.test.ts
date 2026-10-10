@@ -106,3 +106,16 @@ describe('API reliability', () => {
     expect(vi.getTimerCount()).toBe(0);
   });
 });
+
+it('does not send more requests during the server Retry-After cooldown', async () => {
+  vi.useFakeTimers();
+  const transport = vi.fn(async () => new Response('{"error":"limited"}', { status: 429, headers: { 'retry-after': '90' } }));
+  vi.stubGlobal('fetch', transport);
+  await expect(adminFetch('/api/notifications')).rejects.toMatchObject({ retryAfter: 90000 });
+  await vi.advanceTimersByTimeAsync(30000);
+  await expect(adminFetch('/api/notifications')).rejects.toMatchObject({ retryAfter: 60000 });
+  expect(transport).toHaveBeenCalledTimes(1);
+  await vi.advanceTimersByTimeAsync(60000);
+  await expect(adminFetch('/api/notifications')).rejects.toMatchObject({ retryAfter: 90000 });
+  expect(transport).toHaveBeenCalledTimes(2);
+});

@@ -7,6 +7,7 @@ const HTTPS_ORIGIN = /^https:\/\/[A-Za-z0-9.-]+(?::[0-9]{1,5})?$/;
 let sessionVersion = 0;
 const activeRequests = new Set<AbortController>();
 const responseCache = new Map<string, { etag: string; body: string }>();
+const readCooldowns = new Map<string, { until: number; code: string; status: number }>();
 const MAX_CACHE_CHARS = 3_000_000;
 
 function rememberResponse(path: string, etag: string | null, body: string) {
@@ -28,6 +29,7 @@ export function invalidateApiSession() {
   activeRequests.clear();
   responseCache.clear();
   inFlightReads.clear();
+  readCooldowns.clear();
 }
 
 function adminRequestUrl(path: string, native: boolean, origin: string | undefined) {
@@ -55,6 +57,9 @@ type RequestOptions = { method?: string; body?: unknown; binary?: Uint8Array; ho
 const inFlightReads = new Map<string, Promise<unknown>>();
 export async function adminFetch(path: string, init?: RequestOptions) {
   if ((init?.method ?? 'GET').toUpperCase() !== 'GET') return performFetch(path, init);
+  const cooldown = readCooldowns.get(path);
+  if (cooldown && cooldown.until > Date.now()) throw new AdminApiError(cooldown.code, cooldown.status, cooldown.until - Date.now());
+  readCooldowns.delete(path);
   let promise = inFlightReads.get(path);
   if (!promise) {
     promise = performFetch(path, init).finally(() => { if (inFlightReads.get(path) === promise) inFlightReads.delete(path); });
@@ -100,7 +105,12 @@ async function performFetch(path: string, init?: RequestOptions) {
     reportNetworkSuccess(Date.now() - started, !init?.hold);
     if (!response.ok) {
       const code = data && typeof data === 'object' && 'error' in data && typeof data.error === 'string' ? data.error : 'unavailable';
-      throw new AdminApiError(code, response.status, retryAfterMs(response.headers.get('retry-after')));
+      const wait = retryAfterMs(response.headers.get('retry-after'));
+      if (method === 'GET' && wait > 0) {
+        readCooldowns.set(path, { until: Date.now() + wait, code, status: response.status });
+        while (readCooldowns.size > 64) readCooldowns.delete(readCooldowns.keys().next().value!);
+      }
+      throw new AdminApiError(code, response.status, wait);
     }
     if (controller.signal.aborted) throw new AdminApiError('offline', 0);
     if (version !== sessionVersion) throw new AdminApiError('account_changed', 0);

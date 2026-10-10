@@ -44,7 +44,7 @@ final class InboxPoll {
             return;
         }
         if (cookie == null || !cookie.contains("chatx_session=")) return;
-        String body = request(origin + "/api/notifications", cookie);
+        String body = request(origin + "/api/notifications", cookie, prefs, lease);
         if (!InboxLifecycle.current(lease)) { validatedEtag = ""; return; }
         if (body == null) return;
         try {
@@ -122,7 +122,24 @@ final class InboxPoll {
         return true;
     }
 
-    private static String request(String address, String cookie) {
+    private static void recovered(SharedPreferences prefs, long lease) {
+        synchronized (InboxLifecycle.LOCK) {
+            if (InboxLifecycle.current(lease)) prefs.edit().remove("retryAt").remove("retryFailures").apply();
+        }
+    }
+
+    private static void failed(SharedPreferences prefs, String retryAfter, long lease) {
+        synchronized (InboxLifecycle.LOCK) {
+        if (!InboxLifecycle.current(lease)) return;
+        validatedEtag = "";
+        int failures = Math.min(6, prefs.getInt("retryFailures", 0) + 1);
+        long now = System.currentTimeMillis();
+        prefs.edit().putInt("retryFailures", failures).putLong("retryAt", now + InboxRetry.delay(failures, retryAfter, now)).apply();
+        }
+    }
+
+    private static String request(String address, String cookie, SharedPreferences prefs, long lease) {
+        if (prefs.getLong("retryAt", 0) > System.currentTimeMillis()) return null;
         HttpURLConnection connection = null;
         try {
             String scope = address + "\n" + cookie;
@@ -137,22 +154,24 @@ final class InboxPoll {
             connection.setConnectTimeout(8000);
             connection.setReadTimeout(8000);
             int status = connection.getResponseCode();
-            if (status == 304) return null;
-            if (status != 200) { validatedEtag = ""; return null; }
+            if (status == 304) { recovered(prefs, lease); return null; }
+            if (status != 200) { failed(prefs, connection.getHeaderField("Retry-After"), lease); return null; }
             InputStream stream = connection.getInputStream();
             ByteArrayOutputStream buffer = new ByteArrayOutputStream();
             byte[] chunk = new byte[4096];
             int read;
             while ((read = stream.read(chunk)) >= 0) {
-                if (buffer.size() > 200_000) return null;
+                if (buffer.size() + read > 200_000) { failed(prefs, null, lease); return null; }
                 buffer.write(chunk, 0, read);
             }
             String body = buffer.toString(StandardCharsets.UTF_8.name());
-            if (new JSONObject(body).optJSONArray("notifications") == null) return null;
+            if (new JSONObject(body).optJSONArray("notifications") == null) { failed(prefs, null, lease); return null; }
             String etag = connection.getHeaderField("ETag");
             validatedEtag = etag == null ? "" : etag;
+            recovered(prefs, lease);
             return body;
         } catch (Exception error) {
+            failed(prefs, null, lease);
             return null;
         } finally {
             if (connection != null) connection.disconnect();
