@@ -4,6 +4,7 @@ export type Appearance = {
   wallpaper: string;
   wallpaperOpacity: number;
   accent: string;
+  link: string;
   bg: string;
   surface: string;
   frame: string;
@@ -18,6 +19,7 @@ export const DEFAULT_APPEARANCE: Appearance = {
   wallpaper: '',
   wallpaperOpacity: 0.45,
   accent: '#3d9b84',
+  link: '#8fc9bb',
   bg: '#101614',
   surface: '#101614',
   frame: '#31403a',
@@ -81,6 +83,7 @@ export function sanitizeAppearance(value?: Partial<Appearance>): Appearance {
     wallpaper,
     wallpaperOpacity,
     accent: hex(value?.accent, DEFAULT_APPEARANCE.accent),
+    link: hex(value?.link, DEFAULT_APPEARANCE.link),
     bg: hex(value?.bg, DEFAULT_APPEARANCE.bg),
     surface: hex(value?.bg, DEFAULT_APPEARANCE.bg),
     frame: hex(value?.frame, DEFAULT_APPEARANCE.frame),
@@ -102,7 +105,7 @@ export function applyAppearance(look: Appearance) {
   const frame = hex(look.frame, DEFAULT_APPEARANCE.frame);
   const accent = hex(look.accent, DEFAULT_APPEARANCE.accent);
   const wallpaper = look.wallpaper.startsWith('data:image/jpeg') ? look.wallpaper : '';
-  const colorKey = `${accent}|${bg}|${frame}`;
+  const colorKey = `${accent}|${bg}|${frame}|${look.link}`;
   document.title = brandName(look.name);
   if (colorKey === paintedColors && wallpaper === paintedWallpaper) {
     if (wallpaper) root.style.setProperty('--chatx-wallpaper-opacity', String(look.wallpaperOpacity));
@@ -118,6 +121,7 @@ export function applyAppearance(look: Appearance) {
   const onMine = inkOn(mine);
   const soft = mix(bg, frame, 0.4);
   root.style.setProperty('--chatx-accent', accent);
+  root.style.setProperty('--chatx-link', hex(look.link, DEFAULT_APPEARANCE.link));
   root.style.setProperty('--ion-color-primary', accent);
   root.style.setProperty('--chatx-bg', bg);
   root.style.setProperty('--ion-background-color', bg);

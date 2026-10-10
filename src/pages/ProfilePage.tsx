@@ -12,7 +12,7 @@ import { AVATAR_DECORATIONS, PROFILE_EFFECTS, type AvatarDecoration, type Profil
 import { connectionLabel, getUserPresence } from '../lib/presence';
 import { roleLabel } from '../lib/roles';
 import { readBanner, readPhoto } from '../lib/photo';
-import { displayNameFontClass, fontLabel, MESSAGE_FONT_OPTIONS, normalizeUserColorInput, USER_COLOR_OPTIONS } from '../lib/userStyle';
+import { displayNameFontClass, displayNameStyleForUser, fontLabel, MESSAGE_FONT_OPTIONS, normalizeUserColorInput, USER_COLOR_OPTIONS } from '../lib/userStyle';
 import type { MessageFontId } from '../types/user';
 import { useAuthStore } from '../stores/authStore';
 
@@ -42,6 +42,9 @@ export default function ProfilePage({ embedded = false, onShowSettings, scrollHo
   const [displayName, setDisplayName] = useState(currentUser.displayName);
   const [draftBio, setDraftBio] = useState(currentUser.bio);
   const [draftColor, setDraftColor] = useState(currentUser.color);
+  const [colorInput, setColorInput] = useState(currentUser.color);
+  const colorValid = /^#?[0-9a-f]{6}$/i.test(colorInput);
+  const chooseColor = (color: string) => { setDraftColor(color); setColorInput(color); };
   const [draftFont, setDraftFont] = useState<MessageFontId>(currentUser.messageFont ?? 'system');
   const [draftDecoration, setDraftDecoration] = useState<AvatarDecoration>(currentUser.avatarDecoration ?? 'none');
   const [draftEffect, setDraftEffect] = useState<ProfileEffectId>(currentUser.profileEffect ?? 'none');
@@ -57,7 +60,7 @@ export default function ProfilePage({ embedded = false, onShowSettings, scrollHo
   const openEditor = () => {
     setDisplayName(currentUser.displayName);
     setDraftBio(currentUser.bio);
-    setDraftColor(currentUser.color);
+    chooseColor(currentUser.color);
     setDraftFont(currentUser.messageFont ?? 'system');
     setDraftDecoration(currentUser.avatarDecoration ?? 'none');
     setDraftEffect(currentUser.profileEffect ?? 'none');
@@ -76,11 +79,13 @@ export default function ProfilePage({ embedded = false, onShowSettings, scrollHo
   };
 
   const pickPhoto = () => {
-    void scrollHold?.hold().then(() => photoRef.current?.click());
+    if (scrollHold) void scrollHold.hold().then(() => photoRef.current?.click());
+    else photoRef.current?.click();
   };
 
   const pickBanner = () => {
-    void scrollHold?.hold().then(() => bannerRef.current?.click());
+    if (scrollHold) void scrollHold.hold().then(() => bannerRef.current?.click());
+    else bannerRef.current?.click();
   };
 
   const changePhoto = async (file?: File) => {
@@ -104,7 +109,7 @@ export default function ProfilePage({ embedded = false, onShowSettings, scrollHo
 
   const save = () => {
     const name = displayName.trim();
-    if (name.length < 2) return;
+    if (name.length < 2 || !colorValid) return;
     void saveAccountProfile({
       displayName: name,
       bio: draftBio.trim(),
@@ -170,7 +175,7 @@ export default function ProfilePage({ embedded = false, onShowSettings, scrollHo
               event.target.value = '';
             }}
           />
-          <h1>{currentUser.displayName}</h1>
+          <h1 {...displayNameStyleForUser(currentUser.color, currentUser.messageFont)} dir="auto">{currentUser.displayName}</h1>
           <p className="profile-handle" dir="auto">@{currentUser.username}</p>
           {saveError ? <p className="form-error">{saveError}</p> : null}
         </section>
@@ -254,25 +259,10 @@ export default function ProfilePage({ embedded = false, onShowSettings, scrollHo
               <div className="cosmetic-preview" aria-label="معاينة مظهر الملف">
                 <ProfileEffect effect={draftEffect} color={draftColor} />
                 <Avatar name={displayName || currentUser.displayName} color={draftColor} size={64} src={currentUser.avatarUrl} decoration={draftDecoration} animate={animate} />
-                <strong style={{ color: draftColor }}>{displayName || currentUser.displayName}</strong>
+                <strong {...displayNameStyleForUser(draftColor, draftFont)} dir="auto">{displayName || currentUser.displayName}</strong>
               </div>
-              <div className="profile-style-block">
-                <span className="profile-style-title">زينة الصورة</span>
-                <p className="profile-style-hint">اختر الزينة أو أزلها. القبعة تتحرك داخل الملف فقط، وتبقى ثابتة في وضع التوفير وعلى الأجهزة الضعيفة.</p>
-                <div className="cosmetic-options" role="group" aria-label="زينة الصورة">
-                  {AVATAR_DECORATIONS.map(item => <button key={item.id} type="button" aria-pressed={draftDecoration === item.id} className={draftDecoration === item.id ? 'is-on' : ''} onClick={() => setDraftDecoration(item.id)}>{item.label}</button>)}
-                </div>
-                <span className="profile-style-title">تأثير الملف</span>
-                <div className="cosmetic-options" role="group" aria-label="تأثير الملف">
-                  {PROFILE_EFFECTS.map(item => <button key={item.id} type="button" aria-pressed={draftEffect === item.id} className={draftEffect === item.id ? 'is-on' : ''} onClick={() => setDraftEffect(item.id)}>{item.label}</button>)}
-                </div>
-              </div>
-              <button type="button" className="photo-pick profile-photo" aria-label="تغيير الصورة" onClick={pickPhoto}>
-                <Avatar name={displayName || currentUser.displayName} color={draftColor} size={72} src={currentUser.avatarUrl} decoration={draftDecoration} animate={animate} />
-                <span className="photo-badge">
-                  <IonIcon icon={cameraOutline} />
-                </span>
-              </button>
+              <section className="profile-editor-section"><h3>المعلومات الشخصية</h3>
+              <button type="button" className="profile-photo-action" onClick={pickPhoto}><IonIcon icon={cameraOutline} /> تغيير الصورة</button>
               <label className="group-name">
                 <span>الاسم</span>
                 <input dir="auto" maxLength={40} value={displayName} onChange={(event) => setDisplayName(event.target.value)} />
@@ -282,6 +272,8 @@ export default function ProfilePage({ embedded = false, onShowSettings, scrollHo
                 <span>النبذة</span>
                 <textarea dir="auto" maxLength={160} value={draftBio} placeholder="نبذة قصيرة" onChange={(event) => setDraftBio(event.target.value)} />
               </label>
+              </section>
+              <section className="profile-editor-section"><h3>مظهر الاسم</h3>
               <div className="profile-style-block">
                 <span className="profile-style-title">لون الاسم</span>
                 <p className="profile-style-hint">اختر أي لون، مثل مظهر التطبيق. يظهر اسمك في المجموعات للجميع.</p>
@@ -293,7 +285,7 @@ export default function ProfilePage({ embedded = false, onShowSettings, scrollHo
                         type="color"
                         aria-label="لون الاسم"
                         value={draftColor}
-                        onChange={(event) => setDraftColor(event.target.value.toLowerCase())}
+                        onChange={(event) => chooseColor(event.target.value.toLowerCase())}
                       />
                     </span>
                   </label>
@@ -302,12 +294,14 @@ export default function ProfilePage({ embedded = false, onShowSettings, scrollHo
                     <input
                       dir="ltr"
                       maxLength={7}
-                      value={draftColor}
+                      value={colorInput}
+                      aria-invalid={!colorValid}
                       aria-label="رمز اللون"
-                      onChange={(event) => setDraftColor(normalizeUserColorInput(event.target.value, draftColor))}
+                      onChange={(event) => { setColorInput(event.target.value); setDraftColor(normalizeUserColorInput(event.target.value, draftColor)); }}
                     />
                   </label>
                 </div>
+                {!colorValid && <p className="form-error">اكتب ستة أحرف للون، مثل #3d9b84.</p>}
                 <p className="profile-style-hint">ألوان سريعة</p>
                 <div className="profile-color-grid" role="listbox" aria-label="لون الاسم">
                   {USER_COLOR_OPTIONS.map((color) => (
@@ -316,9 +310,10 @@ export default function ProfilePage({ embedded = false, onShowSettings, scrollHo
                       type="button"
                       role="option"
                       aria-selected={draftColor === color}
+                      aria-label={color}
                       className={draftColor === color ? 'is-on' : undefined}
                       style={{ '--swatch': color } as CSSProperties}
-                      onClick={() => setDraftColor(color)}
+                      onClick={() => chooseColor(color)}
                     >
                       <span aria-hidden="true" />
                     </button>
@@ -343,10 +338,24 @@ export default function ProfilePage({ embedded = false, onShowSettings, scrollHo
                   ))}
                 </div>
               </div>
+              </section>
+              <section className="profile-editor-section"><h3>الزينة والتأثيرات</h3>
+              <div className="profile-style-block">
+                <span className="profile-style-title">زينة الصورة</span>
+                <p className="profile-style-hint">اختر الزينة أو أزلها. القبعة تتحرك داخل الملف فقط، وتبقى ثابتة في وضع التوفير وعلى الأجهزة الضعيفة.</p>
+                <div className="cosmetic-options" role="group" aria-label="زينة الصورة">
+                  {AVATAR_DECORATIONS.map(item => <button key={item.id} type="button" aria-pressed={draftDecoration === item.id} className={draftDecoration === item.id ? 'is-on' : ''} onClick={() => setDraftDecoration(item.id)}>{item.label}</button>)}
+                </div>
+                <span className="profile-style-title">تأثير الملف</span>
+                <div className="cosmetic-options" role="group" aria-label="تأثير الملف">
+                  {PROFILE_EFFECTS.map(item => <button key={item.id} type="button" aria-pressed={draftEffect === item.id} className={draftEffect === item.id ? 'is-on' : ''} onClick={() => setDraftEffect(item.id)}>{item.label}</button>)}
+                </div>
+              </div>
+              </section>
               {saveError ? <p className="form-error">{saveError}</p> : null}
-              <div className="account-actions">
+              <div className="account-actions profile-editor-footer">
                 <button type="button" onClick={() => setEditing(false)}>إلغاء</button>
-                <button type="button" className="profile-save" onClick={save}>حفظ</button>
+                <button type="button" className="profile-save" disabled={!colorValid || displayName.trim().length < 2} onClick={save}>حفظ</button>
               </div>
             </div>
           </div>,

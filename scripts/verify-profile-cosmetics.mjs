@@ -41,6 +41,16 @@ try {
   const page = await account(alice, '/account');
   await page.getByRole('button', { name: 'تعديل الملف', exact: true }).click();
   const editor = page.getByRole('dialog');
+  const hex = editor.getByRole('textbox', { name: 'رمز اللون', exact: true });
+  await hex.fill('#12');
+  assert.equal(await hex.inputValue(), '#12');
+  assert.equal(await editor.getByRole('button', { name: 'حفظ', exact: true }).isEnabled(), false);
+  await hex.fill('#12abef');
+  await editor.getByRole('option', { name: 'كلاسيكي', exact: true }).click();
+  assert.match(await editor.locator('.cosmetic-preview strong').evaluate(node => getComputedStyle(node).fontFamily), /ChatX Amiri/);
+  assert.equal(await editor.locator('.cosmetic-preview strong').evaluate(node => getComputedStyle(node).color), 'rgb(18, 171, 239)');
+  await editor.evaluate(node => { node.scrollTop = 0; });
+  await page.screenshot({ path: 'docs/profile-editor-mobile.png' });
   await editor.getByRole('button', { name: 'قبعة الخيزران', exact: true }).click();
   await editor.getByRole('button', { name: 'نجوم', exact: true }).click();
   assert.equal(await editor.locator('.cosmetic-preview .decoration-hat').count(), 1);
@@ -49,6 +59,8 @@ try {
   await editor.waitFor({ state: 'detached' });
   assert.equal((await repo.findUserById(alice.id)).avatarDecoration, 'hat');
   assert.equal((await repo.findUserById(alice.id)).profileEffect, 'stars');
+  assert.equal((await repo.findUserById(alice.id)).accentColor, '#12abef');
+  assert.equal((await repo.findUserById(alice.id)).messageFont, 'classic');
   await page.reload(); await page.locator('.startup-screen').waitFor({ state: 'detached' }); await page.locator('.profile-hero .decoration-hat').waitFor();
   const hat = page.locator('.profile-hero .decoration-hat');
   assert.equal(await hat.evaluate(node => getComputedStyle(node, '::after').animationName), 'profile-hat');
@@ -70,6 +82,8 @@ try {
   await viewer.getByRole('button', { name: 'Alice', exact: true }).first().click();
   await viewer.locator('.member-sheet .decoration-hat').waitFor();
   assert.equal(await viewer.locator('.member-sheet .effect-stars').count(), 1);
+  assert.match(await viewer.locator('#member-sheet-name').evaluate(node => getComputedStyle(node).fontFamily), /ChatX Amiri/);
+  assert.equal(await viewer.locator('#member-sheet-name').evaluate(node => getComputedStyle(node).color), 'rgb(18, 171, 239)');
   // Cancel retains the saved choice; the explicit none choice removes it.
   await page.getByRole('button', { name: 'تعديل الملف', exact: true }).click();
   await page.getByRole('dialog').getByRole('button', { name: 'بدون إطار', exact: true }).click();
@@ -83,6 +97,14 @@ try {
   await page.reload(); await page.locator('.startup-screen').waitFor({ state: 'detached' }); await page.locator('.profile-hero h1').waitFor();
   assert.equal(await page.locator('.profile-hero .avatar-frame, .profile-hero .profile-effect').count(), 0);
   assert.equal((await repo.findUserById(bob.id)).avatarDecoration ?? 'none', 'none');
+  await page.goto(origin + '/account?tab=settings');
+  const linkColor = page.getByLabel('لون الروابط', { exact: true });
+  await linkColor.fill('#ab34ef');
+  assert.equal(await page.evaluate(() => document.documentElement.style.getPropertyValue('--chatx-link')), '#ab34ef');
+  await page.waitForTimeout(800);
+  await page.reload(); await page.locator('.startup-screen').waitFor({ state: 'detached' });
+  assert.equal(await page.getByLabel('لون الروابط', { exact: true }).inputValue(), '#ab34ef');
+  assert.equal(await page.evaluate(() => document.documentElement.style.getPropertyValue('--chatx-link')), '#ab34ef');
   assert.deepEqual(errors, []); assert.deepEqual(external, []);
   console.log('PASS optional hat/effects preview, save, reload, visibility for another account, static chat avatar, reduced motion, cancel/removal, mobile/desktop, no external asset requests');
 } finally { await browser.close(); }

@@ -148,6 +148,7 @@ function AppearanceSettings() {
         </div>
         <div className="look-colors">
           <label className="look-color">التمييز <span className="look-chip" style={{ background: appearance.accent }}><input type="color" aria-label="لون التمييز" value={appearance.accent} onChange={(event) => setAppearance({ accent: event.target.value })} /></span></label>
+          <label className="look-color">الروابط <span className="look-chip" style={{ background: appearance.link }}><input type="color" aria-label="لون الروابط" value={appearance.link} onChange={(event) => setAppearance({ link: event.target.value })} /></span></label>
           <label className="look-color">الخلفية <span className="look-chip" style={{ background: appearance.bg }}><input type="color" aria-label="لون الخلفية" value={appearance.bg} onChange={(event) => setAppearance({ bg: event.target.value, surface: event.target.value })} /></span></label>
           <label className="look-color">الإطار <span className="look-chip" style={{ background: appearance.frame }}><input type="color" aria-label="لون الإطار" value={appearance.frame} onChange={(event) => setAppearance({ frame: event.target.value })} /></span></label>
         </div>

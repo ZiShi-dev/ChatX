@@ -23,6 +23,15 @@ describe('appearance', () => {
     expect(sanitizeAppearance({ frame: '#abcdef', bg: '#000000' }).surface).toBe('#000000');
   });
 
+  it('validates and repaints a separately selected link color', () => {
+    expect(sanitizeAppearance({ link: 'red' }).link).toBe('#8fc9bb');
+    const look = sanitizeAppearance({ link: '#112233' });
+    applyAppearance(look);
+    expect(document.documentElement.style.getPropertyValue('--chatx-link')).toBe('#112233');
+    applyAppearance({ ...look, link: '#abcdef' });
+    expect(document.documentElement.style.getPropertyValue('--chatx-link')).toBe('#abcdef');
+  });
+
   it('applies the palette on the document', () => {
     applyAppearance(sanitizeAppearance({ name: 'أهلي', accent: '#224466', bg: '#101010', surface: '#202020', text: '#f0f0f0' }));
     expect(document.documentElement.style.getPropertyValue('--chatx-accent')).toBe('#224466');

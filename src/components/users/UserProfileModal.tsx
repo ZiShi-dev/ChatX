@@ -7,6 +7,7 @@ import ProfileEffect from '../common/ProfileEffect';
 import { useProfileMotion } from '../../hooks/useProfileMotion';
 import { connectionLabel } from '../../lib/presence';
 import { roleLabel } from '../../lib/roles';
+import { displayNameStyleForUser } from '../../lib/userStyle';
 import type { User } from '../../types/user';
 
 type RoomContext = {
@@ -43,7 +44,7 @@ export default function UserProfileModal({ user, isSelf, room, onClose, onMessag
           {user.bannerUrl ? <img src={user.bannerUrl} alt="" /> : null}
         </div>
         <Avatar name={user.displayName} color={user.color} size={84} src={user.avatarUrl} decoration={user.avatarDecoration} animate={animate} />
-        <h2 id="member-sheet-name">{user.displayName}</h2>
+        <h2 id="member-sheet-name" {...displayNameStyleForUser(user.color, user.messageFont)} dir="auto">{user.displayName}</h2>
         <p className="profile-handle" dir="auto">@{user.username}</p>
         <p className="profile-status">
           <i className={user.status === 'online' ? 'on' : ''} />

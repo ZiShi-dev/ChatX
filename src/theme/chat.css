@@ -5720,3 +5720,19 @@ ion-toolbar {
   --ion-toolbar-color: var(--chatx-ink-raised);
   color: var(--chatx-ink-raised);
 }
+
+.profile-editor-section { margin:18px 0; padding:18px; border:1px solid var(--chatx-frame); border-radius:16px; background:var(--chatx-surface); text-align:start; }
+.profile-editor-section h3 { margin:0 0 16px; font-size:16px; }
+.profile-editor-section .profile-style-block { margin:16px 0 0; }
+.profile-editor-section .group-name { margin:14px 0; }
+.profile-photo-action { display:flex; align-items:center; gap:8px; padding:12px; border:1px solid var(--chatx-frame); border-radius:12px; background:var(--chatx-soft); color:inherit; }
+.profile-editor .profile-color-grid { grid-template-columns:repeat(6,minmax(0,1fr)); gap:10px; }
+.profile-editor .profile-color-grid button { min-width:0; min-height:44px; }
+.profile-editor-footer { position:sticky; bottom:-20px; padding:16px 0; background:var(--chatx-surface); border-top:1px solid var(--chatx-frame); z-index:2; }
+.profile-save:disabled { opacity:.45; }
+.has-user-display.is-name-font-clear { font-family:"ChatX Tajawal",Tahoma,sans-serif; }
+.has-user-display.is-name-font-rounded { font-family:"ChatX Cairo",Tahoma,sans-serif; }
+.has-user-display.is-name-font-classic { font-family:"ChatX Amiri",Georgia,serif; }
+.has-user-display { font-weight:700; }
+
+.bubble .bubble-url { color:var(--chatx-link,var(--chatx-accent-soft)); }
