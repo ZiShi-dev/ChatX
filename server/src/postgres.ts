@@ -290,8 +290,10 @@ export function createPostgresRepository(pool: pg.Pool): AuthRepository {
         last_image_size: number | null;
         last_file_name: string | null;
         last_file_size: number | null;
+        self_room: boolean;
       }>(
         `SELECT r.id, r.kind, r.name, r.created_at, r.admin_id, r.bio, r.avatar_url, r.banner_url, r.turn_user_id, r.turn_opens_at,
+                COALESCE(r.pair_key = rm.user_id::text || ':' || rm.user_id::text, false) AS self_room,
                 (
                   SELECT COUNT(*)::int FROM room_messages m
                   WHERE m.room_id = r.id AND m.sender_id <> $1 AND NOT m.deleted
@@ -336,6 +338,7 @@ export function createPostgresRepository(pool: pg.Pool): AuthRepository {
         createdAt: row.created_at,
         unreadCount: row.unread_count,
         participantIds: row.participant_ids ?? [],
+        ...(row.self_room ? { self: true } : {}),
         lastMessage: row.last_id && row.last_sender_id && row.last_body !== null && row.last_created_at
           ? {
               id: row.last_id,
@@ -745,8 +748,10 @@ export function createPostgresRepository(pool: pg.Pool): AuthRepository {
       const found = await client.query('SELECT id FROM users WHERE role = $1 AND id = ANY($2::uuid[])', ['member', ids]);
       if ((found.rowCount ?? 0) !== ids.length) return 'invalid';
       if (kind === 'private') {
-        if (others.length !== 1) return 'invalid';
-        const pairKey = [creatorId, others[0]].sort().join(':');
+        const alone = others.length === 0 && memberIds.includes(creatorId);
+        if (others.length !== 1 && !alone) return 'invalid';
+        const peer = alone ? creatorId : others[0]!;
+        const pairKey = [creatorId, peer].sort().join(':');
         const existing = await client.query<{ id: string }>('SELECT id FROM rooms WHERE pair_key = $1', [pairKey]);
         const current = existing.rows[0]?.id;
         if (current) return current;
@@ -760,7 +765,7 @@ export function createPostgresRepository(pool: pg.Pool): AuthRepository {
         }
         await client.query(
           `INSERT INTO room_members (room_id, user_id) VALUES ($1, $2), ($1, $3) ON CONFLICT DO NOTHING`,
-          [id, creatorId, others[0]],
+          [id, creatorId, peer],
         );
         return id;
       }
@@ -869,10 +874,10 @@ export function createPostgresRepository(pool: pg.Pool): AuthRepository {
       }));
     },
     async dropOrphanPrivate(roomId, userId) {
-      const room = await pool.query<{ kind: string }>('SELECT kind FROM rooms WHERE id = $1', [roomId]);
+      const room = await pool.query<{ kind: string; pair_key: string | null }>('SELECT kind, pair_key FROM rooms WHERE id = $1', [roomId]);
       const kind = room.rows[0]?.kind;
       if (!kind) return 'missing';
-      if (kind !== 'private') return 'forbidden';
+      if (kind !== 'private' || room.rows[0]?.pair_key === `${userId}:${userId}`) return 'forbidden';
       const member = await pool.query('SELECT 1 FROM room_members WHERE room_id = $1 AND user_id = $2', [roomId, userId]);
       if (!member.rowCount) return 'missing';
       const others = await pool.query('SELECT 1 FROM room_members WHERE room_id = $1 AND user_id <> $2', [roomId, userId]);

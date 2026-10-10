@@ -21,6 +21,7 @@ import MuteSheet from '../components/conversations/MuteSheet';
 import {
   conversationTitle,
   deletedPrivatePeer,
+  isSelfChat,
   formatConversationTime,
   isGlobalConversation,
   lastMessageOf,
@@ -81,7 +82,12 @@ export default function HomePage() {
       if (!alive) return;
       if (result === 'offline') setNotice('تعذر الاتصال.');
       else if (result === 'invalid') setNotice('تعذر تحميل المحادثات.');
-      else setNotice('');
+      else {
+        setNotice('');
+        if (!useChatStore.getState().conversations.some((room) => room.self)) {
+          await useChatStore.getState().openPrivate(useAuthStore.getState().currentUser.id);
+        }
+      }
       setReady(true);
     };
     let first = true;
@@ -104,7 +110,8 @@ export default function HomePage() {
       if (filter === 'group') return conversation.type === 'group';
       return true;
     });
-    return recentConversations(list, messages);
+    const sorted = recentConversations(list, messages);
+    return [...sorted.filter((conversation) => isSelfChat(conversation)), ...sorted.filter((conversation) => !isSelfChat(conversation))];
   }, [conversations, filter, messages]);
   const showGlobal = Boolean(globalChat) && filter !== 'private';
   const inboxClearedAt = useChatStore((state) => state.inboxClearedAt);
@@ -123,8 +130,9 @@ export default function HomePage() {
 
   const renderConversation = (conversation: Conversation) => {
     const last = lastMessageOf(conversation, messages);
-    const other = conversation.type === 'private' ? otherParticipant(conversation, currentUser.id, users) : undefined;
-    const gone = deletedPrivatePeer(conversation, currentUser.id, users);
+    const self = isSelfChat(conversation);
+    const other = conversation.type === 'private' ? (self ? currentUser : otherParticipant(conversation, currentUser.id, users)) : undefined;
+    const gone = self ? false : deletedPrivatePeer(conversation, currentUser.id, users);
     const people = conversation.type === 'private' ? [] : membersOf(conversation, users);
     const online = people.filter((user) => user.status === 'online').length;
     return (
@@ -138,7 +146,7 @@ export default function HomePage() {
         time={last ? formatConversationTime(last.createdAt) : undefined}
         unread={gone ? 0 : conversation.unreadCount}
         type={conversation.type}
-        detail={people.length > 0 ? roomSummary(people.length, online) : undefined}
+        detail={self ? 'رسائلك' : people.length > 0 ? roomSummary(people.length, online) : undefined}
         muted={gone ? undefined : muteHint(conversation.id, mutes)}
         gone={gone}
         onRemove={gone ? () => setRemoveTarget(conversation) : undefined}

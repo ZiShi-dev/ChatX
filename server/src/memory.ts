@@ -372,6 +372,7 @@ export function createMemoryRepository(): AuthRepository {
           unreadCount,
           participantIds: [...members.values()].filter((item) => item.roomId === room.id).map((item) => item.userId).sort(),
           lastMessage,
+          ...(room.pairKey === `${userId}:${userId}` ? { self: true } : {}),
         });
       }
       return home.sort((a, b) => (a.kind === 'global' ? -1 : b.kind === 'global' ? 1 : (b.lastMessage?.createdAt.getTime() ?? b.createdAt.getTime()) - (a.lastMessage?.createdAt.getTime() ?? a.createdAt.getTime())));
@@ -607,12 +608,14 @@ export function createMemoryRepository(): AuthRepository {
       const others = [...new Set(memberIds)].filter((userId) => userId !== creatorId);
       if (others.some((userId) => users.get(userId)?.role !== 'member')) return 'invalid';
       if (kind === 'private') {
-        if (others.length !== 1) return 'invalid';
-        const pairKey = [creatorId, others[0]].sort().join(':');
+        const alone = others.length === 0 && memberIds.includes(creatorId);
+        if (others.length !== 1 && !alone) return 'invalid';
+        const peer = alone ? creatorId : others[0]!;
+        const pairKey = [creatorId, peer].sort().join(':');
         const existing = [...rooms.values()].find((room) => room.pairKey === pairKey);
         if (existing) return existing.id;
         rooms.set(id, { id, kind, name: null, createdAt: at.getTime(), pairKey });
-        for (const userId of [creatorId, others[0]]) {
+        for (const userId of new Set([creatorId, peer])) {
           members.set(memberKey(id, userId), { roomId: id, userId, lastReadAt: null, lastReadMessageId: null });
         }
         return id;
@@ -683,7 +686,7 @@ export function createMemoryRepository(): AuthRepository {
     async dropOrphanPrivate(roomId, userId) {
       const room = rooms.get(roomId);
       if (!room || !members.has(memberKey(roomId, userId))) return 'missing';
-      if (room.kind !== 'private') return 'forbidden';
+      if (room.kind !== 'private' || room.pairKey === `${userId}:${userId}`) return 'forbidden';
       const people = [...members.values()].filter((item) => item.roomId === roomId);
       if (people.length !== 1 || people[0]?.userId !== userId) return 'forbidden';
       const removed = new Set(messages.filter((item) => item.roomId === roomId).map((item) => item.id));

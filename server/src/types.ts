@@ -178,6 +178,8 @@ export type HomeRoom = {
   unreadCount: number;
   participantIds: string[];
   lastMessage: RoomMessage | null;
+  /** Private notes to oneself; told apart from a private chat whose peer was deleted. */
+  self?: boolean;
   adminId?: string | null;
   bio?: string;
   avatarUrl?: string | null;

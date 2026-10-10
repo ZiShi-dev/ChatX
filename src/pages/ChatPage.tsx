@@ -480,6 +480,11 @@ export default function ChatPage() {
                   online={onlineCount > 0}
                 />
               </button>
+            ) : conversation.self ? (
+              <div className="chat-nav-main">
+                <Avatar name={currentUser.displayName} color={currentUser.color} size={32} src={currentUser.avatarUrl} />
+                <GroupHeader title={currentUser.displayName} subtitle="رسائلك" online={false} />
+              </div>
             ) : peerGone ? (
               <div className="chat-nav-main">
                 <Avatar name="حساب محذوف" color="#8ea099" size={32} />

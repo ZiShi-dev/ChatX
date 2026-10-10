@@ -166,4 +166,24 @@ describe('rooms', () => {
     assert.equal(await repo.dropOrphanPrivate(roomId, nora.id), 'ok');
     assert.equal(await repo.dropOrphanPrivate(roomId, nora.id), 'missing');
   });
+
+  it('opens one chat with oneself and keeps it apart from a deleted peer', async () => {
+    const deps = testDeps();
+    const nora = member('11111111-1111-4111-8111-111111111111', 'نورة');
+    await deps.repo.insertUser(nora);
+    await deps.repo.createSession(hashSession('nora-token'), nora.id, new Date(now + 60_000));
+    const handle = createApi(deps);
+    const headers = { cookie: 'chatx_session=nora-token', 'content-type': 'application/json', 'x-chatx-request': '1' };
+    const open = () => handle(new Request('http://127.0.0.1/api/rooms', { method: 'POST', headers, body: JSON.stringify({ kind: 'private', userId: nora.id }) }));
+    const first = await (await open()).json() as { conversation: { id: string; self?: boolean; participantIds: string[] } };
+    assert.equal(first.conversation.self, true);
+    assert.deepEqual(first.conversation.participantIds, [nora.id]);
+    const again = await (await open()).json() as { conversation: { id: string } };
+    assert.equal(again.conversation.id, first.conversation.id);
+    assert.equal(await deps.repo.dropOrphanPrivate(first.conversation.id, nora.id), 'forbidden');
+    const sent = await handle(new Request(`http://127.0.0.1/api/rooms/${first.conversation.id}/messages`, {
+      method: 'POST', headers, body: JSON.stringify({ id: '66666666-6666-4666-8666-666666666666', text: 'ملاحظة' }),
+    }));
+    assert.equal(sent.status, 200);
+  });
 });

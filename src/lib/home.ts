@@ -48,6 +48,7 @@ function readServerConversation(row: unknown): { conversation: Conversation; mes
     id: data.id,
     type,
     participantIds: data.participantIds as string[],
+    ...(data.self === true ? { self: true } : {}),
     unreadCount: Math.floor(data.unreadCount),
     createdAt: data.createdAt,
     ...(name ? { name } : {}),

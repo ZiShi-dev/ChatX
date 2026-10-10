@@ -58,19 +58,25 @@ export function statusLabel(status: UserStatus) {
   return 'غير متصل';
 }
 
+export function isSelfChat(conversation: Pick<Conversation, 'self'>) {
+  return conversation.self === true;
+}
+
 export function otherParticipant(conversation: Conversation, currentUserId: string, users: User[]) {
+  if (isSelfChat(conversation)) return users.find((user) => user.id === currentUserId);
   const otherId = conversation.participantIds.find((id) => id !== currentUserId);
   return users.find((user) => user.id === otherId);
 }
 
 export function deletedPrivatePeer(conversation: Conversation, currentUserId: string, users: User[]) {
-  if (conversation.type !== 'private') return false;
+  if (conversation.type !== 'private' || isSelfChat(conversation)) return false;
   const otherId = conversation.participantIds.find((id) => id !== currentUserId);
   if (!otherId) return true;
   return !users.some((user) => user.id === otherId);
 }
 
 export function conversationTitle(conversation: Conversation, currentUserId: string, users: User[]) {
+  if (isSelfChat(conversation)) return users.find((user) => user.id === currentUserId)?.displayName ?? 'أنت';
   if (conversation.type === 'private') {
     if (deletedPrivatePeer(conversation, currentUserId, users)) return 'حساب محذوف';
     return otherParticipant(conversation, currentUserId, users)?.displayName ?? 'محادثة خاصة';

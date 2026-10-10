@@ -195,6 +195,17 @@ describe('home payload', () => {
     expect(home?.messages[0]?.type).toBe('image');
   });
 
+  it('keeps a chat with oneself apart from a private chat', () => {
+    const home = readHomePayload({
+      conversations: [
+        { id: room, type: 'global', name: 'ChatX', participantIds: [user], unreadCount: 0, createdAt: '2026-01-01T00:00:00.000Z' },
+        { id: '44444444-4444-4444-8444-444444444444', type: 'private', self: true, participantIds: [user], unreadCount: 0, createdAt: '2026-01-02T00:00:00.000Z' },
+      ],
+      users: [{ id: user, displayName: 'نورة', username: 'نورة', role: 'member', bio: '' }],
+    });
+    expect(home?.conversations.find((conversation) => conversation.type === 'private')?.self).toBe(true);
+  });
+
   it('rejects a list without the main room', () => {
     expect(readHomePayload({
       conversations: [{ id: room, type: 'private', participantIds: [user], unreadCount: 0, createdAt: '2026-01-01T00:00:00.000Z' }],

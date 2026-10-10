@@ -14,4 +14,6 @@ export interface Conversation {
   lastMessageId?: string;
   unreadCount: number;
   createdAt?: string;
+  /** Notes privées avec soi-même, comme « Message yourself ». */
+  self?: boolean;
 }

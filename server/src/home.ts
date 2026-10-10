@@ -75,6 +75,7 @@ function roomView(room: HomeRoom) {
     type: room.kind,
     ...(room.name ? { name: room.name } : {}),
     participantIds: room.participantIds,
+    ...(room.self ? { self: true } : {}),
     unreadCount: room.unreadCount,
     createdAt: room.createdAt.toISOString(),
     ...(room.adminId ? { adminId: room.adminId } : {}),
@@ -356,7 +357,7 @@ export async function openRoom(deps: Deps, input: { token: string; kind: unknown
   await deps.repo.ensureHome(user.id);
   let created: string | 'invalid' = 'invalid';
   if (input.kind === 'private') {
-    if (typeof input.userId !== 'string' || !ROOM_ID.test(input.userId) || input.userId === user.id) {
+    if (typeof input.userId !== 'string' || !ROOM_ID.test(input.userId)) {
       return { ok: false as const, error: 'invalid_credentials' as const };
     }
     created = await deps.repo.createRoom({

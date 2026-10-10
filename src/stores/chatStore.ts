@@ -919,6 +919,10 @@ export const useChatStore = create<ChatState>((set, get) => ({
   },
   openPrivate: async (userId) => {
     const currentUserId = useAuthStore.getState().currentUser.id;
+    if (userId === currentUserId) {
+      const mine = get().conversations.find((conversation) => conversation.self);
+      if (mine) return mine.id;
+    }
     const existing = get().conversations.find((conversation) => isPrivateBetween(conversation, currentUserId, userId));
     if (existing) return existing.id;
     if (isServerId(currentUserId)) {
@@ -926,6 +930,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
       try {
         const opened = readOpenedRoom(await adminFetch('/api/rooms', { method: 'POST', body: { kind: 'private', userId } }));
         if (!opened || opened.conversation.type !== 'private') return '';
+        if (userId === currentUserId && !opened.conversation.self) return '';
         rememberPeople(opened.users);
         rememberConversation(opened.conversation);
         return opened.conversation.id;
@@ -934,7 +939,19 @@ export const useChatStore = create<ChatState>((set, get) => ({
       }
     }
     const other = useUserStore.getState().users.find((user) => user.id === userId);
-    if (!other || other.id === currentUserId) return '';
+    if (!other) return '';
+    if (other.id === currentUserId) {
+      const conversation: Conversation = {
+        id: crypto.randomUUID(),
+        type: 'private',
+        self: true,
+        participantIds: [currentUserId],
+        unreadCount: 0,
+        createdAt: new Date().toISOString(),
+      };
+      set((state) => ({ conversations: [conversation, ...state.conversations] }));
+      return conversation.id;
+    }
     const conversation: Conversation = {
       id: crypto.randomUUID(),
       type: 'private',
