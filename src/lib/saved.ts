@@ -1,4 +1,6 @@
+import { firstUrl } from './link';
 import { messagePreview } from './media';
+import { isSafeExternalUrl } from './url';
 import type { Message, MessageType } from '../types/message';
 
 export type SavedEntry = {
@@ -10,6 +12,7 @@ export type SavedEntry = {
   senderName: string;
   type: MessageType;
   preview: string;
+  href?: string;
   createdAt: string;
   savedAt: string;
   /** End-to-end envelope from the server; removed once decrypted. */
@@ -29,6 +32,9 @@ export function toSavedEntry(
   savedAt = new Date().toISOString(),
 ): SavedEntry | null {
   if (message.deletedForEveryone) return null;
+  const href = message.link?.url && isSafeExternalUrl(message.link.url)
+    ? message.link.url
+    : (message.text ? firstUrl(message.text) : '');
   return {
     messageId: message.id,
     userId,
@@ -38,6 +44,7 @@ export function toSavedEntry(
     senderName,
     type: message.type,
     preview: messagePreview(message),
+    ...(href ? { href } : {}),
     createdAt: message.createdAt,
     savedAt,
   };

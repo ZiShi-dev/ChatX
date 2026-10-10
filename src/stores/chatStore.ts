@@ -10,7 +10,7 @@ import { SEED_READ_CURSORS, SEED_READ_TIMES } from '../data/readCursors';
 import { applyReaction } from '../lib/reactions';
 import { advanceCursor, noteReadTime, type ReadCursors, type ReadTimes } from '../lib/readReceipts';
 import { isServerId, mergeHomeMessages, readHomePayload, readOpenedRoom, readRoomMessages, readRoomReaders, readUpdatedRoom, SERVER_GLOBAL_ROOM_ID } from '../lib/home';
-import { notificationPreview, reactionNotice, readInboxPayload, readInboxUnread } from '../lib/inbox';
+import { notificationPreview, reactionNotice, readInboxPayload, readInboxUnread, resolveMessageFocus } from '../lib/inbox';
 import { ensureRoomKey, openMessageMedia, openMessages, openPreview, sealMessageMedia, sealMessageText } from '../lib/e2e';
 import { EVERYONE_HANDLE, mentionedHandles } from '../lib/mention';
 import type { InboxItem } from '../lib/inbox';
@@ -20,7 +20,7 @@ import { AdminApiError, adminFetch, adminFetchBlob, invalidateApiSession } from 
 import { loadChatSnapshot, saveChatSnapshot, releaseMedia } from '../lib/chatCache';
 import { mergeRoomWindow } from '../lib/chatWindow';
 import { prepareMedia } from '../lib/mediaPreparation';
-import { fitChatImage, jpegDataUrl } from '../lib/chatImage';
+import { fitChatImageFromSources, jpegDataUrl } from '../lib/chatImage';
 import { bytesToBase64, FILE_BYTES_MAX, localMediaBytes, VIDEO_BYTES_MAX } from '../lib/chatFile';
 import { ORIGINAL_IMAGE_SIZE, ORIGINAL_VIDEO_SIZE, expectedImageSize, expectedVideoSize } from '../lib/media';
 import { isPrivateBetween } from '../lib/conversation';
@@ -87,6 +87,7 @@ type ChatState = {
   loadLinkPreview: (messageId: string) => void;
   loadOlder: (conversationId: string) => Promise<boolean>;
   revealMessage: (conversationId: string, messageId: string) => void;
+  seekMessage: (conversationId: string, messageId: string) => Promise<boolean>;
   markRead: (conversationId: string, messageId?: string) => Promise<boolean>;
   markAllRead: () => void;
   markNotificationsRead: (ids: string[]) => void;
@@ -545,7 +546,7 @@ async function prepareAndSend(message: Message) {
   try {
     if (message.type === 'image' && !message.prepared) {
       const source = message.media?.localPreviewUrl;
-      const fitted = source ? await prepareMedia(() => fitChatImage(source, useSettingsStore.getState().imageQuality)) : null;
+      const fitted = source ? await prepareMedia(() => fitChatImageFromSources(source, useSettingsStore.getState().imageQuality)) : null;
       if (!fitted || !message.media) throw new Error('invalid_image');
       patchMessage(message.id, { media: { ...message.media, localPreviewUrl: fitted.url, fileSize: fitted.bytes, width: fitted.width, height: fitted.height } });
       if (message.media.localPreviewUrl?.startsWith('blob:')) URL.revokeObjectURL(message.media.localPreviewUrl);
@@ -913,6 +914,30 @@ export const useChatStore = create<ChatState>((set, get) => ({
     if (needed <= limit) return;
     set((state) => ({ historyLimit: { ...state.historyLimit, [conversationId]: needed } }));
   },
+  seekMessage: async (conversationId, messageId) => {
+    const pause = () => new Promise<void>((resolve) => { window.requestAnimationFrame(() => resolve()); });
+    for (let step = 0; step < 48; step += 1) {
+      const messages = get().messages;
+      const limit = get().historyLimit[conversationId] ?? PAGE_SIZE;
+      const target = resolveMessageFocus(messages, conversationId, messageId, limit);
+      if (target === 'ready') return true;
+      if (target === 'older') {
+        get().revealMessage(conversationId, messageId);
+        await pause();
+        continue;
+      }
+      const stored = messages.some((message) => message.id === messageId && message.conversationId === conversationId);
+      if (!stored && isServerId(conversationId) && isServerId(messageId)) {
+        await get().loadRoom(conversationId, { aroundId: messageId });
+        await pause();
+        continue;
+      }
+      if (!(await get().loadOlder(conversationId))) break;
+      await pause();
+    }
+    const limit = get().historyLimit[conversationId] ?? PAGE_SIZE;
+    return resolveMessageFocus(get().messages, conversationId, messageId, limit) === 'ready';
+  },
   loadOlder: async (conversationId) => {
     const count = get().messages.filter((message) => message.conversationId === conversationId).length;
     const limit = get().historyLimit[conversationId] ?? PAGE_SIZE;
@@ -1193,8 +1218,17 @@ export const useChatStore = create<ChatState>((set, get) => ({
     }));
   },
   flushOutgoing: () => {
-    set((state) => ({ messages: state.messages.map((message) => message.status === 'failed' && message.retryable
-      ? { ...message, status: 'pending', sendAttempts: 0, retryAt: undefined } : message) }));
+    set((state) => ({
+      messages: state.messages.map((message) => {
+        if (message.status === 'failed' && message.retryable) {
+          return { ...message, status: 'pending', sendAttempts: 0, retryAt: undefined };
+        }
+        if (message.status === 'sending' && isServerId(message.conversationId) && !preparing.has(message.id)) {
+          return { ...message, status: 'pending', uploadProgress: undefined };
+        }
+        return message;
+      }),
+    }));
     outgoing.wake();
     for (const message of get().messages) if (!isServerId(message.conversationId) && message.status === 'pending') scheduleDelivery(message.id);
   },
@@ -1596,7 +1630,8 @@ function switchChatAccount() {
 }
 
 const outgoing = createOutgoingScheduler({
-  pending: () => useChatStore.getState().messages.filter((message) => isServerId(message.conversationId) && message.status === 'pending'
+  pending: () => useChatStore.getState().messages.filter((message) => isServerId(message.conversationId)
+    && (message.status === 'pending' || (message.status === 'sending' && !preparing.has(message.id)))
     && !useChatStore.getState().messages.some((other) => other.conversationId === message.conversationId && (other.type === 'text') === (message.type === 'text') && preparing.has(other.id))),
   available: () => outgoingReady && useAuthStore.getState().activated && useNetworkStore.getState().network !== 'offline',
   concurrency: () => constrainedDevice() || useNetworkStore.getState().network === 'slow' || useSettingsStore.getState().dataSaver ? 1 : 2,

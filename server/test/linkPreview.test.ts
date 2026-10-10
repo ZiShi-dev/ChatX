@@ -40,6 +40,18 @@ test('loads a card and keeps a small image', async () => {
   assert.equal(card?.image.startsWith('data:image/jpeg;base64,'), true);
 });
 
+test('falls back to the public image URL when download fails', async () => {
+  const fetchImpl = async (input: string) => {
+    if (input.includes('cdn.example')) return new Response('nope', { status: 403 });
+    return new Response('<meta property="og:title" content="Hello"><meta property="og:image" content="https://cdn.example/cover.jpg">', {
+      headers: { 'content-type': 'text/html' },
+    });
+  };
+  const card = await loadLinkCard('https://example.com/a', fetchImpl, async () => ['93.184.216.34']);
+  assert.equal(card?.title, 'Hello');
+  assert.equal(card?.image, 'https://cdn.example/cover.jpg');
+});
+
 test('does not fetch a private address', async () => {
   let called = false;
   const card = await loadLinkCard('https://example.com/a', async () => {

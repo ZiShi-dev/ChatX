@@ -75,7 +75,10 @@ function metaContent(html: string, key: string) {
 export function readPagePreview(html: string, page: URL): { title: string; description: string; image: string } {
   const title = clip(metaContent(html, 'og:title') || metaContent(html, 'twitter:title') || html.match(/<title[^>]*>([^<]*)<\/title>/i)?.[1] || '', TITLE_LIMIT);
   const description = clip(metaContent(html, 'og:description') || metaContent(html, 'twitter:description') || metaContent(html, 'description'), DESCRIPTION_LIMIT);
-  const raw = metaContent(html, 'og:image') || metaContent(html, 'twitter:image');
+  const raw = metaContent(html, 'og:image:secure_url')
+    || metaContent(html, 'og:image')
+    || metaContent(html, 'twitter:image')
+    || metaContent(html, 'twitter:image:src');
   let image = '';
   if (raw) {
     try { image = new URL(decodeEntities(raw), page).href; } catch { image = ''; }
@@ -164,7 +167,11 @@ export async function loadLinkCard(target: string, fetchImpl: FetchLike, lookup:
   if (imageUrl) {
     const file = await pull(imageUrl, 'image/jpeg,image/png,image/webp,image/gif', IMAGE_BYTES, fetchImpl, lookup);
     const fileKind = file ? imageKind(file.bytes) : '';
-    if (file && fileKind) image = `data:${fileKind};base64,${Buffer.from(file.bytes).toString('base64')}`;
+    if (file && fileKind) {
+      image = `data:${fileKind};base64,${Buffer.from(file.bytes).toString('base64')}`;
+    } else {
+      image = imageUrl.href;
+    }
   }
   const host = loaded.url.hostname.replace(/^www\./, '');
   return { title: preview.title || host, description: preview.description, image };

@@ -13,7 +13,7 @@ import { adminFetch } from '../../lib/adminApi';
 import { isServerId } from '../../lib/home';
 import { activeMention, EVERYONE_HANDLE } from '../../lib/mention';
 import { clipFileName, VIDEO_BYTES_MAX } from '../../lib/chatFile';
-import { fitChatImage } from '../../lib/chatImage';
+import { fitChatImage, fitChatImageFromSources } from '../../lib/chatImage';
 import { prepareMedia } from '../../lib/mediaPreparation';
 import { expectedImageSize, expectedVideoSize, formatBytes, messagePreview } from '../../lib/media';
 import { useDataSaver } from '../../hooks/useDataSaver';
@@ -173,7 +173,7 @@ export default function MessageComposer({ conversationId }: MessageComposerProps
   const matches = showEveryone ? [EVERYONE, ...people] : people;
   const activeMatch = Math.min(mentionIndex, Math.max(matches.length - 1, 0));
 
-  const writing = showTyping && draft.trim().length > 0;
+  const writing = showTyping && (draft.trim().length > 0 || attachments.length > 0);
   useEffect(() => {
     if (isServerId(currentUserId) && isServerId(conversationId)) return;
     const mine = currentUserId;
@@ -547,17 +547,42 @@ export default function MessageComposer({ conversationId }: MessageComposerProps
       return;
     }
     if (!text && attachments.length === 0) return;
+    const queue = attachments.slice();
     if (text) sendMessage(conversationId, text);
-    for (const item of attachments) {
+    for (const item of queue) {
+      if (item.kind === 'image') {
+        const source = item.displayUrl || item.previewUrl;
+        let previewUrl = item.previewUrl;
+        let fileSize = item.size;
+        if (source) {
+          try {
+            const fitted = await prepareMedia(() => fitChatImageFromSources(source, imageQuality));
+            if (fitted) {
+              previewUrl = fitted.url;
+              fileSize = fitted.bytes;
+            }
+          } catch {
+            setPickerError('تعذر تجهيز الصورة. أعد المحاولة.');
+            return;
+          }
+        }
+        if (!previewUrl) {
+          setPickerError('تعذر قراءة الصورة.');
+          return;
+        }
+        sendImage(conversationId, imageQuality, { fileName: item.name, fileSize, previewUrl });
+        continue;
+      }
       const payload = { fileName: item.name, fileSize: item.size, previewUrl: item.previewUrl };
-      if (item.kind === 'image') sendImage(conversationId, imageQuality, payload);
-      else if (item.kind === 'video') sendVideo(conversationId, videoQuality, payload);
+      if (item.kind === 'video') sendVideo(conversationId, videoQuality, payload);
       else sendFile(conversationId, payload);
     }
-    // Ownership of these sources moves to the outbox; unmount must not revoke them.
     attachmentsRef.current = [];
     setDraft('');
     setAttachments([]);
+    for (const item of queue) {
+      if (item.previewUrl?.startsWith('blob:')) URL.revokeObjectURL(item.previewUrl);
+    }
     setEmojiOpen(false);
     if (fieldRef.current) fieldRef.current.style.height = 'auto';
     holdKeyboard();

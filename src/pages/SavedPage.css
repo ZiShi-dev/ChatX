@@ -1,3 +1,24 @@
 .saved-page .saved-lead {
   margin: 16px;
 }
+
+.saved-row {
+  align-items: stretch;
+  gap: 6px;
+}
+
+.saved-link-chip {
+  display: grid;
+  flex: none;
+  place-items: center;
+  align-self: center;
+  min-width: 44px;
+  min-height: 44px;
+  padding: 0 10px;
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--chatx-accent) 18%, transparent);
+  color: var(--chatx-accent);
+  font-size: 13px;
+  font-weight: 700;
+  text-decoration: none;
+}

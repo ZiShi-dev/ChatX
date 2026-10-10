@@ -12,6 +12,7 @@ import MessageComposer from '../components/chat/MessageComposer';
 import TypingIndicator from '../components/chat/TypingIndicator';
 import PageNav from '../components/common/PageNav';
 import GroupHeader from '../components/groups/GroupHeader';
+import { typingLabel } from '../lib/typing';
 import UserProfileModal from '../components/users/UserProfileModal';
 import type { Message } from '../types/message';
 import type { User } from '../types/user';
@@ -160,7 +161,7 @@ export default function ChatPage() {
   const serverInbox = useChatStore((state) => state.serverInbox);
   const typingMap = useChatStore((state) => state.typingByConversation);
   const loadOlder = useChatStore((state) => state.loadOlder);
-  const revealMessage = useChatStore((state) => state.revealMessage);
+  const seekMessage = useChatStore((state) => state.seekMessage);
   const historyLimit = useChatStore((state) => state.historyLimit);
   const roomHistoryLimit = historyLimit[id] ?? MESSAGE_PAGE_SIZE;
   const hasMore = useChatStore((state) => state.roomHasMore[id] ?? false);
@@ -365,14 +366,26 @@ export default function ChatPage() {
   useEffect(() => {
     if (!id || (!focusId && !focusMissing)) return;
     if (!ready && isServerId(id)) return;
-    const target = focusId ? resolveMessageFocus(allMessages, id, focusId, historyLimit[id] ?? MESSAGE_PAGE_SIZE) : 'missing';
-    if (focusMissing || target === 'missing') {
-      setFocusMiss(true);
-      const timer = window.setTimeout(() => setFocusMiss(false), 2400);
-      return () => window.clearTimeout(timer);
+    if (!focusId) {
+      if (focusMissing) {
+        setFocusMiss(true);
+        const timer = window.setTimeout(() => setFocusMiss(false), 2400);
+        return () => window.clearTimeout(timer);
+      }
+      return;
     }
-    if (target === 'older') revealMessage(id, focusId);
-  }, [allMessages, focusId, focusMissing, historyLimit, id, ready, revealMessage]);
+    let cancelled = false;
+    void seekMessage(id, focusId).then((found) => {
+      if (cancelled || found) return;
+      const limit = useChatStore.getState().historyLimit[id] ?? MESSAGE_PAGE_SIZE;
+      if (resolveMessageFocus(useChatStore.getState().messages, id, focusId, limit) !== 'missing') return;
+      setFocusMiss(true);
+      window.setTimeout(() => setFocusMiss(false), 2400);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [allMessages.length, focusId, focusMissing, historyLimit[id], id, ready, seekMessage]);
 
   useEffect(() => {
     pinnedFocus.current = '';
@@ -693,7 +706,7 @@ export default function ChatPage() {
 
   useEffect(() => {
     const openSaved = (event: Event) => {
-      if (savedRef.current && event.composedPath().includes(savedRef.current)) navigate(`/saved?room=${id}`);
+      if (savedRef.current && event.composedPath().includes(savedRef.current)) navigate(`/saved?room=${encodeURIComponent(id)}`, { replace: true });
     };
     window.addEventListener('click', openSaved, true);
     return () => window.removeEventListener('click', openSaved, true);
@@ -750,6 +763,13 @@ export default function ChatPage() {
     .filter((userId) => userId !== currentUser.id)
     .map((userId) => users.find((user) => user.id === userId)?.displayName)
     .filter((name): name is string => Boolean(name));
+  const typingLine = typingLabel(typingNames);
+  const groupSubtitle = typingLine || (currentUser.status === 'online'
+    ? onlineCount === 0
+      ? 'لا أحد متصل'
+      : `${onlineCount} متصل`
+    : `${onlineCount === 0 ? 'لا أحد متصل' : `${onlineCount} متصل`} · ${connectionLabel(currentUser)}`);
+  const privateSubtitle = typingLine || (other ? connectionLabel(other) : '');
   const pendingUnread = unreadAbove(arrivalUnread, messages.length, Math.min(messages.length, historyLimit[id] ?? MESSAGE_PAGE_SIZE));
 
   return (
@@ -765,14 +785,9 @@ export default function ChatPage() {
                 <Avatar name={conversation.name ?? 'مجموعة'} color="#3d9b84" size={32} src={conversation.avatarUrl} />
                 <GroupHeader
                   title={conversation.name ?? 'مجموعة'}
-                  subtitle={
-                    currentUser.status === 'online'
-                      ? onlineCount === 0
-                        ? 'لا أحد متصل'
-                        : `${onlineCount} متصل`
-                      : `${onlineCount === 0 ? 'لا أحد متصل' : `${onlineCount} متصل`} · ${connectionLabel(currentUser)}`
-                  }
-                  online={onlineCount > 0}
+                  subtitle={groupSubtitle}
+                  online={!typingLine && onlineCount > 0}
+                  typing={Boolean(typingLine)}
                 />
               </button>
             ) : conversation.self ? (
@@ -795,7 +810,12 @@ export default function ChatPage() {
                 )}
                 {other && (
                   <button ref={directRef} type="button" className="chat-nav-name" aria-label="وسائط المحادثة">
-                    <GroupHeader title={other.displayName} subtitle={connectionLabel(other)} online={getUserPresence(other.id, users) === 'online'} />
+                    <GroupHeader
+                      title={other.displayName}
+                      subtitle={privateSubtitle}
+                      online={!typingLine && getUserPresence(other.id, users) === 'online'}
+                      typing={Boolean(typingLine)}
+                    />
                   </button>
                 )}
               </div>

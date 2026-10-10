@@ -10,7 +10,7 @@ import EmojiText from '../common/EmojiText';
 import { conversationTitle, formatMessageTime, formatNotificationTime } from '../../lib/conversation';
 import { isServerId } from '../../lib/home';
 import { toSavedEntry } from '../../lib/saved';
-import { previewImage, textParts, siteHost } from '../../lib/link';
+import { normalizeLinkPreviewImage, previewImage, textParts, siteHost } from '../../lib/link';
 import { isSafeExternalUrl } from '../../lib/url';
 import { useDataSaver } from '../../hooks/useDataSaver';
 import { formatBytes, formatDuration, messagePreview } from '../../lib/media';
@@ -226,7 +226,7 @@ function LinkBlock({ message }: { message: Message }) {
   }, [dataSaver, link?.preview, loadLinkPreview, message.id, network]);
   if (!link) return null;
   const host = siteHost(link.url);
-  const image = imageFailed ? '' : (link.image || previewImage(link.url));
+  const image = imageFailed ? '' : normalizeLinkPreviewImage(link.image || previewImage(link.url));
   if (link.preview !== 'loaded') {
     if (dataSaver) {
       return (
@@ -259,7 +259,7 @@ function LinkBlock({ message }: { message: Message }) {
   }
   return (
     <a className="wa-preview" href={link.url} target="_blank" rel="noreferrer">
-      {image && !dataSaver && <img className="wa-image" src={image} alt="" onError={() => setImageFailed(true)} />}
+      {image && <img className="wa-image" src={image} alt="" loading="lazy" decoding="async" referrerPolicy="no-referrer" onError={() => setImageFailed(true)} />}
       <span className="wa-copy">
         <span className="wa-host">{host}</span>
         <strong>{link.title || host}</strong>

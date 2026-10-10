@@ -217,7 +217,7 @@ export default function GroupProfilePage() {
                 {onlineCount > 0 ? ` · ${onlineCount} متصل` : ''}
               </p>
             </section>
-            <div className="group-tabs" role="tablist" aria-label="ملف المجموعة">
+            <div className="group-tabs is-scroll" role="tablist" aria-label="ملف المجموعة">
               {(
                 [
                   { id: 'members', label: 'الأعضاء' },

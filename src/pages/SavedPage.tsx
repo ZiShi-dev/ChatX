@@ -8,7 +8,9 @@ import PageSkeleton from '../components/common/PageSkeleton';
 import NetworkStatusBanner from '../components/common/NetworkBanner';
 import PageNav from '../components/common/PageNav';
 import { formatConversationTime } from '../lib/conversation';
-import { savedFor } from '../lib/saved';
+import { firstUrl } from '../lib/link';
+import { savedFor, type SavedEntry } from '../lib/saved';
+import { isSafeExternalUrl } from '../lib/url';
 import { useAuthStore } from '../stores/authStore';
 import { useSavedStore } from '../stores/savedStore';
 import type { MessageType } from '../types/message';
@@ -21,6 +23,12 @@ const KIND: Record<MessageType, string> = {
   link: 'رابط',
   file: 'ملف',
 };
+
+function savedHref(item: SavedEntry) {
+  if (item.href && isSafeExternalUrl(item.href)) return item.href;
+  const url = firstUrl(item.preview);
+  return isSafeExternalUrl(url) ? url : '';
+}
 
 export default function SavedPage() {
   const navigate = useNavigate();
@@ -53,11 +61,22 @@ export default function SavedPage() {
   const mine = useMemo(() => savedFor(entries, currentUser.id), [currentUser.id, entries]);
   const visible = scope === 'room' && room ? mine.filter((item) => item.conversationId === room) : mine;
 
+  const openInChat = (item: SavedEntry) => {
+    const path = `/chat/${item.conversationId}?at=${encodeURIComponent(item.messageId)}`;
+    navigate(path, room === item.conversationId ? { replace: true } : undefined);
+  };
+
+  const backFromSaved = () => {
+    if (!room) return false;
+    navigate(`/chat/${encodeURIComponent(room)}`, { replace: true });
+    return true;
+  };
+
   return (
     <IonPage>
       <IonHeader>
         <NetworkStatusBanner />
-        <PageNav title="المحفوظات" fallback={room ? `/chat/${room}` : '/home'} />
+        <PageNav title="المحفوظات" fallback={room ? `/chat/${room}` : '/home'} onBack={backFromSaved} />
       </IonHeader>
       <IonContent className="inbox-page saved-page">
         <p className="inbox-lead saved-lead">الرسائل التي تحفظها تبقى لك، من المجموعات والمحادثات الخاصة.</p>
@@ -78,26 +97,42 @@ export default function SavedPage() {
           <EmptyState title="لا توجد رسائل محفوظة" detail="اضغط مطولاً على أي رسالة ثم اختر حفظ." />
         ) : (
           <div className="inbox-list">
-            {visible.map((item) => (
-              <div key={`${item.userId}-${item.messageId}`} className="inbox-row">
-                <button type="button" className="saved-open" onClick={() => navigate(`/chat/${item.conversationId}?at=${item.messageId}`)}>
-                  <span className="inbox-copy">
-                    <span className="inbox-line">
-                      <strong>{item.senderName}</strong>
-                      <em>{formatConversationTime(item.createdAt)}</em>
+            {visible.map((item) => {
+              const href = savedHref(item);
+              return (
+                <div key={`${item.userId}-${item.messageId}`} className="inbox-row saved-row">
+                  <button type="button" className="saved-open" onClick={() => openInChat(item)}>
+                    <span className="inbox-copy">
+                      <span className="inbox-line">
+                        <strong>{item.senderName}</strong>
+                        <em>{formatConversationTime(item.createdAt)}</em>
+                      </span>
+                      <span className="inbox-meta">
+                        <span>{item.conversationName}</span>
+                        <span className="kind-pill">{KIND[item.type]}</span>
+                      </span>
+                      <span className="inbox-preview"><EmojiText text={item.preview} /></span>
                     </span>
-                    <span className="inbox-meta">
-                      <span>{item.conversationName}</span>
-                      <span className="kind-pill">{KIND[item.type]}</span>
-                    </span>
-                    <span className="inbox-preview"><EmojiText text={item.preview} /></span>
-                  </span>
-                </button>
-                <button type="button" className="saved-drop" aria-label="إلغاء الحفظ" onClick={() => remove(currentUser.id, item.messageId)}>
-                  <IonIcon icon={bookmark} />
-                </button>
-              </div>
-            ))}
+                  </button>
+                  {href && (
+                    <a
+                      className="saved-link-chip"
+                      href={href}
+                      target="_blank"
+                      rel="noreferrer"
+                      dir="ltr"
+                      aria-label="فتح الرابط في المتصفح"
+                      onClick={(event) => event.stopPropagation()}
+                    >
+                      رابط
+                    </a>
+                  )}
+                  <button type="button" className="saved-drop" aria-label="إلغاء الحفظ" onClick={() => remove(currentUser.id, item.messageId)}>
+                    <IonIcon icon={bookmark} />
+                  </button>
+                </div>
+              );
+            })}
           </div>
         )}
         {hasMore && <button type="button" disabled={loading} onClick={async () => {

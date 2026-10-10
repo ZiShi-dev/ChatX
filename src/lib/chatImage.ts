@@ -1,3 +1,4 @@
+import { Capacitor } from '@capacitor/core';
 import { yieldToInterface } from './deviceBudget';
 const IMAGE_URL_MAX = 80_000;
 const IMAGE_BYTES_MAX = 60_000;
@@ -43,6 +44,23 @@ function drawJpeg(image: HTMLImageElement, edge: number, quality: number) {
   if (!context) return null;
   context.drawImage(image, 0, 0, width, height);
   return { url: canvas.toDataURL('image/jpeg', quality), width, height };
+}
+
+function imageSourceCandidates(source: string) {
+  const candidates = [source];
+  if (Capacitor.isNativePlatform() && !source.startsWith('data:') && !source.startsWith('blob:')) {
+    const converted = Capacitor.convertFileSrc(source);
+    if (converted !== source) candidates.push(converted);
+  }
+  return candidates;
+}
+
+export async function fitChatImageFromSources(source: string, qualityLevel: 'saver' | 'medium' | 'original' = 'saver') {
+  for (const candidate of imageSourceCandidates(source)) {
+    const fitted = await fitChatImage(candidate, qualityLevel);
+    if (fitted) return fitted;
+  }
+  return null;
 }
 
 export async function fitChatImage(source: string, qualityLevel: 'saver' | 'medium' | 'original' = 'saver'): Promise<{ url: string; bytes: number; width: number; height: number } | null> {
