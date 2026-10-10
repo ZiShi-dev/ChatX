@@ -1,4 +1,5 @@
 import type { InviteCode } from '../types/invite';
+import { sanitizeMessageFont, sanitizeUserColor } from './userStyle';
 import type { User, UserRole } from '../types/user';
 
 const COLORS = ['#4d7ea8', '#a56b7a', '#c4893a', '#6f8f72', '#5f8f8a', '#3d9b84'];
@@ -31,6 +32,8 @@ export function readDirectoryUser(value: unknown): User | null {
   if (bannerUrl && (!bannerUrl.startsWith('data:image/jpeg;base64,/9j/') || bannerUrl.length > 180_000)) return null;
   const avatarUrl = typeof data.avatarUrl === 'string' ? data.avatarUrl : '';
   if (avatarUrl && (!avatarUrl.startsWith('data:image/jpeg;base64,/9j/') || avatarUrl.length > 80_000)) return null;
+  const color = typeof data.color === 'string' ? sanitizeUserColor(data.color, colorForId(data.id)) : colorForId(data.id);
+  const messageFont = sanitizeMessageFont(data.messageFont);
   return {
     id: data.id,
     displayName: data.displayName.trim(),
@@ -38,7 +41,8 @@ export function readDirectoryUser(value: unknown): User | null {
     role,
     status: 'offline',
     bio,
-    color: colorForId(data.id),
+    color,
+    ...(messageFont !== 'system' ? { messageFont } : {}),
     ...(avatarUrl ? { avatarUrl } : {}),
     ...(bannerUrl ? { bannerUrl } : {}),
   };

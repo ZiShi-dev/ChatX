@@ -5,6 +5,7 @@ import { Navigate } from 'react-router-dom';
 import Avatar from '../components/common/Avatar';
 import EmptyState from '../components/common/EmptyState';
 import NetworkStatusBanner from '../components/common/NetworkBanner';
+import AccountTabs from '../components/account/AccountTabs';
 import PageNav from '../components/common/PageNav';
 import PageSkeleton from '../components/common/PageSkeleton';
 import { useDataSaver } from '../hooks/useDataSaver';
@@ -382,7 +383,7 @@ export default function PeopleAdminPage() {
         <NetworkStatusBanner />
         <PageNav title="الإدارة" fallback="/account" />
       </IonHeader>
-      <IonContent className="people-admin">
+      <IonContent className="people-admin account-scroll">
         {access === 'pending' ? <PageSkeleton kind="settings" /> : null}
         {access === 'ready' ? (
           <>
@@ -418,7 +419,9 @@ export default function PeopleAdminPage() {
             ))}
           </>
         ) : null}
+        <div className="account-end" aria-hidden="true" />
       </IonContent>
+      {access === 'ready' ? <AccountTabs active="admin" owner /> : null}
       {target ? (
         <ChoiceSheet
           titleId="owner-erase-title"

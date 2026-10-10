@@ -1,4 +1,4 @@
-import { useRef, useState, type CSSProperties } from 'react';
+import { useEffect, useRef, useState, type CSSProperties } from 'react';
 import { createPortal } from 'react-dom';
 import { IonContent, IonHeader, IonIcon, IonPage } from '@ionic/react';
 import { cameraOutline, logOutOutline, pencilOutline, settingsOutline } from 'ionicons/icons';
@@ -9,14 +9,23 @@ import Avatar from '../components/common/Avatar';
 import { connectionLabel, getUserPresence } from '../lib/presence';
 import { roleLabel } from '../lib/roles';
 import { readBanner, readPhoto } from '../lib/photo';
+import { bubbleStyleForUser, fontLabel, MESSAGE_FONT_OPTIONS, USER_COLOR_OPTIONS } from '../lib/userStyle';
+import type { MessageFontId } from '../types/user';
 import { useAuthStore } from '../stores/authStore';
+
+type ScrollHold = {
+  hold: () => Promise<void>;
+  restore: () => void;
+  onPickerDismiss: () => void;
+};
 
 type ProfilePageProps = {
   embedded?: boolean;
   onShowSettings?: () => void;
+  scrollHold?: ScrollHold;
 };
 
-export default function ProfilePage({ embedded = false, onShowSettings }: ProfilePageProps) {
+export default function ProfilePage({ embedded = false, onShowSettings, scrollHold }: ProfilePageProps) {
   const navigate = useNavigate();
   const currentUser = useAuthStore((state) => state.currentUser);
   const saveAccountProfile = useAuthStore((state) => state.saveAccountProfile);
@@ -28,11 +37,23 @@ export default function ProfilePage({ embedded = false, onShowSettings }: Profil
   const [bannerPreview, setBannerPreview] = useState('');
   const [displayName, setDisplayName] = useState(currentUser.displayName);
   const [draftBio, setDraftBio] = useState(currentUser.bio);
+  const [draftColor, setDraftColor] = useState(currentUser.color);
+  const [draftFont, setDraftFont] = useState<MessageFontId>(currentUser.messageFont ?? 'system');
   const [saveError, setSaveError] = useState('');
+  const previewBubble = bubbleStyleForUser(draftColor, true, draftFont);
+
+  useEffect(() => {
+    if (!scrollHold) return;
+    const onFocus = () => scrollHold.onPickerDismiss();
+    window.addEventListener('focus', onFocus);
+    return () => window.removeEventListener('focus', onFocus);
+  }, [scrollHold]);
 
   const openEditor = () => {
     setDisplayName(currentUser.displayName);
     setDraftBio(currentUser.bio);
+    setDraftColor(currentUser.color);
+    setDraftFont(currentUser.messageFont ?? 'system');
     setSaveError('');
     setEditing(true);
   };
@@ -47,26 +68,42 @@ export default function ProfilePage({ embedded = false, onShowSettings }: Profil
     return false;
   };
 
+  const pickPhoto = () => {
+    void scrollHold?.hold().then(() => photoRef.current?.click());
+  };
+
+  const pickBanner = () => {
+    void scrollHold?.hold().then(() => bannerRef.current?.click());
+  };
+
   const changePhoto = async (file?: File) => {
     if (!file) return;
     const avatarUrl = await readPhoto(file).catch(() => '');
     if (!avatarUrl) {
       setSaveError('تعذر حفظ الملف.');
+      scrollHold?.restore();
       return;
     }
     reportSave(await saveAccountProfile({ avatarUrl }));
+    scrollHold?.restore();
   };
 
   const changeBanner = async (file?: File) => {
     if (!file) return;
     const bannerUrl = await readBanner(file).catch(() => '');
     if (bannerUrl) setBannerPreview(bannerUrl);
+    scrollHold?.restore();
   };
 
   const save = () => {
     const name = displayName.trim();
     if (name.length < 2) return;
-    void saveAccountProfile({ displayName: name, bio: draftBio.trim() }).then((saved) => {
+    void saveAccountProfile({
+      displayName: name,
+      bio: draftBio.trim(),
+      color: draftColor,
+      messageFont: draftFont,
+    }).then((saved) => {
       if (reportSave(saved)) setEditing(false);
     });
   };
@@ -86,7 +123,7 @@ export default function ProfilePage({ embedded = false, onShowSettings }: Profil
           >
             {currentUser.bannerUrl ? <img src={currentUser.bannerUrl} alt="" /> : null}
             <div className="banner-actions">
-              <button type="button" className="banner-pick" aria-label="تغيير الغلاف" onClick={() => bannerRef.current?.click()}>
+              <button type="button" className="banner-pick" aria-label="تغيير الغلاف" onClick={pickBanner}>
                 <IonIcon icon={cameraOutline} />
                 <span>الغلاف</span>
               </button>
@@ -107,7 +144,7 @@ export default function ProfilePage({ embedded = false, onShowSettings }: Profil
               }}
             />
           </div>
-          <button type="button" className="photo-pick profile-photo" aria-label="تغيير الصورة" onClick={() => photoRef.current?.click()}>
+          <button type="button" className="photo-pick profile-photo" aria-label="تغيير الصورة" onClick={pickPhoto}>
             <Avatar name={currentUser.displayName} color={currentUser.color} size={96} src={currentUser.avatarUrl} />
             <span className="photo-badge">
               <IonIcon icon={cameraOutline} />
@@ -138,6 +175,16 @@ export default function ProfilePage({ embedded = false, onShowSettings }: Profil
               <i className={getUserPresence(currentUser.id, [currentUser]) === 'online' ? 'on' : ''} />
               {connectionLabel(currentUser, { self: true })}
             </dd>
+          </div>
+          <div>
+            <dt>لون الرسائل</dt>
+            <dd className="profile-style-swatch" style={{ '--style-color': currentUser.color } as CSSProperties}>
+              <span aria-hidden="true" />
+            </dd>
+          </div>
+          <div>
+            <dt>خط الرسائل</dt>
+            <dd>{fontLabel(currentUser.messageFont)}</dd>
           </div>
         </dl>
         <section className="profile-bio">
@@ -194,8 +241,8 @@ export default function ProfilePage({ embedded = false, onShowSettings }: Profil
             <div className="app-sheet profile-pop" role="dialog" onClick={(event) => event.stopPropagation()}>
               <span className="app-handle" />
               <h2>تعديل الملف</h2>
-              <button type="button" className="photo-pick profile-photo" aria-label="تغيير الصورة" onClick={() => photoRef.current?.click()}>
-                <Avatar name={displayName || currentUser.displayName} color={currentUser.color} size={72} src={currentUser.avatarUrl} />
+              <button type="button" className="photo-pick profile-photo" aria-label="تغيير الصورة" onClick={pickPhoto}>
+                <Avatar name={displayName || currentUser.displayName} color={draftColor} size={72} src={currentUser.avatarUrl} />
                 <span className="photo-badge">
                   <IonIcon icon={cameraOutline} />
                 </span>
@@ -209,6 +256,44 @@ export default function ProfilePage({ embedded = false, onShowSettings }: Profil
                 <span>النبذة</span>
                 <textarea dir="auto" maxLength={160} value={draftBio} placeholder="نبذة قصيرة" onChange={(event) => setDraftBio(event.target.value)} />
               </label>
+              <div className="profile-style-block">
+                <span className="profile-style-title">لون الرسائل</span>
+                <p className="profile-style-hint">يظهر في محادثاتك للجميع وفي ملفك.</p>
+                <div className="profile-color-grid" role="listbox" aria-label="لون الرسائل">
+                  {USER_COLOR_OPTIONS.map((color) => (
+                    <button
+                      key={color}
+                      type="button"
+                      role="option"
+                      aria-selected={draftColor === color}
+                      className={draftColor === color ? 'is-on' : undefined}
+                      style={{ '--swatch': color } as CSSProperties}
+                      onClick={() => setDraftColor(color)}
+                    >
+                      <span aria-hidden="true" />
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div className="profile-style-block">
+                <span className="profile-style-title">خط الرسائل</span>
+                <div className="profile-font-grid" role="listbox" aria-label="خط الرسائل">
+                  {MESSAGE_FONT_OPTIONS.map((font) => (
+                    <button
+                      key={font.id}
+                      type="button"
+                      role="option"
+                      aria-selected={draftFont === font.id}
+                      className={draftFont === font.id ? 'is-on' : undefined}
+                      style={{ fontFamily: font.family }}
+                      onClick={() => setDraftFont(font.id)}
+                    >
+                      {font.label}
+                    </button>
+                  ))}
+                </div>
+                <p className="profile-style-preview bubble has-user-style" style={previewBubble.style}>مرحبًا، هكذا تظهر رسائلك.</p>
+              </div>
               {saveError ? <p className="form-error">{saveError}</p> : null}
               <div className="account-actions">
                 <button type="button" onClick={() => setEditing(false)}>إلغاء</button>
@@ -233,6 +318,7 @@ export default function ProfilePage({ embedded = false, onShowSettings }: Profil
                   onClick={() => {
                     void saveAccountProfile({ bannerUrl: bannerPreview }).then((saved) => {
                       if (reportSave(saved)) setBannerPreview('');
+                      scrollHold?.restore();
                     });
                   }}
                 >

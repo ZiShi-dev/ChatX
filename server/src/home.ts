@@ -68,6 +68,8 @@ function memberView(user: AuthUser) {
     bio: user.bio,
     ...(user.avatarUrl ? { avatarUrl: user.avatarUrl } : {}),
     ...(user.bannerUrl ? { bannerUrl: user.bannerUrl } : {}),
+    ...(user.accentColor ? { color: user.accentColor } : {}),
+    ...(user.messageFont && user.messageFont !== 'system' ? { messageFont: user.messageFont } : {}),
   };
 }
 

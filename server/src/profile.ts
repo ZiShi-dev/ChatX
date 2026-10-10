@@ -28,3 +28,30 @@ export function cleanBanner(value: unknown) {
 export function cleanAvatar(value: unknown) {
   return cleanJpeg(value, AVATAR_MAX);
 }
+
+const ACCENT_COLORS = new Set([
+  '#3d9b84',
+  '#4d7ea8',
+  '#6f8f72',
+  '#5f8f8a',
+  '#a56b7a',
+  '#c4893a',
+  '#7d6b9a',
+  '#b08968',
+]);
+
+const MESSAGE_FONTS = new Set(['system', 'clear', 'rounded', 'classic']);
+
+export function cleanAccentColor(value: unknown) {
+  if (value === null) return { ok: true as const, value: null };
+  if (typeof value !== 'string') return { ok: false as const };
+  const hex = value.trim().toLowerCase();
+  if (!/^#[0-9a-f]{6}$/.test(hex) || !ACCENT_COLORS.has(hex)) return { ok: false as const };
+  return { ok: true as const, value: hex };
+}
+
+export function cleanMessageFont(value: unknown) {
+  if (value === null) return { ok: true as const, value: null };
+  if (typeof value !== 'string' || !MESSAGE_FONTS.has(value)) return { ok: false as const };
+  return { ok: true as const, value };
+}

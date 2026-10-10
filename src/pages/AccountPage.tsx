@@ -1,10 +1,12 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { IonContent, IonHeader, IonPage } from '@ionic/react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import NetworkStatusBanner from '../components/common/NetworkBanner';
 import PageNav from '../components/common/PageNav';
 import { adminFetch } from '../lib/adminApi';
 import { useAuthStore } from '../stores/authStore';
+import AccountTabs from '../components/account/AccountTabs';
+import { createScrollHold } from '../lib/ionScrollHold';
 import ProfilePage from './ProfilePage';
 import SettingsPage from './SettingsPage';
 
@@ -21,6 +23,8 @@ export default function AccountPage() {
   const loadAccount = useAuthStore((state) => state.loadAccount);
   const [notice, setNotice] = useState('');
   const [owner, setOwner] = useState(false);
+  const contentRef = useRef<HTMLIonContentElement>(null);
+  const scrollHold = useMemo(() => createScrollHold(contentRef), []);
 
   useEffect(() => {
     let alive = true;
@@ -63,25 +67,13 @@ export default function AccountPage() {
         <NetworkStatusBanner />
         <PageNav title="الحساب" fallback="/home" onBack={goHome} />
       </IonHeader>
-      <IonContent className={tab === 'settings' ? 'settings-page account-scroll' : 'profile-page account-scroll'}>
+      <IonContent ref={contentRef} className={tab === 'settings' ? 'settings-page account-scroll' : 'profile-page account-scroll'}>
         {tab === 'profile' && notice ? <p className="form-error account-notice">{notice}</p> : null}
-        {tab === 'profile' && <ProfilePage embedded onShowSettings={() => select('settings')} />}
+        {tab === 'profile' && <ProfilePage embedded scrollHold={scrollHold} onShowSettings={() => select('settings')} />}
         {tab === 'settings' && <SettingsPage embedded />}
         <div className="account-end" aria-hidden="true" />
       </IonContent>
-      <div className={`group-tabs account-tabs ${owner ? 'is-three' : 'is-two'}`} role="tablist" aria-label="الحساب">
-        <button type="button" role="tab" aria-selected={tab === 'profile'} className={tab === 'profile' ? 'is-on' : undefined} onClick={() => select('profile')}>
-          الملف الشخصي
-        </button>
-        <button type="button" role="tab" aria-selected={tab === 'settings'} className={tab === 'settings' ? 'is-on' : undefined} onClick={() => select('settings')}>
-          الإعدادات
-        </button>
-        {owner ? (
-          <button type="button" onClick={() => navigate('/admin')}>
-            الإدارة
-          </button>
-        ) : null}
-      </div>
+      <AccountTabs active={tab} owner={owner} />
     </IonPage>
   );
 }

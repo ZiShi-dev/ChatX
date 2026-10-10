@@ -3,7 +3,8 @@ import { CURRENT_USER } from '../data/users';
 import { AdminApiError, adminFetch } from '../lib/adminApi';
 import { readDirectoryUser } from '../lib/directory';
 import { readGooglePreview, readGoogleReadyUser } from '../lib/googleAccount';
-import type { User } from '../types/user';
+import { sanitizeMessageFont, sanitizeUserColor } from '../lib/userStyle';
+import type { MessageFontId, User } from '../types/user';
 import { useUserStore } from './userStore';
 
 const AUTH_KEY = 'chatx.auth';
@@ -43,7 +44,8 @@ function asUser(saved?: Partial<User>): User | undefined {
     role: saved.role === 'admin' ? 'admin' : 'member',
     status: 'online',
     bio: saved.bio ?? '',
-    color: saved.color || '#4d7ea8',
+    color: sanitizeUserColor(saved.color, '#4d7ea8'),
+    ...(saved.messageFont ? { messageFont: sanitizeMessageFont(saved.messageFont) } : {}),
     ...(saved.avatarUrl ? { avatarUrl: saved.avatarUrl } : {}),
     ...(saved.bannerUrl ? { bannerUrl: saved.bannerUrl } : {}),
   };
@@ -64,11 +66,13 @@ function writeAuth(state: Pick<AuthState, 'activated' | 'currentUser' | 'account
 
 const SERVER_ID = /^[0-9a-f-]{36}$/i;
 
-function applyAccountPatch(user: User, patch: { displayName?: string; bio?: string; bannerUrl?: string | null; avatarUrl?: string | null }): User {
+function applyAccountPatch(user: User, patch: { displayName?: string; bio?: string; bannerUrl?: string | null; avatarUrl?: string | null; color?: string; messageFont?: MessageFontId }): User {
   const next: User = {
     ...user,
     ...(patch.displayName !== undefined ? { displayName: patch.displayName, username: patch.displayName } : {}),
     ...(patch.bio !== undefined ? { bio: patch.bio } : {}),
+    ...(patch.color !== undefined ? { color: sanitizeUserColor(patch.color, user.color) } : {}),
+    ...(patch.messageFont !== undefined ? { messageFont: sanitizeMessageFont(patch.messageFont) } : {}),
   };
   if (patch.bannerUrl) next.bannerUrl = patch.bannerUrl;
   else if (patch.bannerUrl === null) delete next.bannerUrl;
@@ -97,7 +101,7 @@ type AuthState = {
   accounts: User[];
   logout: () => void;
   updateProfile: (patch: Partial<Pick<User, 'displayName' | 'username' | 'bio' | 'avatarUrl' | 'bannerUrl'>>) => void;
-  saveAccountProfile: (patch: { displayName?: string; bio?: string; bannerUrl?: string | null; avatarUrl?: string | null }) => Promise<'ok' | 'local' | 'offline' | 'invalid' | 'username_taken'>;
+  saveAccountProfile: (patch: { displayName?: string; bio?: string; bannerUrl?: string | null; avatarUrl?: string | null; color?: string; messageFont?: MessageFontId }) => Promise<'ok' | 'local' | 'offline' | 'invalid' | 'username_taken'>;
   loadAccount: () => Promise<'ok' | 'local' | 'offline' | 'invalid'>;
   applyPresence: (rows: Array<{ id: string; status: User['status']; lastSeenAt?: string }>) => void;
   markSelfOffline: () => void;
@@ -137,7 +141,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
           ? state.accounts.map((account) => (account.id === user.id ? user : account))
           : [...state.accounts, user],
       }));
-      const directoryPatch = { ...user, avatarUrl: user.avatarUrl, bannerUrl: user.bannerUrl };
+      const directoryPatch = { ...user, avatarUrl: user.avatarUrl, bannerUrl: user.bannerUrl, color: user.color, messageFont: user.messageFont };
       const users = useUserStore.getState();
       if (users.users.some((item) => item.id === user.id)) users.updateUser(user.id, directoryPatch);
       else users.addUser(user);
@@ -153,10 +157,12 @@ export const useAuthStore = create<AuthState>((set, get) => ({
           ...(patch.bio !== undefined ? { bio: patch.bio } : {}),
           ...(patch.bannerUrl !== undefined ? { banner: patch.bannerUrl } : {}),
           ...(patch.avatarUrl !== undefined ? { avatar: patch.avatarUrl } : {}),
+          ...(patch.color !== undefined ? { color: patch.color } : {}),
+          ...(patch.messageFont !== undefined ? { messageFont: patch.messageFont } : {}),
         },
       }) as { user?: unknown }).user);
       if (saved) {
-        const merged: User = { ...next, ...saved, status: 'online', color: next.color };
+        const merged: User = { ...next, ...saved, status: 'online', color: saved.color ?? next.color, messageFont: saved.messageFont ?? next.messageFont };
         if (!saved.avatarUrl) delete merged.avatarUrl;
         if (!saved.bannerUrl) delete merged.bannerUrl;
         remember(merged);
@@ -197,7 +203,13 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     try {
       const saved = readDirectoryUser((await adminFetch('/api/profile') as { user?: unknown }).user);
       if (!saved) return 'invalid';
-      const next: User = { ...current, ...saved, status: 'online', color: current.id === saved.id ? current.color : saved.color };
+      const next: User = {
+        ...current,
+        ...saved,
+        status: 'online',
+        color: saved.color ?? current.color,
+        messageFont: saved.messageFont ?? current.messageFont,
+      };
       if (!saved.avatarUrl) delete next.avatarUrl;
       if (!saved.bannerUrl) delete next.bannerUrl;
       set((state) => ({

@@ -41,9 +41,11 @@ type UserRow = {
   bio: string;
   banner: string | null;
   avatar: string | null;
+  accent_color: string | null;
+  message_font: string | null;
 };
 
-const USER_COLUMNS = 'id, email, display_name, username, role, bio, banner, avatar, google_sub';
+const USER_COLUMNS = 'id, email, display_name, username, role, bio, banner, avatar, google_sub, accent_color, message_font';
 
 function byteSizeOf(value: unknown, max: number) {
   const size = typeof value === 'number' ? value : typeof value === 'string' ? Number(value) : NaN;
@@ -83,6 +85,8 @@ function mapUser(row: UserRow): AuthUser {
     bannerUrl: row.banner,
     avatarUrl: row.avatar,
     googleSub: row.google_sub,
+    accentColor: row.accent_color,
+    messageFont: row.message_font,
   };
 }
 
@@ -188,7 +192,9 @@ export function createPostgresRepository(pool: pg.Pool): AuthRepository {
                username = CASE WHEN $2::bool THEN $3 ELSE username END,
                bio = CASE WHEN $4::bool THEN $5 ELSE bio END,
                banner = CASE WHEN $6::bool THEN $7 ELSE banner END,
-               avatar = CASE WHEN $8::bool THEN $9 ELSE avatar END
+               avatar = CASE WHEN $8::bool THEN $9 ELSE avatar END,
+               accent_color = CASE WHEN $10::bool THEN $11 ELSE accent_color END,
+               message_font = CASE WHEN $12::bool THEN $13 ELSE message_font END
            WHERE id = $1 AND role = 'member'`,
           [
             id,
@@ -200,6 +206,10 @@ export function createPostgresRepository(pool: pg.Pool): AuthRepository {
             patch.banner ?? null,
             patch.avatar !== undefined,
             patch.avatar ?? null,
+            patch.color !== undefined,
+            patch.color ?? null,
+            patch.messageFont !== undefined,
+            patch.messageFont ?? null,
           ],
         );
         return (result.rowCount ?? 0) > 0 ? 'ok' : 'missing';

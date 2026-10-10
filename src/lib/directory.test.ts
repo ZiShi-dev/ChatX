@@ -32,6 +32,14 @@ describe('directory payloads', () => {
     expect(readDirectoryUsers({ users: [{ ...user, avatarUrl: 'data:image/svg+xml;base64,PHN2Zy8+' }] })).toBeNull();
     expect(readDirectoryUsers({ users: [{ ...user, bio: 'ا'.repeat(161) }] })).toBeNull();
     expect(readDirectoryUsers({ users: [{ ...user, bannerUrl: 'data:image/svg+xml;base64,PHN2Zy8+' }] })).toBeNull();
+    expect(readDirectoryUsers({ users: [{ ...user, color: '#4d7ea8', messageFont: 'classic' }] })?.[0]).toMatchObject({
+      color: '#4d7ea8',
+      messageFont: 'classic',
+    });
+    expect(readDirectoryUsers({ users: [{ ...user, color: '#ffffff', messageFont: 'comic' }] })?.[0]).toMatchObject({
+      color: expect.stringMatching(/^#[0-9a-f]{6}$/),
+    });
+    expect(readDirectoryUsers({ users: [{ ...user, messageFont: 'system' }] })?.[0]).not.toHaveProperty('messageFont');
   });
 
   it('accepts a long invite and rejects a short one', () => {

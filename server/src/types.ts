@@ -12,6 +12,8 @@ export type AuthUser = {
   bio: string;
   bannerUrl: string | null;
   avatarUrl: string | null;
+  accentColor?: string | null;
+  messageFont?: string | null;
 };
 
 export type ProfilePatch = {
@@ -19,6 +21,8 @@ export type ProfilePatch = {
   bio?: string;
   banner?: string | null;
   avatar?: string | null;
+  color?: string | null;
+  messageFont?: string | null;
 };
 
 export type EraseChoices = {

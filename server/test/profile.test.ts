@@ -4,7 +4,7 @@ import { createLimiter, resumeMember, type Deps } from '../src/authService.ts';
 import { loadConfig } from '../src/config.ts';
 import { createApi } from '../src/http.ts';
 import { createMemoryRepository } from '../src/memory.ts';
-import { cleanBanner, cleanBio } from '../src/profile.ts';
+import { cleanAccentColor, cleanBanner, cleanBio, cleanMessageFont } from '../src/profile.ts';
 import { hashSession } from '../src/session.ts';
 import type { AuthUser } from '../src/types.ts';
 
@@ -44,6 +44,10 @@ describe('known account', () => {
 
 describe('profile', () => {
   it('keeps a short bio and a jpeg banner', () => {
+    assert.equal(cleanAccentColor('#4d7ea8').ok, true);
+    assert.equal(cleanAccentColor('#ffffff').ok, false);
+    assert.equal(cleanMessageFont('classic').ok, true);
+    assert.equal(cleanMessageFont('comic').ok, false);
     assert.equal(cleanBio('  مرحبا\u0000 '), 'مرحبا');
     assert.equal(cleanBio('ا'.repeat(161)), null);
     assert.equal(cleanBanner(jpeg).ok, true);
@@ -137,5 +141,38 @@ describe('profile', () => {
       body: JSON.stringify({ bio: 'بعد الخروج' }),
     }));
     assert.equal(closed.status, 401);
+  });
+
+  it('stores message color and font for every member', async () => {
+    const deps = testDeps();
+    await deps.repo.insertUser(member);
+    const token = 'style-session';
+    await deps.repo.createSession(hashSession(token), member.id, new Date('2026-11-08T12:00:00.000Z'));
+    const handle = createApi(deps);
+
+    const saved = await handle(new Request('http://127.0.0.1/api/profile', {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json', 'x-chatx-request': '1', cookie: `chatx_session=${token}` },
+      body: JSON.stringify({ color: '#c4893a', messageFont: 'rounded' }),
+    }));
+    assert.equal(saved.status, 200);
+    const body = await saved.json() as { user: { color?: string; messageFont?: string } };
+    assert.equal(body.user.color, '#c4893a');
+    assert.equal(body.user.messageFont, 'rounded');
+
+    const loaded = await handle(new Request('http://127.0.0.1/api/profile', {
+      headers: { cookie: `chatx_session=${token}` },
+    }));
+    assert.equal(loaded.status, 200);
+    const account = await loaded.json() as { user: { color?: string; messageFont?: string } };
+    assert.equal(account.user.color, '#c4893a');
+    assert.equal(account.user.messageFont, 'rounded');
+
+    const rejected = await handle(new Request('http://127.0.0.1/api/profile', {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json', 'x-chatx-request': '1', cookie: `chatx_session=${token}` },
+      body: JSON.stringify({ color: '#ffffff' }),
+    }));
+    assert.equal(rejected.status, 401);
   });
 });

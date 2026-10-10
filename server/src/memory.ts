@@ -304,6 +304,8 @@ export function createMemoryRepository(): AuthRepository {
         ...(patch.bio !== undefined ? { bio: patch.bio } : {}),
         ...(patch.banner !== undefined ? { bannerUrl: patch.banner } : {}),
         ...(patch.avatar !== undefined ? { avatarUrl: patch.avatar } : {}),
+        ...(patch.color !== undefined ? { accentColor: patch.color } : {}),
+        ...(patch.messageFont !== undefined ? { messageFont: patch.messageFont } : {}),
       });
       return 'ok';
     },

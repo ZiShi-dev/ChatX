@@ -1813,6 +1813,90 @@ ion-content.chat-scroll::part(scroll) {
   border-inline-start-width: 3px;
 }
 
+.bubble.has-user-style {
+  border-width: 1px;
+  border-style: solid;
+}
+
+.profile-style-block {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.profile-style-title {
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.profile-style-hint {
+  margin: 0;
+  color: var(--chatx-muted);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.profile-color-grid,
+.profile-font-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.profile-color-grid button {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border: 2px solid transparent;
+  border-radius: 50%;
+  background: transparent;
+}
+
+.profile-color-grid button span {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  background: var(--swatch);
+}
+
+.profile-color-grid button.is-on {
+  border-color: var(--chatx-accent);
+}
+
+.profile-font-grid button {
+  min-height: 44px;
+  padding: 8px 12px;
+  border: 1px solid var(--chatx-frame);
+  border-radius: 12px;
+  background: var(--chatx-surface);
+  color: inherit;
+  font: inherit;
+  font-size: 14px;
+}
+
+.profile-font-grid button.is-on {
+  border-color: var(--chatx-accent);
+  box-shadow: inset 0 0 0 1px var(--chatx-accent);
+}
+
+.profile-style-preview {
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: 12px;
+}
+
+.profile-style-swatch span {
+  display: inline-block;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--style-color);
+  vertical-align: middle;
+}
+
 .aim-mark {
   display: inline-flex;
   align-items: center;

@@ -430,10 +430,14 @@ async function route(deps: Deps, request: Request) {
       bio: body.bio,
       banner: body.banner,
       avatar: body.avatar,
+      color: body.color,
+      messageFont: body.messageFont,
       hasDisplayName: Object.prototype.hasOwnProperty.call(body, 'displayName'),
       hasBio: Object.prototype.hasOwnProperty.call(body, 'bio'),
       hasBanner: Object.prototype.hasOwnProperty.call(body, 'banner'),
       hasAvatar: Object.prototype.hasOwnProperty.call(body, 'avatar'),
+      hasColor: Object.prototype.hasOwnProperty.call(body, 'color'),
+      hasMessageFont: Object.prototype.hasOwnProperty.call(body, 'messageFont'),
       ip,
     });
     if (!result.ok) return failure(deps, result.error);
