@@ -52,6 +52,32 @@ describe('network polling', () => {
     await vi.advanceTimersByTimeAsync(0);
     expect(task).toHaveBeenCalledTimes(3);
   });
+  it('honors the adaptive inbox interval on a slow connection', async () => {
+    useNetworkStore.getState().setNetwork('slow');
+    const task = vi.fn(async () => 'ok');
+    let interval = 20_000;
+    stop = startPolling(task, { economy: true, interval: () => interval });
+    await vi.advanceTimersByTimeAsync(20_000);
+    expect(task).toHaveBeenCalledTimes(2);
+    interval = 45_000;
+    await vi.advanceTimersByTimeAsync(20_000);
+    expect(task).toHaveBeenCalledTimes(3);
+    await vi.advanceTimersByTimeAsync(44_999);
+    expect(task).toHaveBeenCalledTimes(3);
+    await vi.advanceTimersByTimeAsync(1);
+    expect(task).toHaveBeenCalledTimes(4);
+  });
+  it('refreshes after an online event during an in-flight request without overlap', async () => {
+    let finish: (() => void) | undefined;
+    const task = vi.fn(() => new Promise<void>(resolve => { finish = resolve; }));
+    stop = startPolling(task, { interval: () => 60_000 });
+    window.dispatchEvent(new Event('online'));
+    expect(task).toHaveBeenCalledTimes(1);
+    finish?.();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(task).toHaveBeenCalledTimes(2);
+    stop(); finish?.();
+  });
   it('honors the server retry deadline even when connectivity changes', async () => {
     const task = vi.fn(async () => { throw { retryAfter: 90000 }; });
     stop = startPolling(task);

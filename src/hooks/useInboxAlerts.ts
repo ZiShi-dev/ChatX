@@ -10,9 +10,6 @@ import { localRoomKeyRecords } from '../lib/e2e';
 import { InboxWatch } from '../lib/inboxWatch';
 import { notifyChatMessage } from '../lib/notifications';
 import { getApiOrigin } from '../lib/apiOrigin';
-import { startPushRegistration, stopPushRegistration, syncPushPrefs } from '../lib/pushRegister';
-
-const fcmEnabled = import.meta.env.VITE_ENABLE_FCM === 'true';
 import { useAuthStore } from '../stores/authStore';
 import { useChatStore } from '../stores/chatStore';
 import { quietLevel, useMuteStore } from '../stores/muteStore';
@@ -41,7 +38,6 @@ function rememberPhoneWatch() {
     !item.unread || notified.has(item.id) || (phoneActive && document.visibilityState !== 'hidden' && watching(item.conversationId)) ? [item.id] : []
   ));
   void InboxWatch.remember({ origin, quiet, hiddenKinds, seen }).catch(() => undefined);
-  if (fcmEnabled) syncPushPrefs();
   void localRoomKeyRecords().then((records) => {
     if (!records) return;
     const signature = records.map((item) => `${item.roomId}:${item.keyId}`).sort().join(',');
@@ -126,17 +122,20 @@ export function useInboxAlerts() {
 
     const unsubscribeMutes = useMuteStore.subscribe((state, previous) => { if (state.mutes !== previous.mutes) rememberPhoneWatch(); });
     const unsubscribeSettings = useSettingsStore.subscribe((state, previous) => { if (state.notifyTypes !== previous.notifyTypes) rememberPhoneWatch(); });
-    if (fcmEnabled) void startPushRegistration(userId);
     let stopState = () => {};
     if (Capacitor.isNativePlatform()) {
       void CapApp.addListener('appStateChange', ({ isActive }) => {
         phoneActive = isActive;
         if (!isActive) rememberPhoneWatch();
-      }).then((handle) => { stopState = () => { void handle.remove(); }; });
+      }).then((handle) => {
+        if (stopped) void handle.remove();
+        else stopState = () => { void handle.remove(); };
+      });
     }
 
     // Android's native watcher checks the inbox once the app leaves the screen.
     const stop = startPolling(tick, {
+      active: () => !Capacitor.isNativePlatform() || phoneActive,
       background: !Capacitor.isNativePlatform(),
       economy: true,
       backgroundInterval: () => cadence.delay(true),
@@ -157,7 +156,6 @@ export function useInboxAlerts() {
         avatarSignature = '';
         notified.clear();
         void InboxWatch.stop().catch(() => undefined);
-        if (fcmEnabled) void stopPushRegistration().catch(() => undefined);
       }
     };
   }, [activated, userId]);

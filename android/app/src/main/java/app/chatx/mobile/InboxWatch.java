@@ -186,7 +186,13 @@ final class InboxWatch {
         clearAvatars(context);
     }
 
+    static void pauseAlarm(Context context) {
+        AlarmManager alarms = (AlarmManager) context.getSystemService(Context.ALARM_SERVICE);
+        if (alarms != null) alarms.cancel(broadcast(context));
+    }
+
     static void schedule(Context context) {
+        if (MainActivity.foreground) return;
         if (!prefs(context).getBoolean("armed", false)) return;
         AlarmManager alarms = (AlarmManager) context.getSystemService(Context.ALARM_SERVICE);
         if (alarms == null) return;

@@ -510,6 +510,11 @@ export default function ChatPage() {
       }, 400);
     };
     const thread = endRef.current?.parentElement;
+    const mutations = new MutationObserver(() => {
+      window.clearTimeout(readTimer);
+      readTimer = window.setTimeout(() => void markVisible(), 900);
+    });
+    if (thread) mutations.observe(thread, { childList: true, subtree: true });
     const observer = new ResizeObserver(() => {
       const element = scrollerRef.current;
       if (!element) return;
@@ -556,6 +561,7 @@ export default function ChatPage() {
       window.clearTimeout(readTimer);
       window.clearTimeout(keepTimer);
       observer.disconnect();
+      mutations.disconnect();
       viewport?.removeEventListener('resize', holdBottom);
       document.removeEventListener('focusin', onFocus);
       window.removeEventListener('pagehide', onLeave);

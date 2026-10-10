@@ -28,6 +28,7 @@ public class MainActivity extends BridgeActivity {
         super.onResume();
         foreground = true;
         InboxLifecycle.foreground(true);
+        InboxWatch.pauseAlarm(getApplicationContext());
         WebView webView = getBridge().getWebView();
         if (webView != null) {
             ViewCompat.requestApplyInsets(webView);

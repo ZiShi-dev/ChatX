@@ -13,8 +13,9 @@ export function startPolling(task: () => Promise<unknown>, options: { active?: (
   let retryAfter = 0;
   const delay = () => {
     const base = document.visibilityState === 'hidden' ? options.backgroundInterval?.() ?? 60_000
+      : options.interval ? options.interval()
       : options.economy && constrainedDevice() ? 60_000
-      : options.economy && (useSettingsStore.getState().dataSaver || useNetworkStore.getState().network === 'slow') ? 40_000 : options.interval?.() ?? PRESENCE_BEAT_MS;
+      : options.economy && (useSettingsStore.getState().dataSaver || useNetworkStore.getState().network === 'slow') ? 40_000 : PRESENCE_BEAT_MS;
     return Math.max(retryAfter - Date.now(), failures ? Math.min(120000, base * 2 ** Math.min(failures, 3)) : base);
   };
   const tick = async () => {
@@ -42,6 +43,7 @@ export function startPolling(task: () => Promise<unknown>, options: { active?: (
   };
   const wake = () => {
     failures = 0;
+    if (running) { recoveredWhileRunning = true; return; }
     if (retryAfter > Date.now()) {
       window.clearTimeout(timer);
       timer = window.setTimeout(() => void tick(), retryAfter - Date.now());
