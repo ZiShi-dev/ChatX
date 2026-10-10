@@ -81,9 +81,16 @@ try {
   await page.waitForTimeout(500);
   const second = { ...message, id: randomUUID(), text: 'Current chat live message', createdAt: new Date() };
   await repo.addRoomMessage(second); await repo.notifyRoomMessage(second);
-  await banner.waitFor({ timeout: 22000 });
+  await banner.filter({ hasText: 'Current chat live message' }).waitFor({ timeout: 22000 });
   assert.ok((await banner.innerText()).includes('Current chat live message'));
   await page.getByRole('button', { name: 'إخفاء الإشعار' }).click();
+  const groupMessage = { ...message, id: randomUUID(), roomId: groupId, text: 'Group live message from private chat', createdAt: new Date() };
+  await repo.addRoomMessage(groupMessage); await repo.notifyRoomMessage(groupMessage);
+  await banner.filter({ hasText: 'Group live message from private chat' }).waitFor({ timeout: 22000 });
+  assert.ok(page.url().includes(privateId));
+  assert.equal((await repo.listNotifications(alice.id, 30, null)).find(item => item.messageId === groupMessage.id)?.read, false);
+  await page.locator('.live-inbox-open').click();
+  await page.waitForURL(`**/chat/${groupId}?at=${groupMessage.id}`);
   assert.deepEqual(errors, []);
-  console.log('PASS repeated emoji picks, cursor/keyboard stability, private recent emoji, and live private banner from a group without premature reads; CPU 6x');
+  console.log('PASS repeated emoji picks, cursor/keyboard stability, private recent emoji, and banners in both directions between group/private chats without premature reads; CPU 6x');
 } finally { await browser.close(); }

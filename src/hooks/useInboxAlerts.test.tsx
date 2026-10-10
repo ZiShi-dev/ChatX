@@ -37,3 +37,14 @@ it('delivers background unread notifications to the system and honors disabled t
   act(() => useChatStore.setState({ serverInbox: [{ ...item('muted'), unread: true, unreadCount: 1 }] }));
   expect(notify).toHaveBeenCalledOnce();
 });
+it.each([
+  ['group', 'private', undefined],
+  ['private', 'group', 'Friends group'],
+])('shows a %s-to-%s banner without changing the open chat', (openRoom, incomingRoom, conversationName) => {
+  window.history.replaceState({}, '', `/chat/${openRoom}`); mount();
+  const incoming = { ...item('cross-chat'), conversationId: incomingRoom, conversationName, senderName: 'Bob', unread: true, unreadCount: 1 };
+  act(() => useChatStore.setState({ serverInbox: [incoming] }));
+  expect(useLiveInbox.getState().notices[0]).toMatchObject({ conversationId: incomingRoom, messageId: 'cross-chat', title: conversationName ?? 'Bob' });
+  expect(window.location.pathname).toBe(`/chat/${openRoom}`);
+  expect(useChatStore.getState().serverInbox[0].unread).toBe(true);
+});
