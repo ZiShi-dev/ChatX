@@ -5,7 +5,7 @@ import { formatMessageDay, unreadDividerLabel, unreadOnScreen, unreadStart } fro
 import { facesOnMessage, type ReceiptRow } from '../../lib/readReceipts';
 import { useChatStore } from '../../stores/chatStore';
 import MessageBubble from './MessageBubble';
-import EmojiText from '../common/EmojiText';
+import EventMessage from './EventMessage';
 import type { Message } from '../../types/message';
 import type { User } from '../../types/user';
 
@@ -114,7 +114,7 @@ function MessageList({ messages, limit, showAuthor, group = false, direct = fals
             {day !== previous && <p className="chat-day">{day}</p>}
             {!filtered && index === unreadAt && <p id="unread-anchor" className="unread-divider">{unreadDividerLabel(onScreen)}</p>}
             {message.event ? (
-              <p id={`msg-${message.id}`} className="chat-event" dir="auto"><EmojiText text={message.text ?? ''} /></p>
+              <EventMessage message={message} spotlight={message.id === spotlightId} />
             ) : (
             <MessageBubble
               message={message}

@@ -192,7 +192,6 @@ function MessageText({ text, username, onOpenProfile }: { text: string; username
                 type="button"
                 className={tone ? `bubble-mention ${tone}` : 'bubble-mention'}
                 dir="auto"
-                onPointerDown={(event) => event.stopPropagation()}
                 onClick={(event) => {
                   event.stopPropagation();
                   onOpenProfile(person);
