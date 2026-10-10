@@ -186,7 +186,7 @@ export async function eraseSelection(db: Queryable, actorId: string, targetId: s
       await db.query('DELETE FROM message_reactions WHERE user_id = $1', [person.id]);
     }
     if (choices.profile && !choices.account) {
-      await db.query('UPDATE users SET avatar = NULL, banner = NULL WHERE id = $1', [person.id]);
+      await db.query("UPDATE users SET avatar = NULL, banner = NULL, avatar_decoration = 'none', profile_effect = 'none' WHERE id = $1", [person.id]);
     }
     if (choices.membership && !choices.account) {
       await db.query(

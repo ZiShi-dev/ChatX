@@ -6,6 +6,9 @@ import { useNavigate } from 'react-router-dom';
 import NetworkStatusBanner from '../components/common/NetworkBanner';
 import PageNav from '../components/common/PageNav';
 import Avatar from '../components/common/Avatar';
+import ProfileEffect from '../components/common/ProfileEffect';
+import { useProfileMotion } from '../hooks/useProfileMotion';
+import { AVATAR_DECORATIONS, PROFILE_EFFECTS, type AvatarDecoration, type ProfileEffectId } from '../lib/profileCosmetics';
 import { connectionLabel, getUserPresence } from '../lib/presence';
 import { roleLabel } from '../lib/roles';
 import { readBanner, readPhoto } from '../lib/photo';
@@ -28,6 +31,7 @@ type ProfilePageProps = {
 export default function ProfilePage({ embedded = false, onShowSettings, scrollHold }: ProfilePageProps) {
   const navigate = useNavigate();
   const currentUser = useAuthStore((state) => state.currentUser);
+  const animate = useProfileMotion();
   const saveAccountProfile = useAuthStore((state) => state.saveAccountProfile);
   const logout = useAuthStore((state) => state.logout);
   const photoRef = useRef<HTMLInputElement>(null);
@@ -39,6 +43,8 @@ export default function ProfilePage({ embedded = false, onShowSettings, scrollHo
   const [draftBio, setDraftBio] = useState(currentUser.bio);
   const [draftColor, setDraftColor] = useState(currentUser.color);
   const [draftFont, setDraftFont] = useState<MessageFontId>(currentUser.messageFont ?? 'system');
+  const [draftDecoration, setDraftDecoration] = useState<AvatarDecoration>(currentUser.avatarDecoration ?? 'none');
+  const [draftEffect, setDraftEffect] = useState<ProfileEffectId>(currentUser.profileEffect ?? 'none');
   const [saveError, setSaveError] = useState('');
 
   useEffect(() => {
@@ -53,6 +59,8 @@ export default function ProfilePage({ embedded = false, onShowSettings, scrollHo
     setDraftBio(currentUser.bio);
     setDraftColor(currentUser.color);
     setDraftFont(currentUser.messageFont ?? 'system');
+    setDraftDecoration(currentUser.avatarDecoration ?? 'none');
+    setDraftEffect(currentUser.profileEffect ?? 'none');
     setSaveError('');
     setEditing(true);
   };
@@ -102,6 +110,8 @@ export default function ProfilePage({ embedded = false, onShowSettings, scrollHo
       bio: draftBio.trim(),
       color: draftColor,
       messageFont: draftFont,
+      avatarDecoration: draftDecoration,
+      profileEffect: draftEffect,
     }).then((saved) => {
       if (reportSave(saved)) setEditing(false);
     });
@@ -116,6 +126,7 @@ export default function ProfilePage({ embedded = false, onShowSettings, scrollHo
     <>
       <div className="profile-frame">
         <section className="profile-hero">
+          <ProfileEffect effect={currentUser.profileEffect} color={currentUser.color} />
           <div
             className={currentUser.bannerUrl ? 'profile-banner is-photo' : 'profile-banner'}
             style={{ '--banner': currentUser.color } as CSSProperties}
@@ -144,7 +155,7 @@ export default function ProfilePage({ embedded = false, onShowSettings, scrollHo
             />
           </div>
           <button type="button" className="photo-pick profile-photo" aria-label="تغيير الصورة" onClick={pickPhoto}>
-            <Avatar name={currentUser.displayName} color={currentUser.color} size={96} src={currentUser.avatarUrl} />
+            <Avatar name={currentUser.displayName} color={currentUser.color} size={96} src={currentUser.avatarUrl} decoration={currentUser.avatarDecoration} animate={animate} />
             <span className="photo-badge">
               <IonIcon icon={cameraOutline} />
             </span>
@@ -237,11 +248,27 @@ export default function ProfilePage({ embedded = false, onShowSettings, scrollHo
       {editing &&
         createPortal(
           <div className="app-scrim sheet" onClick={() => setEditing(false)}>
-            <div className="app-sheet profile-pop" role="dialog" onClick={(event) => event.stopPropagation()}>
+            <div className="app-sheet profile-pop profile-editor" role="dialog" aria-label="تعديل الملف" onClick={(event) => event.stopPropagation()}>
               <span className="app-handle" />
               <h2>تعديل الملف</h2>
+              <div className="cosmetic-preview" aria-label="معاينة مظهر الملف">
+                <ProfileEffect effect={draftEffect} color={draftColor} />
+                <Avatar name={displayName || currentUser.displayName} color={draftColor} size={64} src={currentUser.avatarUrl} decoration={draftDecoration} animate={animate} />
+                <strong style={{ color: draftColor }}>{displayName || currentUser.displayName}</strong>
+              </div>
+              <div className="profile-style-block">
+                <span className="profile-style-title">زينة الصورة</span>
+                <p className="profile-style-hint">اختر الزينة أو أزلها. القبعة تتحرك داخل الملف فقط، وتبقى ثابتة في وضع التوفير وعلى الأجهزة الضعيفة.</p>
+                <div className="cosmetic-options" role="group" aria-label="زينة الصورة">
+                  {AVATAR_DECORATIONS.map(item => <button key={item.id} type="button" aria-pressed={draftDecoration === item.id} className={draftDecoration === item.id ? 'is-on' : ''} onClick={() => setDraftDecoration(item.id)}>{item.label}</button>)}
+                </div>
+                <span className="profile-style-title">تأثير الملف</span>
+                <div className="cosmetic-options" role="group" aria-label="تأثير الملف">
+                  {PROFILE_EFFECTS.map(item => <button key={item.id} type="button" aria-pressed={draftEffect === item.id} className={draftEffect === item.id ? 'is-on' : ''} onClick={() => setDraftEffect(item.id)}>{item.label}</button>)}
+                </div>
+              </div>
               <button type="button" className="photo-pick profile-photo" aria-label="تغيير الصورة" onClick={pickPhoto}>
-                <Avatar name={displayName || currentUser.displayName} color={draftColor} size={72} src={currentUser.avatarUrl} />
+                <Avatar name={displayName || currentUser.displayName} color={draftColor} size={72} src={currentUser.avatarUrl} decoration={draftDecoration} animate={animate} />
                 <span className="photo-badge">
                   <IonIcon icon={cameraOutline} />
                 </span>

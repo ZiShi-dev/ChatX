@@ -112,7 +112,7 @@ export default function NewChatPage() {
               <div className="picked-row">
                 {picked.map((user) => (
                   <button key={user.id} type="button" className="picked-chip" onClick={() => toggle(user.id)}>
-                    <Avatar name={user.displayName} color={user.color} size={46} src={user.avatarUrl} />
+                    <Avatar name={user.displayName} color={user.color} size={46} src={user.avatarUrl} decoration={user.avatarDecoration} />
                     <span>{user.displayName.split(' ')[0]}</span>
                     <IonIcon icon={closeOutline} />
                   </button>
@@ -137,7 +137,7 @@ export default function NewChatPage() {
                   disabled={busy}
                   onClick={() => (mode === 'private' ? startPrivate(user.id) : toggle(user.id))}
                 >
-                  <Avatar name={user.displayName} color={user.color} src={user.avatarUrl} />
+                  <Avatar name={user.displayName} color={user.color} src={user.avatarUrl} decoration={user.avatarDecoration} />
                   <span className="person-copy">
                     <strong>{user.displayName}</strong>
                     <em dir="auto">@{user.username}</em>

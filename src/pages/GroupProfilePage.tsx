@@ -263,7 +263,7 @@ export default function GroupProfilePage() {
                       aria-label={self ? 'رسائلك' : `محادثة مع ${user.displayName}`}
                       onClick={() => messageUser(user.id)}
                     >
-                      <Avatar name={user.displayName} color={user.color} size={48} src={user.avatarUrl} />
+                      <Avatar name={user.displayName} color={user.color} size={48} src={user.avatarUrl} decoration={user.avatarDecoration} />
                       <span className="group-profile-copy">
                         <strong>
                           <span className="group-profile-name" dir="auto">{user.displayName}</span>

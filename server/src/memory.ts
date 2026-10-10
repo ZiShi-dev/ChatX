@@ -208,6 +208,8 @@ export function createMemoryRepository(): AuthRepository {
       if (choices.profile && !choices.account) {
         target.avatarUrl = null;
         target.bannerUrl = null;
+        target.avatarDecoration = 'none';
+        target.profileEffect = 'none';
       }
       if (choices.account) {
         for (const room of rooms.values()) {
@@ -306,6 +308,8 @@ export function createMemoryRepository(): AuthRepository {
         ...(patch.avatar !== undefined ? { avatarUrl: patch.avatar } : {}),
         ...(patch.color !== undefined ? { accentColor: patch.color } : {}),
         ...(patch.messageFont !== undefined ? { messageFont: patch.messageFont } : {}),
+        ...(patch.avatarDecoration !== undefined ? { avatarDecoration: patch.avatarDecoration } : {}),
+        ...(patch.profileEffect !== undefined ? { profileEffect: patch.profileEffect } : {}),
       });
       return 'ok';
     },

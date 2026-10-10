@@ -1,3 +1,4 @@
+import { avatarDecoration, profileEffect, type ProfileCosmetics } from '../lib/profileCosmetics';
 import { create } from 'zustand';
 import { CURRENT_USER } from '../data/users';
 import { AdminApiError, adminFetch } from '../lib/adminApi';
@@ -45,6 +46,8 @@ function asUser(saved?: Partial<User>): User | undefined {
     status: 'online',
     bio: saved.bio ?? '',
     color: sanitizeUserColor(saved.color, '#4d7ea8'),
+    avatarDecoration: avatarDecoration(saved.avatarDecoration),
+    profileEffect: profileEffect(saved.profileEffect),
     ...(saved.messageFont ? { messageFont: sanitizeMessageFont(saved.messageFont) } : {}),
     ...(saved.avatarUrl ? { avatarUrl: saved.avatarUrl } : {}),
     ...(saved.bannerUrl ? { bannerUrl: saved.bannerUrl } : {}),
@@ -66,12 +69,14 @@ function writeAuth(state: Pick<AuthState, 'activated' | 'currentUser' | 'account
 
 const SERVER_ID = /^[0-9a-f-]{36}$/i;
 
-function applyAccountPatch(user: User, patch: { displayName?: string; bio?: string; bannerUrl?: string | null; avatarUrl?: string | null; color?: string; messageFont?: MessageFontId }): User {
+function applyAccountPatch(user: User, patch: ProfileCosmetics & { displayName?: string; bio?: string; bannerUrl?: string | null; avatarUrl?: string | null; color?: string; messageFont?: MessageFontId }): User {
   const next: User = {
     ...user,
     ...(patch.displayName !== undefined ? { displayName: patch.displayName, username: patch.displayName } : {}),
     ...(patch.bio !== undefined ? { bio: patch.bio } : {}),
     ...(patch.color !== undefined ? { color: sanitizeUserColor(patch.color, user.color) } : {}),
+    ...(patch.avatarDecoration !== undefined ? { avatarDecoration: avatarDecoration(patch.avatarDecoration) } : {}),
+    ...(patch.profileEffect !== undefined ? { profileEffect: profileEffect(patch.profileEffect) } : {}),
     ...(patch.messageFont !== undefined ? { messageFont: sanitizeMessageFont(patch.messageFont) } : {}),
   };
   if (patch.bannerUrl) next.bannerUrl = patch.bannerUrl;
@@ -101,7 +106,7 @@ type AuthState = {
   accounts: User[];
   logout: () => void;
   updateProfile: (patch: Partial<Pick<User, 'displayName' | 'username' | 'bio' | 'avatarUrl' | 'bannerUrl'>>) => void;
-  saveAccountProfile: (patch: { displayName?: string; bio?: string; bannerUrl?: string | null; avatarUrl?: string | null; color?: string; messageFont?: MessageFontId }) => Promise<'ok' | 'local' | 'offline' | 'invalid' | 'username_taken'>;
+  saveAccountProfile: (patch: ProfileCosmetics & { displayName?: string; bio?: string; bannerUrl?: string | null; avatarUrl?: string | null; color?: string; messageFont?: MessageFontId }) => Promise<'ok' | 'local' | 'offline' | 'invalid' | 'username_taken'>;
   loadAccount: () => Promise<'ok' | 'local' | 'offline' | 'invalid' | 'no_server'>;
   applyPresence: (rows: Array<{ id: string; status: User['status']; lastSeenAt?: string }>) => void;
   markSelfOffline: () => void;
@@ -158,6 +163,8 @@ export const useAuthStore = create<AuthState>((set, get) => ({
           ...(patch.bannerUrl !== undefined ? { banner: patch.bannerUrl } : {}),
           ...(patch.avatarUrl !== undefined ? { avatar: patch.avatarUrl } : {}),
           ...(patch.color !== undefined ? { color: patch.color } : {}),
+          ...(patch.avatarDecoration !== undefined ? { avatarDecoration: patch.avatarDecoration } : {}),
+          ...(patch.profileEffect !== undefined ? { profileEffect: patch.profileEffect } : {}),
           ...(patch.messageFont !== undefined ? { messageFont: patch.messageFont } : {}),
         },
       }) as { user?: unknown }).user);

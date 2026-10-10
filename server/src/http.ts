@@ -432,12 +432,16 @@ async function route(deps: Deps, request: Request) {
       avatar: body.avatar,
       color: body.color,
       messageFont: body.messageFont,
+      avatarDecoration: body.avatarDecoration,
+      profileEffect: body.profileEffect,
       hasDisplayName: Object.prototype.hasOwnProperty.call(body, 'displayName'),
       hasBio: Object.prototype.hasOwnProperty.call(body, 'bio'),
       hasBanner: Object.prototype.hasOwnProperty.call(body, 'banner'),
       hasAvatar: Object.prototype.hasOwnProperty.call(body, 'avatar'),
       hasColor: Object.prototype.hasOwnProperty.call(body, 'color'),
       hasMessageFont: Object.prototype.hasOwnProperty.call(body, 'messageFont'),
+      hasAvatarDecoration: Object.prototype.hasOwnProperty.call(body, 'avatarDecoration'),
+      hasProfileEffect: Object.prototype.hasOwnProperty.call(body, 'profileEffect'),
       ip,
     });
     if (!result.ok) return failure(deps, result.error);

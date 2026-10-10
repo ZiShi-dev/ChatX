@@ -70,6 +70,8 @@ function memberView(user: AuthUser) {
     ...(user.bannerUrl ? { bannerUrl: user.bannerUrl } : {}),
     ...(user.accentColor ? { color: user.accentColor } : {}),
     ...(user.messageFont && user.messageFont !== 'system' ? { messageFont: user.messageFont } : {}),
+    avatarDecoration: user.avatarDecoration ?? 'none',
+    profileEffect: user.profileEffect ?? 'none',
   };
 }
 

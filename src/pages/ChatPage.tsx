@@ -811,7 +811,7 @@ export default function ChatPage() {
               </button>
             ) : conversation.self ? (
               <div className="chat-nav-main">
-                <Avatar name={currentUser.displayName} color={currentUser.color} size={32} src={currentUser.avatarUrl} />
+                <Avatar name={currentUser.displayName} color={currentUser.color} size={32} src={currentUser.avatarUrl} decoration={currentUser.avatarDecoration} />
                 <GroupHeader title={currentUser.displayName} subtitle="رسائلك" online={false} />
               </div>
             ) : peerGone ? (
@@ -823,7 +823,7 @@ export default function ChatPage() {
               <div className="chat-nav-main">
                 {other && (
                   <button type="button" className="chat-avatar" aria-label={other.displayName} onClick={() => setProfile(other)}>
-                    <Avatar name={other.displayName} color={other.color} size={32} src={other.avatarUrl} />
+                    <Avatar name={other.displayName} color={other.color} size={32} src={other.avatarUrl} decoration={other.avatarDecoration} />
                     {getUserPresence(other.id, users) === 'online' && <span className="presence" />}
                   </button>
                 )}

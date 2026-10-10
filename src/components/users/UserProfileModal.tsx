@@ -3,6 +3,8 @@ import type { CSSProperties } from 'react';
 import { IonIcon } from '@ionic/react';
 import { chatbubbleOutline } from 'ionicons/icons';
 import Avatar from '../common/Avatar';
+import ProfileEffect from '../common/ProfileEffect';
+import { useProfileMotion } from '../../hooks/useProfileMotion';
 import { connectionLabel } from '../../lib/presence';
 import { roleLabel } from '../../lib/roles';
 import type { User } from '../../types/user';
@@ -29,16 +31,18 @@ function chipsFor(user: User, isSelf: boolean, room?: RoomContext) {
 }
 
 export default function UserProfileModal({ user, isSelf, room, onClose, onMessage }: UserProfileModalProps) {
+  const animate = useProfileMotion();
   if (!user) return null;
   const chips = chipsFor(user, isSelf, room);
   return createPortal(
     <div className="app-scrim sheet" onClick={onClose}>
       <div className="app-sheet profile-pop member-sheet" role="dialog" aria-labelledby="member-sheet-name" onClick={(event) => event.stopPropagation()}>
         <span className="app-handle" />
+        <ProfileEffect effect={user.profileEffect} color={user.color} />
         <div className={user.bannerUrl ? 'user-card-banner is-photo' : 'user-card-banner'} style={{ '--banner': user.color } as CSSProperties}>
           {user.bannerUrl ? <img src={user.bannerUrl} alt="" /> : null}
         </div>
-        <Avatar name={user.displayName} color={user.color} size={84} src={user.avatarUrl} />
+        <Avatar name={user.displayName} color={user.color} size={84} src={user.avatarUrl} decoration={user.avatarDecoration} animate={animate} />
         <h2 id="member-sheet-name">{user.displayName}</h2>
         <p className="profile-handle" dir="auto">@{user.username}</p>
         <p className="profile-status">

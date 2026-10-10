@@ -43,9 +43,11 @@ type UserRow = {
   avatar: string | null;
   accent_color: string | null;
   message_font: string | null;
+  avatar_decoration: string;
+  profile_effect: string;
 };
 
-const USER_COLUMNS = 'id, email, display_name, username, role, bio, banner, avatar, google_sub, accent_color, message_font';
+const USER_COLUMNS = 'id, email, display_name, username, role, bio, banner, avatar, google_sub, accent_color, message_font, avatar_decoration, profile_effect';
 
 function byteSizeOf(value: unknown, max: number) {
   const size = typeof value === 'number' ? value : typeof value === 'string' ? Number(value) : NaN;
@@ -87,6 +89,8 @@ function mapUser(row: UserRow): AuthUser {
     googleSub: row.google_sub,
     accentColor: row.accent_color,
     messageFont: row.message_font,
+    avatarDecoration: row.avatar_decoration,
+    profileEffect: row.profile_effect,
   };
 }
 
@@ -194,7 +198,9 @@ export function createPostgresRepository(pool: pg.Pool): AuthRepository {
                banner = CASE WHEN $6::bool THEN $7 ELSE banner END,
                avatar = CASE WHEN $8::bool THEN $9 ELSE avatar END,
                accent_color = CASE WHEN $10::bool THEN $11 ELSE accent_color END,
-               message_font = CASE WHEN $12::bool THEN $13 ELSE message_font END
+               message_font = CASE WHEN $12::bool THEN $13 ELSE message_font END,
+               avatar_decoration = CASE WHEN $14::bool THEN $15 ELSE avatar_decoration END,
+               profile_effect = CASE WHEN $16::bool THEN $17 ELSE profile_effect END
            WHERE id = $1 AND role = 'member'`,
           [
             id,
@@ -210,6 +216,10 @@ export function createPostgresRepository(pool: pg.Pool): AuthRepository {
             patch.color ?? null,
             patch.messageFont !== undefined,
             patch.messageFont ?? null,
+            patch.avatarDecoration !== undefined,
+            patch.avatarDecoration ?? 'none',
+            patch.profileEffect !== undefined,
+            patch.profileEffect ?? 'none',
           ],
         );
         return (result.rowCount ?? 0) > 0 ? 'ok' : 'missing';

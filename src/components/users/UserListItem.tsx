@@ -17,7 +17,7 @@ export default function UserListItem({ user, onClick, onDelete, badge }: UserLis
   const self = useAuthStore((state) => state.currentUser.id) === user.id;
   return (
     <IonItem button={!onDelete} detail={false} className="member-row" onClick={onClick}>
-      <Avatar slot="start" name={user.displayName} color={user.color} src={user.avatarUrl} />
+      <Avatar slot="start" name={user.displayName} color={user.color} src={user.avatarUrl} decoration={user.avatarDecoration} />
       <IonLabel>
         <h2>
           {user.displayName}

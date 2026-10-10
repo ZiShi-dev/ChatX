@@ -14,6 +14,8 @@ export type AuthUser = {
   avatarUrl: string | null;
   accentColor?: string | null;
   messageFont?: string | null;
+  avatarDecoration?: string;
+  profileEffect?: string;
 };
 
 export type ProfilePatch = {
@@ -23,6 +25,8 @@ export type ProfilePatch = {
   avatar?: string | null;
   color?: string | null;
   messageFont?: string | null;
+  avatarDecoration?: string;
+  profileEffect?: string;
 };
 
 export type EraseChoices = {

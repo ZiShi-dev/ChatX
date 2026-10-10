@@ -213,7 +213,7 @@ export default function HomePage() {
       <div className="user-dock">
         <button type="button" className="user-dock-main" onClick={() => navigate('/account')}>
           <span className="user-dock-avatar">
-            <Avatar name={currentUser.displayName} color={currentUser.color} size={46} src={currentUser.avatarUrl} />
+            <Avatar name={currentUser.displayName} color={currentUser.color} size={46} src={currentUser.avatarUrl} decoration={currentUser.avatarDecoration} />
             <i className={presence === 'online' ? 'on' : ''} />
           </span>
           <span className="user-dock-copy">

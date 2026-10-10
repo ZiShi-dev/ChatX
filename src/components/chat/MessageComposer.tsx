@@ -716,7 +716,7 @@ export default function MessageComposer({ conversationId }: MessageComposerProps
                 onMouseDown={(event) => event.preventDefault()}
                 onClick={() => insertMention(user)}
               >
-                <Avatar name={user.displayName} color={user.color} size={32} src={user.avatarUrl} />
+                <Avatar name={user.displayName} color={user.color} size={32} src={user.avatarUrl} decoration={user.avatarDecoration} />
                 <span>
                   <strong dir="auto">@{user.username}</strong>
                   <em>{user.id === EVERYONE_HANDLE ? 'إشعار للجميع' : user.displayName}</em>

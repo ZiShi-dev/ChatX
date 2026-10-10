@@ -1,3 +1,4 @@
+import { avatarDecoration, profileEffect } from './profileCosmetics';
 import type { InviteCode } from '../types/invite';
 import { sanitizeMessageFont, sanitizeUserColor } from './userStyle';
 import type { User, UserRole } from '../types/user';
@@ -45,6 +46,8 @@ export function readDirectoryUser(value: unknown): User | null {
     bio,
     color,
     messageFont,
+    avatarDecoration: avatarDecoration(data.avatarDecoration),
+    profileEffect: profileEffect(data.profileEffect),
     ...(avatarUrl ? { avatarUrl } : {}),
     ...(bannerUrl ? { bannerUrl } : {}),
   };

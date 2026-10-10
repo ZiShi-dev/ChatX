@@ -36,7 +36,7 @@ export default function DirectMediaPage() {
                 {other.bannerUrl ? <img src={other.bannerUrl} alt="" /> : null}
               </div>
               <span className="group-hero-photo">
-                <Avatar name={other.displayName} color={other.color} size={96} src={other.avatarUrl} />
+                <Avatar name={other.displayName} color={other.color} size={96} src={other.avatarUrl} decoration={other.avatarDecoration} />
               </span>
               <h1>{other.displayName}</h1>
               <p className="profile-status">

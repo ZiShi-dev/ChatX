@@ -319,7 +319,7 @@ function ReplyQuote({ messageId }: { messageId: string }) {
 }
 
 function PersonButton({ user, onOpen }: { user: User; onOpen?: (user: User) => void }) {
-  const avatar = <Avatar name={user.displayName} color={user.color} size={32} src={user.avatarUrl} />;
+  const avatar = <Avatar name={user.displayName} color={user.color} size={32} src={user.avatarUrl} decoration={user.avatarDecoration} />;
   if (!onOpen) return avatar;
   return (
     <button
@@ -546,7 +546,7 @@ function MessageBubble({ message, mine, showAuthor, group = false, direct = fals
             <ul>
               {seenRows.map((row) => (
                 <li key={row.user.id}>
-                  <Avatar name={row.user.displayName} color={row.user.color} size={36} src={row.user.avatarUrl} />
+                  <Avatar name={row.user.displayName} color={row.user.color} size={36} src={row.user.avatarUrl} decoration={row.user.avatarDecoration} />
                   <div>
                     <strong>{row.user.displayName}</strong>
                     <span className="is-on">{row.seenAt ? `شاهد ${formatNotificationTime(row.seenAt)}` : 'شاهد'}</span>
@@ -794,7 +794,7 @@ function MessageBubble({ message, mine, showAuthor, group = false, direct = fals
           onClick={() => setSeenOpen(true)}
         >
           {seenHere.slice(0, 3).map((user) => (
-            <Avatar key={user.id} name={user.displayName} color={user.color} size={18} src={user.avatarUrl} />
+            <Avatar key={user.id} name={user.displayName} color={user.color} size={18} src={user.avatarUrl} decoration={user.avatarDecoration} />
           ))}
           {seenHere.length > 3 && <span className="seen-more">+{seenHere.length - 3}</span>}
         </button>

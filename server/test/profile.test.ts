@@ -184,4 +184,25 @@ describe('profile', () => {
     }));
     assert.equal(rejected.status, 401);
   });
+  it('persists optional profile cosmetics, removes them, and rejects unknown assets', async () => {
+    const deps = testDeps(); await deps.repo.insertUser(member);
+    const token = 'cosmetics-session';
+    await deps.repo.createSession(hashSession(token), member.id, new Date('2026-11-08T12:00:00.000Z'));
+    const api = createApi(deps);
+    const patch = (body: unknown) => api(new Request('http://127.0.0.1/api/profile', {
+      method: 'PATCH', headers: { 'content-type': 'application/json', 'x-chatx-request': '1', cookie: `chatx_session=${token}` }, body: JSON.stringify(body),
+    }));
+    assert.equal((await patch({ avatarDecoration: 'hat', profileEffect: 'stars' })).status, 200);
+    const saved = await deps.repo.findUserById(member.id);
+    assert.equal(saved?.avatarDecoration, 'hat'); assert.equal(saved?.profileEffect, 'stars');
+    const loaded = await api(new Request('http://127.0.0.1/api/profile', { headers: { cookie: `chatx_session=${token}` } }));
+    const body = await loaded.json() as { user: { avatarDecoration: string; profileEffect: string } };
+    assert.equal(body.user.avatarDecoration, 'hat'); assert.equal(body.user.profileEffect, 'stars');
+    assert.equal((await patch({ avatarDecoration: 'https://example.com/hat.gif', profileEffect: 'stars' })).status, 401);
+    assert.equal((await patch({ profileEffect: '<script>' })).status, 401);
+    assert.equal((await deps.repo.findUserById(member.id))?.avatarDecoration, 'hat');
+    assert.equal((await patch({ avatarDecoration: null, profileEffect: 'none' })).status, 200);
+    assert.equal((await deps.repo.findUserById(member.id))?.avatarDecoration, 'none');
+    assert.equal((await deps.repo.findUserById(member.id))?.profileEffect, 'none');
+  });
 });

@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 import type { AppConfig } from './config.ts';
 import { verifyGoogleIdToken } from './google.ts';
 import { visiblePresence } from './presence.ts';
-import { cleanAccentColor, cleanAvatar, cleanBanner, cleanBio, cleanMessageFont } from './profile.ts';
+import { cleanCosmetic, cleanAccentColor, cleanAvatar, cleanBanner, cleanBio, cleanMessageFont } from './profile.ts';
 import { createRateLimiter, type RateLimiter, type ThrottleState } from './rateLimit.ts';
 import { hashSession, newSessionToken } from './session.ts';
 import { ERASE_OPERATOR_EMAIL, resolveEraseChoices, resolveGroupChoices } from './eraseMember.ts';
@@ -45,6 +45,8 @@ function publicUser(user: AuthUser) {
     ...(user.bannerUrl ? { bannerUrl: user.bannerUrl } : {}),
     ...(user.accentColor ? { color: user.accentColor } : {}),
     ...(user.messageFont && user.messageFont !== 'system' ? { messageFont: user.messageFont } : {}),
+    avatarDecoration: user.avatarDecoration ?? 'none',
+    profileEffect: user.profileEffect ?? 'none',
   };
 }
 
@@ -184,11 +186,15 @@ export async function updateOwnProfile(deps: Deps, input: {
   hasMessageFont: boolean;
   color?: unknown;
   messageFont?: unknown;
+  avatarDecoration?: unknown;
+  profileEffect?: unknown;
+  hasAvatarDecoration?: boolean;
+  hasProfileEffect?: boolean;
   ip: string;
 }) {
   const limit = blocked(deps, input.ip);
   if (limit) return limit;
-  if (!input.token || (!input.hasDisplayName && !input.hasBio && !input.hasBanner && !input.hasAvatar && !input.hasColor && !input.hasMessageFont)) {
+  if (!input.token || (!input.hasDisplayName && !input.hasBio && !input.hasBanner && !input.hasAvatar && !input.hasColor && !input.hasMessageFont && !input.hasAvatarDecoration && !input.hasProfileEffect)) {
     return { ok: false as const, error: 'invalid_credentials' as const };
   }
   const user = await sessionUser(deps, input.token);
@@ -224,6 +230,16 @@ export async function updateOwnProfile(deps: Deps, input: {
     const font = cleanMessageFont(input.messageFont);
     if (!font.ok) return { ok: false as const, error: 'invalid_credentials' as const };
     patch.messageFont = font.value;
+  }
+  if (input.hasAvatarDecoration) {
+    const value = cleanCosmetic(input.avatarDecoration, 'avatar');
+    if (!value.ok) return { ok: false as const, error: 'invalid_credentials' as const };
+    patch.avatarDecoration = value.value;
+  }
+  if (input.hasProfileEffect) {
+    const value = cleanCosmetic(input.profileEffect, 'profile');
+    if (!value.ok) return { ok: false as const, error: 'invalid_credentials' as const };
+    patch.profileEffect = value.value;
   }
   const updated = await deps.repo.updateMemberProfile(user.id, patch);
   if (updated === 'taken') return { ok: false as const, error: 'username_taken' as const };

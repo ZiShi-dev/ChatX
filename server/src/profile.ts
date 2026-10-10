@@ -44,3 +44,9 @@ export function cleanMessageFont(value: unknown) {
   if (typeof value !== 'string' || !MESSAGE_FONTS.has(value)) return { ok: false as const };
   return { ok: true as const, value };
 }
+
+export function cleanCosmetic(value: unknown, kind: 'avatar' | 'profile') {
+  const choices = kind === 'avatar' ? ['none', 'orbit', 'laurel', 'prism', 'hat'] : ['none', 'aurora', 'stars'];
+  if (value === null) return { ok: true as const, value: 'none' };
+  return typeof value === 'string' && choices.includes(value) ? { ok: true as const, value } : { ok: false as const };
+}

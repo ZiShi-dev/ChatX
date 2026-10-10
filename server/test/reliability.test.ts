@@ -172,6 +172,11 @@ it('verifies PostgreSQL migrations, cursor SQL and transaction rollback', { skip
       assert.equal((await repo.findUserByGoogleSub(person.id))?.id, person.id);
       await repo.createSession(hashSession(person.id), person.id, new Date(now.getTime() + 60000));
       assert.equal((await repo.findSessionUser(hashSession(person.id), now))?.id, person.id);
+      assert.equal(await repo.updateMemberProfile(person.id, { avatarDecoration: 'hat', profileEffect: 'aurora' }), 'ok');
+      assert.equal((await repo.findUserById(person.id))?.avatarDecoration, 'hat');
+      assert.equal((await repo.listUsers()).find(user => user.id === person.id)?.profileEffect, 'aurora');
+      assert.equal(await repo.updateMemberProfile(person.id, { avatarDecoration: 'none', profileEffect: 'none' }), 'ok');
+      assert.equal((await repo.findSessionUser(hashSession(person.id), now))?.avatarDecoration, 'none');
       assert.ok((await repo.listHome(person.id, now)).length > 0);
       assert.deepEqual(await repo.listSaved(person.id, 30), []);
     }));

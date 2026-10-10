@@ -26,6 +26,16 @@ afterEach(() => {
 });
 
 describe('authStore user style', () => {
+  it('saves and removes profile cosmetics across the server and local directory', async () => {
+    const fetch = vi.spyOn(adminApi, 'adminFetch').mockResolvedValue({ user: { ...baseUser, avatarDecoration: 'hat', profileEffect: 'stars' } });
+    expect(await useAuthStore.getState().saveAccountProfile({ avatarDecoration: 'hat', profileEffect: 'stars' })).toBe('ok');
+    expect(fetch).toHaveBeenCalledWith('/api/profile', { method: 'PATCH', body: { avatarDecoration: 'hat', profileEffect: 'stars' } });
+    expect(useUserStore.getState().users.find(user => user.id === MEMBER_ID)?.avatarDecoration).toBe('hat');
+    fetch.mockResolvedValue({ user: { ...baseUser, avatarDecoration: 'none', profileEffect: 'none' } });
+    await useAuthStore.getState().saveAccountProfile({ avatarDecoration: 'none', profileEffect: 'none' });
+    expect(useAuthStore.getState().currentUser.avatarDecoration).toBe('none');
+    expect(useUserStore.getState().users.find(user => user.id === MEMBER_ID)?.profileEffect).toBe('none');
+  });
   it('applies color and font locally before the server answers', async () => {
     const fetch = vi.spyOn(adminApi, 'adminFetch').mockImplementation(() => new Promise(() => {}));
     void useAuthStore.getState().saveAccountProfile({ color: '#c4893a', messageFont: 'classic' });
