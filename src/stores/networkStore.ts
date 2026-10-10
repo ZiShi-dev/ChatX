@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { Capacitor } from '@capacitor/core';
+import { getApiOrigin, nativeNeedsApiOrigin } from '../lib/apiOrigin';
 import type { NetworkState } from '../types/settings';
 
 type NetworkStore = {

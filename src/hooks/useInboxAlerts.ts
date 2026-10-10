@@ -9,6 +9,7 @@ import { notificationAvatars, presentInbox } from '../lib/inbox';
 import { localRoomKeyRecords } from '../lib/e2e';
 import { InboxWatch } from '../lib/inboxWatch';
 import { notifyChatMessage } from '../lib/notifications';
+import { getApiOrigin } from '../lib/apiOrigin';
 import { startPushRegistration, stopPushRegistration, syncPushPrefs } from '../lib/pushRegister';
 
 const fcmEnabled = import.meta.env.VITE_ENABLE_FCM === 'true';
@@ -17,8 +18,6 @@ import { useChatStore } from '../stores/chatStore';
 import { quietLevel, useMuteStore } from '../stores/muteStore';
 import { useSettingsStore } from '../stores/settingsStore';
 import { useUserStore } from '../stores/userStore';
-
-const HTTPS_ORIGIN = /^https:\/\/[A-Za-z0-9.-]+(?::[0-9]{1,5})?$/;
 
 let keySignature = '';
 let avatarSignature = '';
@@ -31,8 +30,8 @@ function watching(conversationId: string) {
 
 function rememberPhoneWatch() {
   if (!Capacitor.isNativePlatform()) return;
-  const origin = String(import.meta.env.VITE_API_ORIGIN ?? '').trim().replace(/\/$/, '');
-  if (!HTTPS_ORIGIN.test(origin)) return;
+  const origin = getApiOrigin();
+  if (!origin) return;
   const quiet = useMuteStore.getState().mutes.map((item) => `${item.conversationId}=${quietLevel(item)}`).join(',');
   const hiddenKinds = Object.entries(useSettingsStore.getState().notifyTypes)
     .filter(([, enabled]) => !enabled)

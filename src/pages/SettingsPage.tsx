@@ -1,5 +1,7 @@
 import { useRef, useState } from 'react';
+import { Capacitor } from '@capacitor/core';
 import { IonContent, IonHeader, IonPage, IonToggle } from '@ionic/react';
+import NativeServerSettings from '../components/settings/NativeServerSettings';
 import NetworkStatusBanner from '../components/common/NetworkBanner';
 import NotificationPermissionCard from '../components/common/NotificationPermission';
 import PageNav from '../components/common/PageNav';
@@ -191,6 +193,7 @@ export default function SettingsPage({ embedded = false }: SettingsPageProps) {
 
   const body = (
     <>
+        {Capacitor.isNativePlatform() ? <NativeServerSettings /> : null}
         <AppearanceSettings />
         <section className="settings-block">
           <h2>الخصوصية</h2>

@@ -32,10 +32,14 @@ export function cleanAvatar(value: unknown) {
 const ACCENT_COLORS = new Set([
   '#3d9b84',
   '#4d7ea8',
+  '#528fba',
   '#6f8f72',
+  '#4f8f6a',
   '#5f8f8a',
   '#a56b7a',
+  '#9b5a7c',
   '#c4893a',
+  '#d97838',
   '#7d6b9a',
   '#b08968',
 ]);

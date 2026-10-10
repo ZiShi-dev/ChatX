@@ -30,7 +30,8 @@ export default function AccountPage() {
     let alive = true;
     void loadAccount().then((result) => {
       if (!alive) return;
-      if (result === 'offline') setNotice('تعذر الاتصال.');
+      if (result === 'no_server') setNotice('اضبط عنوان الخادم من الإعدادات → الخادم.');
+      else if (result === 'offline') setNotice('تعذر الاتصال.');
       else if (result === 'invalid') setNotice('تعذر تحميل الحساب.');
       else setNotice('');
     });

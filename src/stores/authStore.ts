@@ -102,7 +102,7 @@ type AuthState = {
   logout: () => void;
   updateProfile: (patch: Partial<Pick<User, 'displayName' | 'username' | 'bio' | 'avatarUrl' | 'bannerUrl'>>) => void;
   saveAccountProfile: (patch: { displayName?: string; bio?: string; bannerUrl?: string | null; avatarUrl?: string | null; color?: string; messageFont?: MessageFontId }) => Promise<'ok' | 'local' | 'offline' | 'invalid' | 'username_taken'>;
-  loadAccount: () => Promise<'ok' | 'local' | 'offline' | 'invalid'>;
+  loadAccount: () => Promise<'ok' | 'local' | 'offline' | 'invalid' | 'no_server'>;
   applyPresence: (rows: Array<{ id: string; status: User['status']; lastSeenAt?: string }>) => void;
   markSelfOffline: () => void;
   signInWithGoogle: (credential: string) => Promise<{ ok: true; step: 'ready' } | { ok: true; step: 'profile'; name: string; picture: string } | { ok: false; reason: 'invalid' | 'offline' | 'rate_limited' }>;
@@ -225,6 +225,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       writeAuth(get());
       return 'ok';
     } catch (error) {
+      if (error instanceof AdminApiError && error.code === 'no_server') return 'no_server';
       const reason = inviteFailure(error);
       if (!SERVER_ID.test(current.id) && reason !== 'offline') return 'local';
       return reason === 'offline' ? 'offline' : 'invalid';

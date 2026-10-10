@@ -11,7 +11,7 @@ import { conversationTitle, formatMessageTime, formatNotificationTime } from '..
 import { isServerId } from '../../lib/home';
 import { toSavedEntry } from '../../lib/saved';
 import { normalizeLinkPreviewImage, previewImage, textParts, siteHost } from '../../lib/link';
-import { bubbleStyleForUser } from '../../lib/userStyle';
+import { displayNameStyleForUser } from '../../lib/userStyle';
 import { isSafeExternalUrl } from '../../lib/url';
 import { useDataSaver } from '../../hooks/useDataSaver';
 import { formatBytes, formatDuration, messagePreview } from '../../lib/media';
@@ -339,11 +339,14 @@ function PersonButton({ user, onOpen }: { user: User; onOpen?: (user: User) => v
 }
 
 function PersonName({ user, onOpen }: { user: User; onOpen?: (user: User) => void }) {
-  if (!onOpen) return <p className="bubble-author">{user.displayName}</p>;
+  const look = displayNameStyleForUser(user.color, user.messageFont);
+  const className = ['bubble-author', look.className].join(' ');
+  if (!onOpen) return <p className={className} style={look.style}>{user.displayName}</p>;
   return (
     <button
       type="button"
-      className="bubble-author"
+      className={className}
+      style={look.style}
       onPointerDown={(event) => event.stopPropagation()}
       onClick={(event) => {
         event.stopPropagation();
@@ -359,8 +362,6 @@ function MessageBubble({ message, mine, showAuthor, group = false, direct = fals
   const currentUser = useAuthStore((state) => state.currentUser);
   const currentUserId = currentUser.id;
   const username = currentUser.username;
-  const styleUser = mine ? currentUser : author;
-  const bubbleLook = styleUser ? bubbleStyleForUser(styleUser.color, mine, styleUser.messageFont) : undefined;
   const replyToMe = useChatStore((state) => {
     if (!message.replyToId || message.senderId === currentUserId) return false;
     const parent = state.messages.find((item) => item.id === message.replyToId);
@@ -711,8 +712,7 @@ function MessageBubble({ message, mine, showAuthor, group = false, direct = fals
       )}
       {showAuthor && !mine && author && <PersonButton user={author} onOpen={onOpenProfile} />}
       <div
-        className={['bubble', tone ? `is-${tone}` : '', message.link ? 'has-link' : '', message.type === 'image' || message.type === 'video' ? 'has-media' : '', mediaSending ? 'is-sending' : '', bubbleLook?.className].filter(Boolean).join(' ')}
-        style={bubbleLook?.style}
+        className={['bubble', tone ? `is-${tone}` : '', message.link ? 'has-link' : '', message.type === 'image' || message.type === 'video' ? 'has-media' : '', mediaSending ? 'is-sending' : ''].filter(Boolean).join(' ')}
       >
         {tone && tone !== 'reply' && <AimMark tone={tone} />}
         {showAuthor && !mine && author && <PersonName user={author} onOpen={onOpenProfile} />}

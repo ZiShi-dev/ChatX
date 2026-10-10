@@ -14,7 +14,7 @@ afterEach(() => {
   useUserStore.setState({ users: oldUsers });
 });
 
-it('shows peer bubble color and font to other readers', () => {
+it('shows peer name color and font without styling the bubble', () => {
   const peer = {
     ...oldUsers[0],
     id: 'peer-1111-4111-8111-111111111111',
@@ -37,13 +37,14 @@ it('shows peer bubble color and font to other readers', () => {
   const { container } = render(
     <MessageBubble message={message} mine={false} showAuthor author={peer} onOpenProfile={vi.fn()} />,
   );
-  const bubble = container.querySelector('.bubble.has-user-style');
-  expect(bubble).toBeTruthy();
-  expect((bubble as HTMLElement).style.borderColor).toBe('#a56b7a');
-  expect((bubble as HTMLElement).style.fontFamily).toContain('Georgia');
+  const author = container.querySelector('button.bubble-author')!;
+  expect(author.className).toContain('has-user-display');
+  expect((author as HTMLElement).style.color).toMatch(/165,\s*107,\s*122|#a56b7a/i);
+  expect((author as HTMLElement).style.fontFamily).toContain('Georgia');
+  expect(container.querySelector('.bubble.has-user-display')).toBeNull();
 });
 
-it('uses the signed-in style on outgoing bubbles', () => {
+it('keeps default bubble classes for outgoing messages', () => {
   useAuthStore.setState({
     currentUser: {
       ...oldAuth,
@@ -62,7 +63,6 @@ it('uses the signed-in style on outgoing bubbles', () => {
     createdAt: '2026-10-10T10:00:00.000Z',
   };
   const { container } = render(<MessageBubble message={message} mine showAuthor={false} />);
-  const bubble = container.querySelector('.bubble.has-user-style');
-  expect(bubble).toBeTruthy();
-  expect((bubble as HTMLElement).style.fontFamily).toContain('Tahoma');
+  expect(container.querySelector('.bubble.has-user-display')).toBeNull();
+  expect(container.querySelector('.bubble-stack.mine .bubble')).toBeTruthy();
 });

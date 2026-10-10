@@ -9,7 +9,7 @@ import Avatar from '../components/common/Avatar';
 import { connectionLabel, getUserPresence } from '../lib/presence';
 import { roleLabel } from '../lib/roles';
 import { readBanner, readPhoto } from '../lib/photo';
-import { bubbleStyleForUser, fontLabel, MESSAGE_FONT_OPTIONS, USER_COLOR_OPTIONS } from '../lib/userStyle';
+import { displayNameStyleForUser, fontLabel, MESSAGE_FONT_OPTIONS, USER_COLOR_OPTIONS } from '../lib/userStyle';
 import type { MessageFontId } from '../types/user';
 import { useAuthStore } from '../stores/authStore';
 
@@ -40,7 +40,7 @@ export default function ProfilePage({ embedded = false, onShowSettings, scrollHo
   const [draftColor, setDraftColor] = useState(currentUser.color);
   const [draftFont, setDraftFont] = useState<MessageFontId>(currentUser.messageFont ?? 'system');
   const [saveError, setSaveError] = useState('');
-  const previewBubble = bubbleStyleForUser(draftColor, true, draftFont);
+  const previewName = displayNameStyleForUser(draftColor, draftFont);
 
   useEffect(() => {
     if (!scrollHold) return;
@@ -177,13 +177,13 @@ export default function ProfilePage({ embedded = false, onShowSettings, scrollHo
             </dd>
           </div>
           <div>
-            <dt>لون الرسائل</dt>
+            <dt>لون الاسم</dt>
             <dd className="profile-style-swatch" style={{ '--style-color': currentUser.color } as CSSProperties}>
               <span aria-hidden="true" />
             </dd>
           </div>
           <div>
-            <dt>خط الرسائل</dt>
+            <dt>خط الاسم</dt>
             <dd>{fontLabel(currentUser.messageFont)}</dd>
           </div>
         </dl>
@@ -257,9 +257,9 @@ export default function ProfilePage({ embedded = false, onShowSettings, scrollHo
                 <textarea dir="auto" maxLength={160} value={draftBio} placeholder="نبذة قصيرة" onChange={(event) => setDraftBio(event.target.value)} />
               </label>
               <div className="profile-style-block">
-                <span className="profile-style-title">لون الرسائل</span>
-                <p className="profile-style-hint">يظهر في محادثاتك للجميع وفي ملفك.</p>
-                <div className="profile-color-grid" role="listbox" aria-label="لون الرسائل">
+                <span className="profile-style-title">لون الاسم</span>
+                <p className="profile-style-hint">يظهر اسمك بهذا اللون فوق رسائلك في المجموعات، للجميع.</p>
+                <div className="profile-color-grid" role="listbox" aria-label="لون الاسم">
                   {USER_COLOR_OPTIONS.map((color) => (
                     <button
                       key={color}
@@ -276,8 +276,9 @@ export default function ProfilePage({ embedded = false, onShowSettings, scrollHo
                 </div>
               </div>
               <div className="profile-style-block">
-                <span className="profile-style-title">خط الرسائل</span>
-                <div className="profile-font-grid" role="listbox" aria-label="خط الرسائل">
+                <span className="profile-style-title">خط الاسم</span>
+                <p className="profile-style-hint">نفس الخط لاسمك في المحادثات. نص الرسالة يبقى بخط التطبيق.</p>
+                <div className="profile-font-grid" role="listbox" aria-label="خط الاسم">
                   {MESSAGE_FONT_OPTIONS.map((font) => (
                     <button
                       key={font.id}
@@ -292,7 +293,12 @@ export default function ProfilePage({ embedded = false, onShowSettings, scrollHo
                     </button>
                   ))}
                 </div>
-                <p className="profile-style-preview bubble has-user-style" style={previewBubble.style}>مرحبًا، هكذا تظهر رسائلك.</p>
+                <div className="profile-style-preview">
+                  <span className={`bubble-author ${previewName.className}`} style={previewName.style} dir="auto">
+                    {displayName.trim() || currentUser.displayName}
+                  </span>
+                  <p className="profile-style-preview-msg">مثال على شكل الاسم فوق الرسالة.</p>
+                </div>
               </div>
               {saveError ? <p className="form-error">{saveError}</p> : null}
               <div className="account-actions">

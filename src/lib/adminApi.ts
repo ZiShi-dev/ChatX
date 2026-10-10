@@ -1,4 +1,5 @@
 import { Capacitor } from '@capacitor/core';
+import { getApiOrigin, nativeNeedsApiOrigin } from './apiOrigin';
 import { reportNetworkFailure, reportNetworkSuccess } from '../stores/networkStore';
 import { syncServerClock } from './serverClock';
 import { retryAfterMs } from './retry';

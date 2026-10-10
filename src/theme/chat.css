@@ -1813,9 +1813,12 @@ ion-content.chat-scroll::part(scroll) {
   border-inline-start-width: 3px;
 }
 
-.bubble.has-user-style {
-  border-width: 1px;
-  border-style: solid;
+.bubble-author.has-user-display {
+  font-weight: 700;
+}
+
+button.bubble-author.has-user-display {
+  color: var(--author-display-color, inherit);
 }
 
 .profile-style-block {
@@ -1837,11 +1840,19 @@ ion-content.chat-scroll::part(scroll) {
   line-height: 1.4;
 }
 
-.profile-color-grid,
+.profile-color-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+  justify-items: center;
+  width: 100%;
+}
+
 .profile-font-grid {
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 8px;
+  width: 100%;
 }
 
 .profile-color-grid button {
@@ -1883,9 +1894,20 @@ ion-content.chat-scroll::part(scroll) {
 }
 
 .profile-style-preview {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
   margin: 0;
-  padding: 10px 12px;
+  padding: 12px;
+  border: 1px solid var(--chatx-frame);
   border-radius: 12px;
+  background: var(--chatx-surface);
+}
+
+.profile-style-preview-msg {
+  margin: 0;
+  color: var(--chatx-muted);
+  font-size: 12px;
 }
 
 .profile-style-swatch span {
@@ -4217,6 +4239,37 @@ ion-toolbar.network-toolbar.slow {
   --color: #1a1408;
   --ion-toolbar-color: #1a1408;
   color: #1a1408;
+}
+
+ion-toolbar.network-toolbar.setup {
+  --background: #3d5a80;
+  --color: #f4fbf8;
+  --ion-toolbar-color: #f4fbf8;
+  color: #f4fbf8;
+}
+
+.settings-ok {
+  margin: 0;
+  color: var(--chatx-accent);
+  font-size: 13px;
+}
+
+.settings-muted {
+  margin: 0;
+  color: var(--chatx-muted);
+  font-size: 12px;
+}
+
+.settings-save {
+  align-self: stretch;
+  min-height: 44px;
+  margin-top: 4px;
+  border: 0;
+  border-radius: 12px;
+  background: var(--chatx-accent);
+  color: var(--chatx-on-accent, #fff);
+  font: inherit;
+  font-weight: 700;
 }
 
 .network-banner {
