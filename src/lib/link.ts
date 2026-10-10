@@ -47,3 +47,15 @@ export function linkDraft(url: string): MessageLink {
 export function textParts(text: string) {
   return text.split(/(https?:\/\/[^\s]+)/g).filter((part) => part.length > 0);
 }
+
+const PREVIEW_IMAGE = /^data:image\/(?:jpeg|png|gif|webp);base64,[a-z0-9+/]+={0,2}$/i;
+
+export function readPreviewPayload(data: unknown) {
+  if (!data || typeof data !== 'object') return null;
+  const row = data as Record<string, unknown>;
+  const title = typeof row.title === 'string' ? row.title.replace(/\s+/g, ' ').trim().slice(0, 140) : '';
+  const description = typeof row.description === 'string' ? row.description.replace(/\s+/g, ' ').trim().slice(0, 200) : '';
+  const image = typeof row.image === 'string' && row.image.length <= 200_000 && PREVIEW_IMAGE.test(row.image) ? row.image : '';
+  if (!title && !description && !image) return null;
+  return { title, description, image };
+}

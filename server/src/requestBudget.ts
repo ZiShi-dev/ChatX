@@ -17,6 +17,7 @@ export function createRequestBudget(now:()=>number) {
     const general=consume('ip:'+ip,1200);if(general)return general;
     const path=new URL(request.url).pathname;
     if(path.startsWith('/api/auth/google'))return consume('auth:'+ip,30);
+    if(path==='/api/links/preview')return consume('link:'+ip,40);
     if(path==='/api/owner/erase' || path==='/api/owner/groups/erase') {
       const token=readCookie(request.headers.get('cookie'),'chatx_session');
       const limited=consume('owner:'+(token?hashSession(token):ip),10);

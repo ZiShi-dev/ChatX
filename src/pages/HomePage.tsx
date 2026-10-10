@@ -12,6 +12,7 @@ import {
 import { chevronDownOutline, createOutline, notificationsOutline } from 'ionicons/icons';
 import { useNavigate } from 'react-router-dom';
 import Avatar from '../components/common/Avatar';
+import PermissionDialog from '../components/common/PermissionDialog';
 import NetworkStatusBanner from '../components/common/NetworkBanner';
 import EmptyState from '../components/common/EmptyState';
 import PageSkeleton from '../components/common/PageSkeleton';
@@ -19,6 +20,7 @@ import ConversationItem from '../components/conversations/ConversationItem';
 import MuteSheet from '../components/conversations/MuteSheet';
 import {
   conversationTitle,
+  deletedPrivatePeer,
   formatConversationTime,
   isGlobalConversation,
   lastMessageOf,
@@ -54,6 +56,8 @@ export default function HomePage() {
   const mutes = useMuteStore((state) => state.mutes);
   const [filter, setFilter] = useState<Filter>('all');
   const [muteTarget, setMuteTarget] = useState<Conversation>();
+  const [removeTarget, setRemoveTarget] = useState<Conversation>();
+  const dismissDeletedChat = useChatStore((state) => state.dismissDeletedChat);
   const [ready, setReady] = useState(false);
   const [notice, setNotice] = useState('');
   const serverAccount = isServerId(currentUser.id);
@@ -120,23 +124,26 @@ export default function HomePage() {
   const renderConversation = (conversation: Conversation) => {
     const last = lastMessageOf(conversation, messages);
     const other = conversation.type === 'private' ? otherParticipant(conversation, currentUser.id, users) : undefined;
+    const gone = deletedPrivatePeer(conversation, currentUser.id, users);
     const people = conversation.type === 'private' ? [] : membersOf(conversation, users);
     const online = people.filter((user) => user.status === 'online').length;
     return (
       <ConversationItem
         key={conversation.id}
         title={conversationTitle(conversation, currentUser.id, users)}
-        color={other?.color ?? '#3d9b84'}
+        color={other?.color ?? '#8ea099'}
         photo={conversation.type === 'private' ? other?.avatarUrl : conversation.avatarUrl}
-        preview={messagePreview(last, last?.senderId === currentUser.id)}
+        preview={gone ? 'لا يمكن مراسلته بعد الآن' : messagePreview(last, last?.senderId === currentUser.id)}
         deleted={Boolean(last?.deletedForEveryone)}
         time={last ? formatConversationTime(last.createdAt) : undefined}
-        unread={conversation.unreadCount}
+        unread={gone ? 0 : conversation.unreadCount}
         type={conversation.type}
         detail={people.length > 0 ? roomSummary(people.length, online) : undefined}
-        muted={muteHint(conversation.id, mutes)}
+        muted={gone ? undefined : muteHint(conversation.id, mutes)}
+        gone={gone}
+        onRemove={gone ? () => setRemoveTarget(conversation) : undefined}
         onClick={() => navigate(`/chat/${conversation.id}`)}
-        onHold={() => setMuteTarget(conversation)}
+        onHold={() => { if (!gone) setMuteTarget(conversation); }}
       />
     );
   };
@@ -214,6 +221,21 @@ export default function HomePage() {
           {inboxBadge && <span className="dock-badge">{inboxBadge}</span>}
         </button>
       </div>
+      {removeTarget && (
+        <PermissionDialog
+          title="إزالة المحادثة"
+          body="ستختفي من المحادثات الأخيرة والخاصة. الحساب محذوف ولن تعود الرسائل."
+          allowLabel="إزالة"
+          onAllow={() => {
+            const id = removeTarget.id;
+            setRemoveTarget(undefined);
+            void dismissDeletedChat(id).then((ok) => {
+              if (!ok) setNotice('تعذر إزالة المحادثة.');
+            });
+          }}
+          onLater={() => setRemoveTarget(undefined)}
+        />
+      )}
       {muteTarget && (
         <MuteSheet
           conversation={muteTarget}

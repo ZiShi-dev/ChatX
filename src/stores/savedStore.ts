@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { isServerId } from '../lib/home';
-import { readSavedPayload, toggleSaved, type SavedEntry } from '../lib/saved';
+import { readSavedPayload, savedPreview, toggleSaved, type SavedEntry } from '../lib/saved';
+import { openPreview } from '../lib/e2e';
 import { adminFetch } from '../lib/adminApi';
 import { useAuthStore } from './authStore';
 
@@ -57,8 +58,13 @@ export const useSavedStore = create<SavedStore>((set, get) => ({
     const last = get().entries.filter((entry) => entry.userId === me).at(-1);
     const payload = await adminFetch(`/api/saved${older && last ? `?beforeId=${encodeURIComponent(last.messageId)}` : ''}`);
     if (version !== accountVersion || me !== useAuthStore.getState().currentUser.id) return;
-    const items = readSavedPayload(payload, me);
-    if (!items) return;
+    const parsed = readSavedPayload(payload, me);
+    if (!parsed) return;
+    const items = await Promise.all(parsed.map(async ({ sealed, ...entry }) => {
+      const plain = sealed ? await openPreview(me, entry.conversationId, entry.messageId, sealed) : null;
+      return plain ? { ...entry, preview: savedPreview(plain) } : entry;
+    }));
+    if (version !== accountVersion || me !== useAuthStore.getState().currentUser.id) return;
     set((state) => {
       const entries = older
         ? [...state.entries, ...items.filter((item) => !state.entries.some((entry) => entry.userId === me && entry.messageId === item.messageId))]

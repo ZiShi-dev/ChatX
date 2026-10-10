@@ -63,8 +63,16 @@ export function otherParticipant(conversation: Conversation, currentUserId: stri
   return users.find((user) => user.id === otherId);
 }
 
+export function deletedPrivatePeer(conversation: Conversation, currentUserId: string, users: User[]) {
+  if (conversation.type !== 'private') return false;
+  const otherId = conversation.participantIds.find((id) => id !== currentUserId);
+  if (!otherId) return true;
+  return !users.some((user) => user.id === otherId);
+}
+
 export function conversationTitle(conversation: Conversation, currentUserId: string, users: User[]) {
   if (conversation.type === 'private') {
+    if (deletedPrivatePeer(conversation, currentUserId, users)) return 'حساب محذوف';
     return otherParticipant(conversation, currentUserId, users)?.displayName ?? 'محادثة خاصة';
   }
   return conversation.name ?? 'مجموعة';

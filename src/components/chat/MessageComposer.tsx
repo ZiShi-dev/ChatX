@@ -3,7 +3,7 @@ import { FilePicker } from '@capawesome/capacitor-file-picker';
 import { Camera } from '@capacitor/camera';
 import { Capacitor } from '@capacitor/core';
 import { IonIcon } from '@ionic/react';
-import { addOutline, cameraOutline, checkmark, closeOutline, documentOutline, folderOutline, happyOutline, imagesOutline, send } from 'ionicons/icons';
+import { attachOutline, cameraOutline, checkmark, closeOutline, documentOutline, folderOutline, happyOutline, imagesOutline, send } from 'ionicons/icons';
 import PermissionDialog from '../common/PermissionDialog';
 import EmojiPanel from './EmojiPanel';
 import Avatar from '../common/Avatar';
@@ -638,65 +638,81 @@ export default function MessageComposer({ conversationId }: MessageComposerProps
           </div>
         )}
         {emojiOpen && <EmojiPanel onPick={insertEmoji} onClose={() => { setEmojiOpen(false); fieldRef.current?.focus(); }} />}
-        <div className="composer-field">
-          <button
-            type="button"
-            className={menuOpen ? 'composer-icon open' : 'composer-icon'}
-            aria-label={menuOpen ? 'إغلاق' : 'مرفق'}
-            aria-expanded={menuOpen}
-            disabled={Boolean(editing)}
-            onClick={() => {
-              setEmojiOpen(false);
-              setMenuOpen((open) => !open);
-            }}
-          >
-            <IonIcon icon={addOutline} />
-          </button>
-          <button
-            type="button"
-            className={emojiOpen ? 'composer-icon is-on' : 'composer-icon'}
-            aria-label="إيموجي"
-            aria-expanded={emojiOpen}
-            onClick={() => {
-              setMenuOpen(false);
-              if (!emojiOpen) fieldRef.current?.blur();
-              setEmojiOpen((open) => !open);
-            }}
-          >
-            <IonIcon icon={happyOutline} />
-          </button>
-          <textarea
-            ref={fieldRef}
-            className="composer-input"
-            rows={1}
-            dir="ltr"
-            value={draft}
-            placeholder="اكتب رسالة"
-            enterKeyHint="send"
-            onChange={(event) => {
-              setDraft(event.target.value);
-              setCursor(event.target.selectionStart ?? event.target.value.length);
-              setMentionIndex(0);
-              resizeField();
-            }}
-            onSelect={(event) => setCursor(event.currentTarget.selectionStart ?? 0)}
-            onKeyDown={(event) => {
-              if (matches.length > 0 && event.key === 'ArrowDown') {
-                event.preventDefault();
-                setMentionIndex((index) => (index + 1) % matches.length);
-                return;
-              }
-              if (matches.length > 0 && event.key === 'ArrowUp') {
-                event.preventDefault();
-                setMentionIndex((index) => (index - 1 + matches.length) % matches.length);
-                return;
-              }
-              if (event.key === 'Enter' && !event.shiftKey) {
-                event.preventDefault();
-                void submit();
-              }
-            }}
-          />
+        <div className="composer-bar">
+          <div className="composer-field">
+            <button
+              type="button"
+              className={emojiOpen ? 'composer-icon is-on' : 'composer-icon'}
+              aria-label="إيموجي"
+              aria-expanded={emojiOpen}
+              onClick={() => {
+                setMenuOpen(false);
+                if (!emojiOpen) fieldRef.current?.blur();
+                setEmojiOpen((open) => !open);
+              }}
+            >
+              <IonIcon icon={happyOutline} />
+            </button>
+            <textarea
+              ref={fieldRef}
+              className="composer-input"
+              rows={1}
+              dir="auto"
+              value={draft}
+              placeholder="اكتب رسالة"
+              enterKeyHint="send"
+              onChange={(event) => {
+                setDraft(event.target.value);
+                setCursor(event.target.selectionStart ?? event.target.value.length);
+                setMentionIndex(0);
+                resizeField();
+              }}
+              onSelect={(event) => setCursor(event.currentTarget.selectionStart ?? 0)}
+              onKeyDown={(event) => {
+                if (matches.length > 0 && event.key === 'ArrowDown') {
+                  event.preventDefault();
+                  setMentionIndex((index) => (index + 1) % matches.length);
+                  return;
+                }
+                if (matches.length > 0 && event.key === 'ArrowUp') {
+                  event.preventDefault();
+                  setMentionIndex((index) => (index - 1 + matches.length) % matches.length);
+                  return;
+                }
+                if (event.key === 'Enter' && !event.shiftKey) {
+                  event.preventDefault();
+                  void submit();
+                }
+              }}
+            />
+            <button
+              type="button"
+              className={menuOpen ? 'composer-icon open' : 'composer-icon'}
+              aria-label={menuOpen ? 'إغلاق' : 'مرفق'}
+              aria-expanded={menuOpen}
+              disabled={Boolean(editing)}
+              onClick={() => {
+                setEmojiOpen(false);
+                setMenuOpen((open) => !open);
+              }}
+            >
+              <IonIcon icon={menuOpen ? closeOutline : attachOutline} />
+            </button>
+            {!editing && !draft.trim() && attachments.length === 0 && (
+              <button
+                type="button"
+                className="composer-icon"
+                aria-label="الكاميرا"
+                onClick={() => {
+                  setMenuOpen(false);
+                  setEmojiOpen(false);
+                  void openCamera();
+                }}
+              >
+                <IonIcon icon={cameraOutline} />
+              </button>
+            )}
+          </div>
           <button type="submit" className={editing ? 'composer-send is-edit' : 'composer-send'} disabled={!canSend} aria-label={editing ? 'حفظ' : 'إرسال'}>
             <IonIcon icon={editing ? checkmark : send} />
           </button>

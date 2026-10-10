@@ -1,6 +1,7 @@
 import type { Deps } from './authService.ts';
 import { hashSession } from './session.ts';
-import type { InboxKind, InboxNotice } from './types.ts';
+import { isSealed } from './sealed.ts';
+import type { InboxKind, InboxNotice, RoomMessage } from './types.ts';
 
 export const INBOX_PAGE_SIZE = 30;
 
@@ -16,7 +17,20 @@ export function messageKind(text: string, username: string, repliedToMe: boolean
   return 'message';
 }
 
+/** Sealed messages carry sender-declared hints because the server cannot read @mentions. */
+export function noticeKind(message: Pick<RoomMessage, 'text' | 'hints'>, member: { id: string; username: string }, repliedToMe: boolean): InboxKind {
+  if (!isSealed(message.text)) return messageKind(message.text, member.username, repliedToMe);
+  if (message.hints?.mentions.includes(member.id)) return 'mention';
+  if (message.hints?.everyone) return 'everyone';
+  if (repliedToMe) return 'reply';
+  if (message.hints?.signal) return 'signal';
+  return 'message';
+}
+
+export const SEALED_PREVIEW = 'رسالة جديدة';
+
 function preview(text: string) {
+  if (isSealed(text)) return SEALED_PREVIEW;
   const flat = text.replace(/\s+/g, ' ').trim();
   return flat.length <= 80 ? flat : `${flat.slice(0, 80)}…`;
 }
@@ -36,6 +50,7 @@ export function inboxView(notice: InboxNotice) {
     kind: notice.kind,
     createdAt: notice.createdAt.toISOString(),
     preview: notice.deleted ? 'رسالة محذوفة' : preview(notice.text),
+    ...(!notice.deleted && notice.kind !== 'reaction' && isSealed(notice.text) ? { sealed: notice.text } : {}),
     unread: !notice.read,
   };
 }

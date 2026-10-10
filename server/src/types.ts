@@ -1,3 +1,5 @@
+import type { NoticeHints } from './sealed.ts';
+
 export type AuthRole = 'creator' | 'admin' | 'member';
 
 export type AuthUser = {
@@ -45,7 +47,23 @@ export type OwnerAudit = {
   detail: string;
 };
 
+export type KeyBackup = { salt: string; iv: string; data: string; iterations: number };
+
+export type UserKeys = { publicKey: string | null; backup: KeyBackup | null };
+
+export type RoomKeyWrap = { keyId: string; memberId: string; wrapped: string };
+
+export type RoomKeys = {
+  members: Array<{ id: string; publicKey: string | null }>;
+  keys: Array<{ keyId: string; createdAt: Date; memberIds: string[] }>;
+  mine: Array<{ keyId: string; wrapperPublic: string; wrapped: string }>;
+};
+
 export interface AuthRepository {
+  readUserKeys(userId: string): Promise<UserKeys>;
+  saveUserKeys(userId: string, publicKey: string, backup: KeyBackup, reset: boolean): Promise<'ok' | 'exists' | 'missing'>;
+  listRoomKeys(roomId: string, userId: string): Promise<RoomKeys | null>;
+  addRoomKeys(roomId: string, userId: string, wraps: RoomKeyWrap[], at: Date): Promise<'ok' | 'missing' | 'invalid'>;
   findUserByGoogleSub(sub:string):Promise<AuthUser | null>;
   bindGoogleSub(id:string,sub:string):Promise<boolean>;
   readRoomSync(roomId: string, userId: string, cursor: string | null): Promise<RoomSync | null>;
@@ -88,12 +106,13 @@ export interface AuthRepository {
   listReactions(roomId: string, messageIds?: string[]): Promise<StoredReaction[]>;
   listReaders(roomId: string): Promise<RoomReader[]>;
   createRoom(input: { id: string; kind: 'private' | 'group'; name: string | null; creatorId: string; memberIds: string[]; at: Date }): Promise<string | 'invalid'>;
+  dropOrphanPrivate(roomId: string, userId: string): Promise<'ok' | 'missing' | 'forbidden'>;
   listSaved(userId: string, limit: number, beforeId?: string): Promise<SavedItem[]>;
   setSaved(userId: string, messageId: string, saved: boolean, at: Date): Promise<'ok' | 'missing'>;
 }
 
 export type RoomSync = { historyHasMore: boolean; messages: RoomMessage[]; reactions: StoredReaction[]; readers: RoomReader[]; removedIds: string[]; cursor: string; reset: boolean; hasMore: boolean };
-export type Upload = { id: string; roomId: string; ownerId: string; kind: 'image' | 'file'; name: string; size: number; sha256: string; replyToId: string | null; bytes: Uint8Array; expiresAt: Date };
+export type Upload = { id: string; roomId: string; ownerId: string; kind: 'image' | 'file'; name: string; size: number; sha256: string; replyToId: string | null; bytes: Uint8Array; expiresAt: Date; sealed?: string | null };
 
 export type RoomKind = 'global' | 'group' | 'private';
 
@@ -135,6 +154,7 @@ export type RoomMessage = {
   fileBytes?: number | null;
   editedAt?: Date | null;
   event?: boolean;
+  hints?: NoticeHints;
 };
 
 export type InboxNotice = {

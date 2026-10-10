@@ -7,6 +7,7 @@ import { StatusBar, Style } from '@capacitor/status-bar';
 import { IonApp, IonRouterOutlet, setupIonicReact } from '@ionic/react';
 import AppErrorBoundary from './components/common/AppErrorBoundary';
 import StartupScreen from './components/common/StartupScreen';
+import KeyGate from './components/common/KeyGate';
 import { NotificationPermissionDialog } from './components/common/NotificationPermission';
 import PageSkeleton, { type SkeletonKind } from './components/common/PageSkeleton';
 import ActivationPage from './pages/ActivationPage';
@@ -95,7 +96,8 @@ function AppRoutes() {
     <BrowserRouter>
       <NativeChrome />
       <NotificationPermissionDialog />
-      <IonRouterOutlet>
+      <KeyGate>
+        <IonRouterOutlet>
         <Routes>
         <Route path="/activation" element={activated ? <Navigate to="/home" replace /> : <ActivationPage />} />
         <Route path="/home" element={guard(<HomePage />)} />
@@ -113,7 +115,8 @@ function AppRoutes() {
         <Route path="/" element={<Navigate to={activated ? '/home' : '/activation'} replace />} />
         <Route path="*" element={<Navigate to={activated ? '/home' : '/activation'} replace />} />
         </Routes>
-      </IonRouterOutlet>
+        </IonRouterOutlet>
+      </KeyGate>
     </BrowserRouter>
   );
 }

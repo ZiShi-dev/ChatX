@@ -1,8 +1,9 @@
 import { randomInt, randomUUID } from 'node:crypto';
 import { GLOBAL_ROOM_ID } from './home.ts';
 import { resolveGroupTurn } from './groupTurn.ts';
-import { messageKind } from './inbox.ts';
-import type { AuthRepository, Upload, AuthUser, EraseChoices, HomeRoom, InboxNotice, OwnerAudit, ProfilePatch, RoomMessage, RoomReader, SavedItem, StoredReaction } from './types.ts';
+import { noticeKind } from './inbox.ts';
+import { isSealed } from './sealed.ts';
+import type { AuthRepository, KeyBackup, Upload, AuthUser, EraseChoices, HomeRoom, InboxNotice, OwnerAudit, ProfilePatch, RoomMessage, RoomReader, SavedItem, StoredReaction } from './types.ts';
 import { auditDetail, ERASE_OPERATOR_EMAIL, resolveEraseChoices, resolveGroupChoices } from './eraseMember.ts';
 
 function copyUser(user: AuthUser): AuthUser {
@@ -24,6 +25,8 @@ export function createMemoryRepository(): AuthRepository {
   const reactions = new Map<string, StoredReaction & { createdAt: number }>();
   const notices: Array<Omit<InboxNotice, 'conversationName' | 'deleted'> & { userId: string }> = [];
   const audits: OwnerAudit[] = [];
+  const identities = new Map<string, { publicKey: string; backup: KeyBackup }>();
+  const roomKeys = new Map<string, { roomId: string; keyId: string; memberId: string; wrapperPublic: string; wrapped: string; createdAt: number }>();
   const ownerBound = (actorId: string) => {
     const actor = users.get(actorId);
     return Boolean(actor && actor.email.toLowerCase() === ERASE_OPERATOR_EMAIL && actor.googleSub);
@@ -48,6 +51,53 @@ export function createMemoryRepository(): AuthRepository {
   };
 
   return {
+    async readUserKeys(userId) {
+      const identity = identities.get(userId);
+      return { publicKey: identity?.publicKey ?? null, backup: identity ? { ...identity.backup } : null };
+    },
+    async saveUserKeys(userId, publicKey, backup, reset) {
+      if (!users.has(userId)) return 'missing';
+      const old = identities.get(userId);
+      if (old && old.publicKey !== publicKey && !reset) return 'exists';
+      if (old && old.publicKey !== publicKey) for (const [key, row] of roomKeys) if (row.memberId === userId) roomKeys.delete(key);
+      identities.set(userId, { publicKey, backup: { ...backup } });
+      return 'ok';
+    },
+    async listRoomKeys(roomId, userId) {
+      if (!members.has(memberKey(roomId, userId))) return null;
+      const rows = [...roomKeys.values()].filter((row) => row.roomId === roomId);
+      const grouped = new Map<string, { keyId: string; createdAt: Date; memberIds: string[] }>();
+      for (const row of rows) {
+        const key = grouped.get(row.keyId) ?? { keyId: row.keyId, createdAt: new Date(row.createdAt), memberIds: [] };
+        key.memberIds.push(row.memberId);
+        if (row.createdAt < key.createdAt.getTime()) key.createdAt = new Date(row.createdAt);
+        grouped.set(row.keyId, key);
+      }
+      return {
+        members: [...members.values()].filter((m) => m.roomId === roomId).map((m) => ({ id: m.userId, publicKey: identities.get(m.userId)?.publicKey ?? null }))
+          .sort((a, b) => a.id.localeCompare(b.id)),
+        keys: [...grouped.values()].map((key) => ({ ...key, memberIds: key.memberIds.sort() }))
+          .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime() || b.keyId.localeCompare(a.keyId)).slice(0, 50),
+        mine: rows.filter((row) => row.memberId === userId).sort((a, b) => b.createdAt - a.createdAt)
+          .map((row) => ({ keyId: row.keyId, wrapperPublic: row.wrapperPublic, wrapped: row.wrapped })),
+      };
+    },
+    async addRoomKeys(roomId, userId, wraps, at) {
+      if (!members.has(memberKey(roomId, userId))) return 'missing';
+      const actor = identities.get(userId);
+      if (!actor || wraps.some((wrap) => !members.has(memberKey(roomId, wrap.memberId)) || !identities.has(wrap.memberId))) return 'invalid';
+      const rows = [...roomKeys.values()].filter((row) => row.roomId === roomId);
+      for (const keyId of new Set(wraps.map((wrap) => wrap.keyId))) {
+        const known = rows.filter((row) => row.keyId === keyId);
+        const allowed = known.length ? known.some((row) => row.memberId === userId) : wraps.some((wrap) => wrap.keyId === keyId && wrap.memberId === userId);
+        if (!allowed) return 'invalid';
+      }
+      for (const wrap of wraps) {
+        const key = `${roomId}:${wrap.keyId}:${wrap.memberId}`;
+        if (!roomKeys.has(key)) roomKeys.set(key, { roomId, keyId: wrap.keyId, memberId: wrap.memberId, wrapperPublic: actor.publicKey, wrapped: wrap.wrapped, createdAt: at.getTime() });
+      }
+      return 'ok';
+    },
     async findUserByGoogleSub(sub) { const user=[...users.values()].find((user)=>user.googleSub===sub);return user?copyUser(user):null; },
     async bindGoogleSub(id,sub) {const user=users.get(id);if(!user || user.role!=='member' || user.googleSub && user.googleSub!==sub || [...users.values()].some((other)=>other.id!==id&&other.googleSub===sub))return false;user.googleSub=sub;return true;},
     async deleteUpload(roomId, ownerId, id) { const row = uploads.get(id); if (row?.roomId === roomId && row.ownerId === ownerId) uploads.delete(id); },
@@ -80,7 +130,7 @@ export function createMemoryRepository(): AuthRepository {
       if (!members.has(memberKey(upload.roomId, upload.ownerId))) return null;
       for (const [id,row] of uploads) if (row.expiresAt <= at) uploads.delete(id);
       const old=uploads.get(upload.id);
-      if (old) return old.ownerId === upload.ownerId && old.roomId === upload.roomId && old.sha256 === upload.sha256 && old.size === upload.size && old.kind === upload.kind && old.name === upload.name && old.replyToId === upload.replyToId ? {...old} : null;
+      if (old) return old.ownerId === upload.ownerId && old.roomId === upload.roomId && old.sha256 === upload.sha256 && old.size === upload.size && old.kind === upload.kind && old.name === upload.name && old.replyToId === upload.replyToId && (old.sealed ?? null) === (upload.sealed ?? null) ? {...old} : null;
       if ([...uploads.values()].filter((u) => u.ownerId === upload.ownerId).length >= 40) return null;
       uploads.set(upload.id, {...upload}); return {...upload};
     },
@@ -167,6 +217,8 @@ export function createMemoryRepository(): AuthRepository {
         }
         for (const [key, session] of sessions) if (session.userId === targetId) sessions.delete(key);
         for (const [id, upload] of uploads) if (upload.ownerId === targetId) uploads.delete(id);
+        identities.delete(targetId);
+        for (const [key, row] of roomKeys) if (row.memberId === targetId) roomKeys.delete(key);
         users.delete(targetId);
       }
       audits.push({ actorId, action: 'member', targetId, detail: auditDetail(choices) });
@@ -216,6 +268,7 @@ export function createMemoryRepository(): AuthRepository {
         for (const [key, member] of members) if (member.roomId === roomId) members.delete(key);
         for (const key of passed.keys()) if (key.startsWith(`${roomId}:`)) passed.delete(key);
         for (const [id, upload] of uploads) if (upload.roomId === roomId) uploads.delete(id);
+        for (const [key, row] of roomKeys) if (row.roomId === roomId) roomKeys.delete(key);
       }
       audits.push({ actorId, action: 'group', targetId: roomId, detail: auditDetail(choices) });
       return 'ok';
@@ -438,7 +491,7 @@ export function createMemoryRepository(): AuthRepository {
           roomId: message.roomId,
           senderId: message.senderId,
           senderName: sender.displayName,
-          kind: messageKind(message.text, user.username, parent?.senderId === member.userId),
+          kind: noticeKind(message, { id: member.userId, username: user.username }, parent?.senderId === member.userId),
           text: message.text,
           createdAt: message.createdAt,
           read: false,
@@ -464,7 +517,8 @@ export function createMemoryRepository(): AuthRepository {
           const other = otherId ? users.get(otherId) : undefined;
           return {
             ...notice,
-            text: message?.deleted ? '' : notice.kind === 'reaction' ? notice.text : message?.fileName ? message.fileName : message?.imageSize ? 'صورة' : notice.text,
+            text: message?.deleted ? '' : notice.kind === 'reaction' ? notice.text : message?.imageSize ? 'صورة'
+              : message && isSealed(message.text) ? message.text : message?.fileName ? message.fileName : notice.text,
             deleted: Boolean(message?.deleted),
             conversationName: room?.kind === 'private' ? (other?.displayName || 'محادثة خاصة') : (room?.name || 'ChatX'),
           };
@@ -599,7 +653,8 @@ export function createMemoryRepository(): AuthRepository {
           conversationName: room.kind === 'private' ? (other?.displayName || 'محادثة خاصة') : (room.name || 'ChatX'),
           senderId: sender.id,
           senderName: sender.displayName,
-          text: message.fileName ? message.fileName : message.imageSize && !message.text ? 'صورة' : message.text,
+          text: message.imageSize && (!message.text.trim() || isSealed(message.text)) ? 'صورة'
+            : isSealed(message.text) ? message.text : message.fileName ? message.fileName : message.text,
           createdAt: message.createdAt,
           savedAt: new Date(savedAt),
         });
@@ -624,6 +679,28 @@ export function createMemoryRepository(): AuthRepository {
           messageId: member.lastReadMessageId as string,
           readAt: new Date(member.lastReadAt as number),
         }));
+    },
+    async dropOrphanPrivate(roomId, userId) {
+      const room = rooms.get(roomId);
+      if (!room || !members.has(memberKey(roomId, userId))) return 'missing';
+      if (room.kind !== 'private') return 'forbidden';
+      const people = [...members.values()].filter((item) => item.roomId === roomId);
+      if (people.length !== 1 || people[0]?.userId !== userId) return 'forbidden';
+      const removed = new Set(messages.filter((item) => item.roomId === roomId).map((item) => item.id));
+      for (let index = messages.length - 1; index >= 0; index -= 1) {
+        if (messages[index]?.roomId === roomId) messages.splice(index, 1);
+      }
+      for (const id of removed) {
+        images.delete(id);
+        files.delete(id);
+      }
+      for (const [key, reaction] of reactions) if (removed.has(reaction.messageId)) reactions.delete(key);
+      for (let index = notices.length - 1; index >= 0; index -= 1) {
+        if (notices[index]?.roomId === roomId) notices.splice(index, 1);
+      }
+      members.delete(memberKey(roomId, userId));
+      rooms.delete(roomId);
+      return 'ok';
     },
     async listPresence(now) {
       return [...users.values()].filter((user) => user.role === 'member').map((user) => {

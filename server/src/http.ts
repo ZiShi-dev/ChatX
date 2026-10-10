@@ -15,11 +15,13 @@ import {
   updateOwnProfile,
   type Deps,
 } from './authService.ts';
-import { messageView, openRoom, postRoomMessage, readHome, readGroupTurn, readRoomFile, readRoomImage, readRoomMessages, setRoomReaction, markRoomSeen, changeMessage, updateRoomProfile } from './home.ts';
+import { messageView, openRoom, postRoomMessage, readHome, readGroupTurn, readRoomFile, readRoomImage, readRoomMessages, setRoomReaction, markRoomSeen, changeMessage, updateRoomProfile, dropOrphanPrivate } from './home.ts';
 import { keepMessage, readSaved } from './saved.ts';
+import { addRoomKeys, readKeys, readRoomKeys, saveKeys } from './keys.ts';
 import { clearInbox, markInboxRead, readInbox } from './inbox.ts';
 import { clearSessionCookie, hashSession, readCookie, sessionCookie } from './session.ts';
 import { armRoomWatch, LIVE_HOLD_MS } from './roomLive.ts';
+import { cachedLinkCard } from './linkPreview.ts';
 
 const PROFILE_BODY_LIMIT = 280_000;
 const MESSAGE_BODY_LIMIT = 400_000;
@@ -36,7 +38,8 @@ function statusFor(error: string) {
   if (error === 'rate_limited') return 429;
   if (error === 'forbidden') return 403;
   if (error === 'not_found') return 404;
-  if (error === 'username_taken') return 409;
+  if (error === 'username_taken' || error === 'key_exists') return 409;
+  if (error === 'invalid') return 400;
   if (error === 'unavailable') return 503;
   return 401;
 }
@@ -44,6 +47,7 @@ function statusFor(error: string) {
 function requestBodyLimit(path: string) {
   if (path === '/api/profile') return PROFILE_BODY_LIMIT;
   if (/^\/api\/rooms\/[0-9a-f-]{36}$/i.test(path)) return PROFILE_BODY_LIMIT;
+  if (/^\/api\/rooms\/[0-9a-f-]{36}\/keys$/i.test(path)) return 40_000;
   if (/^\/api\/rooms\/[0-9a-f-]{36}\/messages\/[0-9a-f-]{36}$/i.test(path)) return 24_000;
   if (/^\/api\/rooms\/[0-9a-f-]{36}\/messages$/i.test(path)) return MESSAGE_BODY_LIMIT;
   return 4096;
@@ -216,6 +220,15 @@ async function route(deps: Deps, request: Request) {
     response.headers.append('set-cookie', sessionCookie(result.sessionToken, secureRequest(request)));
     return response;
   }
+  if (request.method === 'GET' && path === '/api/links/preview') {
+    const user = await deps.repo.findSessionUser(hashSession(readCookie(request.headers.get('cookie'), 'chatx_session')), new Date(deps.now()));
+    if (!user) return failure(deps, 'invalid_credentials');
+    const target = new URL(request.url).searchParams.get('url') ?? '';
+    if (target.length > 2000) return json({ error: 'invalid_url' }, 400);
+    const card = await cachedLinkCard(target).catch(() => null);
+    if (!card) return json({ error: 'invalid_url' }, 400);
+    return json(card);
+  }
   if (request.method === 'GET' && path === '/api/presence') {
     const result = await readPresence(deps, readCookie(request.headers.get('cookie'), 'chatx_session'));
     if (!result.ok) return failure(deps, result.error);
@@ -230,6 +243,23 @@ async function route(deps: Deps, request: Request) {
     return json({ ok: true });
   }
   const roomMessages = path.match(/^\/api\/rooms\/([0-9a-f-]{36})\/messages$/i);
+  if (path === '/api/keys' && request.method === 'GET') {
+    const result = await readKeys(deps, readCookie(request.headers.get('cookie'), 'chatx_session'));
+    return result.ok ? json(result.keys) : failure(deps, result.error);
+  }
+  if (path === '/api/keys' && request.method === 'POST') {
+    const result = await saveKeys(deps, { token: readCookie(request.headers.get('cookie'), 'chatx_session'), publicKey: body.publicKey, backup: body.backup, reset: body.reset });
+    return result.ok ? json({ ok: true }) : failure(deps, result.error);
+  }
+  const roomKeys = path.match(/^\/api\/rooms\/([0-9a-f-]{36})\/keys$/i);
+  if (roomKeys && request.method === 'GET') {
+    const result = await readRoomKeys(deps, { token: readCookie(request.headers.get('cookie'), 'chatx_session'), roomId: roomKeys[1] });
+    return result.ok ? json({ members: result.members, keys: result.keys, mine: result.mine }) : failure(deps, result.error);
+  }
+  if (roomKeys && request.method === 'POST') {
+    const result = await addRoomKeys(deps, { token: readCookie(request.headers.get('cookie'), 'chatx_session'), roomId: roomKeys[1], wraps: body.wraps });
+    return result.ok ? json({ ok: true }) : failure(deps, result.error);
+  }
   const roomRead = path.match(/^\/api\/rooms\/([0-9a-f-]{36})\/read$/i);
   if (roomRead && request.method === 'POST') {
     const result = await markRoomSeen(deps, { token: readCookie(request.headers.get('cookie'), 'chatx_session'), roomId: roomRead[1], messageId: body.messageId });
@@ -295,6 +325,7 @@ async function route(deps: Deps, request: Request) {
       replyToId: body.replyToId,
       image: body.image,
       file: body.file,
+      hints: body.hints,
     });
     if (!result.ok) return failure(deps, result.error);
     return json({ message: result.message });
@@ -323,6 +354,11 @@ async function route(deps: Deps, request: Request) {
     const result = await clearInbox(deps, readCookie(request.headers.get('cookie'), 'chatx_session'), body.until);
     if (!result.ok) return failure(deps, result.error);
     return json({ ok: true });
+  }
+  const orphanRoom = path.match(/^\/api\/rooms\/([0-9a-f-]{36})$/i);
+  if (orphanRoom && request.method === 'DELETE') {
+    const result = await dropOrphanPrivate(deps, { token: readCookie(request.headers.get('cookie'), 'chatx_session'), roomId: orphanRoom[1]! });
+    return result.ok ? json({ ok: true }) : failure(deps, result.error);
   }
   if (request.method === 'POST' && path === '/api/rooms') {
     const result = await openRoom(deps, {

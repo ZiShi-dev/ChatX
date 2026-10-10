@@ -17,7 +17,7 @@ import type { User } from '../types/user';
 import { MESSAGE_HIGHLIGHT_DURATION, MESSAGE_PAGE_SIZE, SKELETON_DELAY_MS } from '../constants/chat';
 import { GLOBAL_CHAT_ID } from '../data/conversations';
 import { isServerId, SERVER_GLOBAL_ROOM_ID } from '../lib/home';
-import { catchUpLabel, membersOf, otherParticipant, unreadAbove } from '../lib/conversation';
+import { catchUpLabel, deletedPrivatePeer, membersOf, otherParticipant, unreadAbove } from '../lib/conversation';
 import { resolveMessageFocus } from '../lib/inbox';
 import { matchingMessages } from '../lib/messageSearch';
 import { connectionLabel, getUserPresence } from '../lib/presence';
@@ -448,6 +448,7 @@ export default function ChatPage() {
   }
 
   const other = conversation.type === 'private' ? otherParticipant(conversation, currentUser.id, users) : undefined;
+  const peerGone = deletedPrivatePeer(conversation, currentUser.id, users);
   const members = membersOf(conversation, users);
   const onlineCount = members.filter((user) => getUserPresence(user.id, users) === 'online').length;
   const typingNames = typingIds
@@ -479,6 +480,11 @@ export default function ChatPage() {
                   online={onlineCount > 0}
                 />
               </button>
+            ) : peerGone ? (
+              <div className="chat-nav-main">
+                <Avatar name="حساب محذوف" color="#8ea099" size={32} />
+                <GroupHeader title="حساب محذوف" subtitle="تم حذف هذا الحساب" online={false} />
+              </div>
             ) : (
               <div className="chat-nav-main">
                 {other && (
@@ -595,7 +601,23 @@ export default function ChatPage() {
         </button>
       )}
       <IonFooter className="chat-footer">
-        <MessageComposer conversationId={conversation.id} />
+        {peerGone ? (
+          <div className="deleted-peer">
+            <p>تم حذف هذا الحساب</p>
+            <button
+              type="button"
+              onClick={() => {
+                void useChatStore.getState().dismissDeletedChat(conversation.id).then((ok) => {
+                  if (ok) navigate('/home');
+                });
+              }}
+            >
+              إزالة المحادثة
+            </button>
+          </div>
+        ) : (
+          <MessageComposer conversationId={conversation.id} />
+        )}
       </IonFooter>
       <UserProfileModal
         user={profile}

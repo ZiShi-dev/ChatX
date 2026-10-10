@@ -30,6 +30,7 @@ function bodyLimit(url: string | undefined) {
   if (/^\/api\/rooms\/[0-9a-f-]{36}\/uploads\/[0-9a-f-]{36}$/.test(path)) return 32_768;
   if (path === '/api/profile') return 280_000;
   if (/^\/api\/rooms\/[0-9a-f-]{36}$/i.test(path)) return 280_000;
+  if (/^\/api\/rooms\/[0-9a-f-]{36}\/keys$/i.test(path)) return 40_000;
   if (/^\/api\/rooms\/[0-9a-f-]{36}\/messages\/[0-9a-f-]{36}$/i.test(path)) return 24_000;
   if (/^\/api\/rooms\/[0-9a-f-]{36}\/messages$/i.test(path)) return 400_000;
   return 4096;
@@ -102,7 +103,8 @@ try {
       } finally {
         res.off('close', stop);
       }
-    } catch {
+    } catch (error) {
+      console.error(`${req.method} ${req.url?.split('?')[0]} failed: ${safeMessage(error)}`);
       if (res.headersSent) return;
       const headers = new Headers();
       securityHeaders(headers);

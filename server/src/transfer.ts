@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto';
 import type { Deps } from './authService.ts';
 import { hashSession, readCookie } from './session.ts';
 import { cleanFileName, messageView, postRoomMessage } from './home.ts';
+import { cleanSealed, FILE_BYTES_MAX, IMAGE_BYTES_MAX, SEALED_FILE_NAME, SEALED_OVERHEAD } from './sealed.ts';
 
 const ID = /^[0-9a-f-]{36}$/i;
 const fail = (error: string, status: number) => ({ error, status });
@@ -21,11 +22,14 @@ export async function handleTransfer(deps: Deps, request: Request, roomId: strin
     let body: Record<string, unknown>;
     try { body = JSON.parse(raw); if (!body || typeof body !== 'object') throw new Error(); } catch { return fail('invalid_upload', 400); }
     const kind = body.kind; const size = body.size; const sha256 = body.sha256;
-    const name = kind === 'image' ? 'photo.jpg' : cleanFileName(body.name);
-    if ((kind !== 'image' && kind !== 'file') || !name || typeof size !== 'number' || !Number.isInteger(size) || size < 1 || size > (kind === 'image' ? 60_000 : 262_144)
+    const sealed = body.sealed == null ? null : cleanSealed(body.sealed);
+    if (body.sealed != null && (!sealed || sealed.length > 1000)) return fail('invalid_upload', 400);
+    const name = kind === 'image' ? 'photo.jpg' : sealed ? SEALED_FILE_NAME : cleanFileName(body.name);
+    const max = (kind === 'image' ? IMAGE_BYTES_MAX : FILE_BYTES_MAX) + (sealed ? SEALED_OVERHEAD : 0);
+    if ((kind !== 'image' && kind !== 'file') || !name || typeof size !== 'number' || !Number.isInteger(size) || size < 1 || size > max
       || typeof sha256 !== 'string' || !/^[a-f0-9]{64}$/.test(sha256)) return fail('invalid_upload', 400);
     const replyToId = typeof body.replyToId === 'string' && ID.test(body.replyToId) && body.replyToId !== id ? body.replyToId : null;
-    const upload = await deps.repo.beginUpload({ id, roomId, ownerId: user.id, kind, name, size, sha256, replyToId, bytes: new Uint8Array(), expiresAt: new Date(at.getTime() + 86_400_000) }, at);
+    const upload = await deps.repo.beginUpload({ id, roomId, ownerId: user.id, kind, name, size, sha256, replyToId, bytes: new Uint8Array(), expiresAt: new Date(at.getTime() + 86_400_000), sealed }, at);
     return upload ? { offset: upload.bytes.length, completed: false, status: 200 } : fail('upload_conflict', 409);
   }
   const upload = await deps.repo.readUpload(roomId, user.id, id, at);
@@ -40,10 +44,13 @@ export async function handleTransfer(deps: Deps, request: Request, roomId: strin
   }
   if (request.method === 'POST' && complete) {
     if (upload.bytes.length !== upload.size || createHash('sha256').update(upload.bytes).digest('hex') !== upload.sha256) return fail('invalid_upload', 400);
-    const data = Buffer.from(upload.bytes).toString('base64');
-    const result = await postRoomMessage(deps, { token, roomId, id, text: undefined, replyToId: upload.replyToId,
-      image: upload.kind === 'image' ? `data:image/jpeg;base64,${data}` : undefined,
-      file: upload.kind === 'file' ? { name: upload.name, data } : undefined });
+    const data = upload.sealed ? '' : Buffer.from(upload.bytes).toString('base64');
+    const result = upload.sealed
+      ? await postRoomMessage(deps, { token, roomId, id, text: upload.sealed, replyToId: upload.replyToId, image: undefined, file: undefined,
+        sealedMedia: { kind: upload.kind, bytes: upload.bytes } })
+      : await postRoomMessage(deps, { token, roomId, id, text: undefined, replyToId: upload.replyToId,
+        image: upload.kind === 'image' ? `data:image/jpeg;base64,${data}` : undefined,
+        file: upload.kind === 'file' ? { name: upload.name, data } : undefined });
     if (!result.ok) return fail(result.error, result.error === 'not_found' ? 404 : 400);
     await deps.repo.deleteUpload(roomId, user.id, id);
     return { offset: upload.size, completed: true, message: result.message, status: 200 };

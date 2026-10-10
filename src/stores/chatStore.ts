@@ -10,9 +10,12 @@ import { SEED_READ_CURSORS, SEED_READ_TIMES } from '../data/readCursors';
 import { applyReaction } from '../lib/reactions';
 import { advanceCursor, noteReadTime, type ReadCursors, type ReadTimes } from '../lib/readReceipts';
 import { isServerId, mergeHomeMessages, readHomePayload, readOpenedRoom, readRoomMessages, readRoomReaders, readUpdatedRoom, SERVER_GLOBAL_ROOM_ID } from '../lib/home';
-import { reactionNotice, readInboxPayload, readInboxUnread } from '../lib/inbox';
+import { notificationPreview, reactionNotice, readInboxPayload, readInboxUnread } from '../lib/inbox';
+import { ensureRoomKey, openMessageMedia, openMessages, openPreview, sealMessageMedia, sealMessageText } from '../lib/e2e';
+import { EVERYONE_HANDLE, mentionedHandles } from '../lib/mention';
 import type { InboxItem } from '../lib/inbox';
-import { firstUrl, linkDraft, siteHost } from '../lib/link';
+import { deletedPrivatePeer } from '../lib/conversation';
+import { firstUrl, linkDraft, readPreviewPayload, siteHost } from '../lib/link';
 import { AdminApiError, adminFetch, adminFetchBlob, invalidateApiSession } from '../lib/adminApi';
 import { loadChatSnapshot, saveChatSnapshot, releaseMedia } from '../lib/chatCache';
 import { mergeRoomWindow } from '../lib/chatWindow';
@@ -102,6 +105,7 @@ type ChatState = {
   flushOutgoing: () => void;
   resetMediaCache: () => void;
   loadHome: () => Promise<'ok' | 'local' | 'offline' | 'invalid'>;
+  dismissDeletedChat: (conversationId: string) => Promise<boolean>;
   loadGroupTurn: (conversationId: string) => Promise<'ok' | 'local' | 'offline' | 'invalid'>;
   loadRoom: (conversationId: string, page?: { beforeId?: string; aroundId?: string; wait?: boolean; signal?: AbortSignal }) => Promise<boolean>;
   editingId: string | null;
@@ -239,18 +243,40 @@ function serverFile(message: Pick<Message, 'conversationId' | 'type'>) {
   return isServerId(message.conversationId) && message.type === 'file';
 }
 
+function roomMembers(conversationId: string) {
+  return useChatStore.getState().conversations.find((room) => room.id === conversationId)?.participantIds ?? [];
+}
+
+/** The server cannot read sealed text, so the sender declares who must be alerted. */
+function noticeHints(text: string, conversationId: string) {
+  const handles = new Set(mentionedHandles(text));
+  const members = new Set(roomMembers(conversationId));
+  const mentions = handles.size
+    ? useUserStore.getState().users.filter((user) => members.has(user.id) && handles.has(user.username.toLowerCase())).map((user) => user.id).slice(0, 50)
+    : [];
+  return { mentions, everyone: handles.has(EVERYONE_HANDLE), signal: text.startsWith('تنبيه') };
+}
+
+function cleanText(value: string | undefined) {
+  const text = (value ?? '').replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/g, '').trim();
+  return text.length <= 4000 ? text : '';
+}
+
 async function publishText(message: Message) {
-  const text = message.text?.trim() ?? '';
+  const text = cleanText(message.text);
   if (!text) {
     patchMessage(message.id, { status: 'failed' });
     return;
   }
   try {
+    const owner = useAuthStore.getState().currentUser.id;
+    const sealed = await sealMessageText(owner, message.conversationId, message.id, text, roomMembers(message.conversationId));
     await adminFetch(`/api/rooms/${message.conversationId}/messages`, {
       method: 'POST',
       body: {
         id: message.id,
-        text,
+        text: sealed,
+        hints: noticeHints(text, message.conversationId),
         ...(message.replyToId && isServerId(message.replyToId) ? { replyToId: message.replyToId } : {}),
       },
     });
@@ -267,14 +293,21 @@ async function publishImage(message: Message) {
   const current = useChatStore.getState().messages.find((item) => item.id === message.id);
   if (!current?.media) throw new Error('invalid_image');
   try {
-    const bytes = await localMediaBytes(source);
-    await uploadResumable({ roomId: message.conversationId, id: message.id, kind: 'image', name: 'photo.jpg', bytes, replyToId: message.replyToId },
+    const plain = await localMediaBytes(source);
+    const sealed = await sealMessageMedia(useAuthStore.getState().currentUser.id, message.conversationId, message.id, plain, '', roomMembers(message.conversationId));
+    await uploadResumable({ roomId: message.conversationId, id: message.id, kind: 'image', name: 'photo.jpg', bytes: sealed.bytes, sealed: sealed.body, replyToId: message.replyToId },
       (uploadProgress) => patchMessage(message.id, { uploadProgress }), yieldToTexts, () => {
         const current = useChatStore.getState().messages.find((item) => item.id === message.id);
         return !current || current.status === 'failed' || current.senderId !== useAuthStore.getState().currentUser.id;
       });
     patchMessage(message.id, { status: 'sent', uploadProgress: undefined });
   } catch (error) { throw error; }
+}
+
+/** Received media is cached already decrypted, so a cache hit never needs the room key. */
+async function openedBlob(owner: string, message: Message, blob: Blob) {
+  if (!message.sealedKey) return blob;
+  return new Blob([new Uint8Array(await openMessageMedia(owner, message, new Uint8Array(await blob.arrayBuffer())))], { type: blob.type });
 }
 
 async function pullServerImage(message: Message) {
@@ -287,7 +320,7 @@ async function pullServerImage(message: Message) {
   try {
     const owner = useAuthStore.getState().currentUser.id;
     const cached = await readReceivedMedia(owner, message.id).catch(() => null);
-    const blob = cached ?? await adminFetchBlob(`/api/rooms/${message.conversationId}/messages/${message.id}/image`);
+    const blob = cached ?? await openedBlob(owner, message, await adminFetchBlob(`/api/rooms/${message.conversationId}/messages/${message.id}/image`));
     if (owner !== useAuthStore.getState().currentUser.id) return;
     void saveReceivedMedia(owner, message.id, blob).catch(() => undefined);
     const url = jpegDataUrl(new Uint8Array(await blob.arrayBuffer()));
@@ -342,7 +375,8 @@ async function publishFile(message: Message) {
       patchMessage(message.id, { status: 'failed' });
       return;
     }
-    await uploadResumable({ roomId: message.conversationId, id: message.id, kind: 'file', name, bytes, replyToId: message.replyToId },
+    const sealed = await sealMessageMedia(useAuthStore.getState().currentUser.id, message.conversationId, message.id, bytes, name.slice(0, 120), roomMembers(message.conversationId));
+    await uploadResumable({ roomId: message.conversationId, id: message.id, kind: 'file', name, bytes: sealed.bytes, sealed: sealed.body, replyToId: message.replyToId },
       (uploadProgress) => patchMessage(message.id, { uploadProgress }), yieldToTexts, () => {
         const current = useChatStore.getState().messages.find((item) => item.id === message.id);
         return !current || current.status === 'failed' || current.senderId !== useAuthStore.getState().currentUser.id;
@@ -373,7 +407,7 @@ async function pullServerFile(message: Message) {
   try {
     const owner = useAuthStore.getState().currentUser.id;
     const cached = await readReceivedMedia(owner, message.id).catch(() => null);
-    const blob = cached ?? await adminFetchBlob(`/api/rooms/${message.conversationId}/messages/${message.id}/file`);
+    const blob = cached ?? await openedBlob(owner, message, await adminFetchBlob(`/api/rooms/${message.conversationId}/messages/${message.id}/file`));
     if (owner !== useAuthStore.getState().currentUser.id) return;
     void saveReceivedMedia(owner, message.id, blob).catch(() => undefined);
     if (blob.size < 1 || blob.size > FILE_BYTES_MAX) throw new Error('size');
@@ -489,8 +523,10 @@ async function syncRoom(conversationId: string, wait = false, signal?: AbortSign
         const payload = await adminFetch(`/api/rooms/${conversationId}/sync${params.size ? `?${params}` : ''}`, wait ? { hold: true, signal } : undefined);
         if (owner !== useAuthStore.getState().currentUser.id || !useAuthStore.getState().activated) return false;
         const delta = readRoomSync(payload, conversationId); if (!delta) return false;
+        const opened = await openMessages(owner, delta.messages);
+        if (owner !== useAuthStore.getState().currentUser.id || !useAuthStore.getState().activated) return false;
         const state = useChatStore.getState();
-        const incoming = delta.messages.map((message) => {
+        const incoming = opened.map((message) => {
           const previous = state.messages.find((item) => item.id === message.id);
           return previous?.media?.localPreviewUrl && message.media && !message.deletedForEveryone
             ? { ...message, media: { ...message.media, localPreviewUrl: previous.media.localPreviewUrl, state: 'cached' as const } } : message;
@@ -732,20 +768,27 @@ export const useChatStore = create<ChatState>((set, get) => ({
   },
   loadLinkPreview: (messageId) => {
     const message = get().messages.find((item) => item.id === messageId);
-    if (!message?.link || message.link.preview === 'loaded' || useNetworkStore.getState().network === 'offline') return;
+    if (!message?.link || message.link.preview !== 'notLoaded' || useNetworkStore.getState().network === 'offline') return;
+    const url = message.link.url;
     patchMessage(messageId, { link: { ...message.link, preview: 'loading' } });
-    const wait = useNetworkStore.getState().network === 'slow' ? 1400 : 500;
-    window.setTimeout(() => {
+    void adminFetch(`/api/links/preview?url=${encodeURIComponent(url)}`, { hold: true }).then((payload) => {
       const current = useChatStore.getState().messages.find((item) => item.id === messageId);
-      if (!current?.link) return;
+      if (!current?.link || current.link.url !== url) return;
+      const card = readPreviewPayload(payload);
       patchMessage(messageId, {
         link: {
           ...current.link,
           preview: 'loaded',
-          title: current.link.title || siteHost(current.link.url),
+          title: card?.title || current.link.title || siteHost(url),
+          description: card?.description || '',
+          image: card?.image || undefined,
         },
       });
-    }, wait);
+    }).catch(() => {
+      const current = useChatStore.getState().messages.find((item) => item.id === messageId);
+      if (!current?.link || current.link.url !== url) return;
+      patchMessage(messageId, { link: { ...current.link, preview: 'loaded', title: current.link.title || siteHost(url) } });
+    });
   },
   revealMessage: (conversationId, messageId) => {
     const mine = get()
@@ -942,8 +985,10 @@ export const useChatStore = create<ChatState>((set, get) => ({
       if (patch.bannerUrl) body.banner = patch.bannerUrl;
       if (!body.name && body.bio === undefined && !body.avatar && !body.banner) return true;
       try {
-        const saved = readUpdatedRoom(await adminFetch(`/api/rooms/${conversationId}`, { method: 'PATCH', body }));
-        if (!saved) throw new Error('bad');
+        const updated = readUpdatedRoom(await adminFetch(`/api/rooms/${conversationId}`, { method: 'PATCH', body }));
+        if (!updated) throw new Error('bad');
+        const owner = useAuthStore.getState().currentUser.id;
+        const saved = { ...updated, message: updated.message ? (await openMessages(owner, [updated.message]))[0] : undefined };
         set((state) => ({
           lastError: '',
           conversations: state.conversations.some((item) => item.id === saved.conversation.id)
@@ -1013,9 +1058,14 @@ export const useChatStore = create<ChatState>((set, get) => ({
       const payload = await adminFetch(`/api/notifications${query}`);
       if (me !== useAuthStore.getState().currentUser.id || !useAuthStore.getState().activated) return 'invalid';
       if (readVersion !== inboxReadVersion) return 'ok';
-      const items = readInboxPayload(payload);
+      const parsed = readInboxPayload(payload);
       const unread = readInboxUnread(payload);
-      if (!items || unread === null) return 'invalid';
+      if (!parsed || unread === null) return 'invalid';
+      const items = await Promise.all(parsed.map(async ({ sealed, ...item }) => {
+        const plain = sealed ? await openPreview(me, item.conversationId, item.id, sealed) : null;
+        return plain ? { ...item, preview: notificationPreview(plain) } : item;
+      }));
+      if (me !== useAuthStore.getState().currentUser.id || !useAuthStore.getState().activated || readVersion !== inboxReadVersion) return 'ok';
         const overlaid = overlayPendingReads(me, items);
         const pending = pendingReads(me);
         const cutoff = [pending.allUntil, pending.clearedUntil].filter(Boolean).sort().at(-1);
@@ -1051,13 +1101,33 @@ export const useChatStore = create<ChatState>((set, get) => ({
       return offline ? 'offline' : 'invalid';
     }
   },
+  dismissDeletedChat: async (conversationId) => {
+    const me = useAuthStore.getState().currentUser.id;
+    const room = get().conversations.find((item) => item.id === conversationId);
+    if (!room || !deletedPrivatePeer(room, me, useUserStore.getState().users)) return false;
+    if (isServerId(me)) {
+      try {
+        await adminFetch(`/api/rooms/${conversationId}`, { method: 'DELETE' });
+      } catch {
+        return false;
+      }
+    }
+    set((state) => ({
+      conversations: state.conversations.filter((item) => item.id !== conversationId),
+      messages: state.messages.filter((item) => item.conversationId !== conversationId),
+      fullRooms: state.fullRooms.filter((id) => id !== conversationId),
+    }));
+    return true;
+  },
   loadHome: async () => {
     const me = useAuthStore.getState().currentUser.id;
     if (!isServerId(me)) return 'local';
     try {
-      const home = readHomePayload(await adminFetch('/api/home'));
+      const parsed = readHomePayload(await adminFetch('/api/home'));
       if (me !== useAuthStore.getState().currentUser.id || !useAuthStore.getState().activated) return 'invalid';
-      if (!home) return 'invalid';
+      if (!parsed) return 'invalid';
+      const home = { ...parsed, messages: await openMessages(me, parsed.messages) };
+      if (me !== useAuthStore.getState().currentUser.id || !useAuthStore.getState().activated) return 'invalid';
       const users = useUserStore.getState();
       for (const user of home.users) {
         if (users.users.some((item) => item.id === user.id)) {
@@ -1082,6 +1152,9 @@ export const useChatStore = create<ChatState>((set, get) => ({
   },
   loadRoom: async (conversationId, page) => {
     if (!isServerId(conversationId)) return true;
+    const me = useAuthStore.getState().currentUser.id;
+    // Opening a room also hands its keys to members who set up encryption since.
+    if (!page?.wait && isServerId(me)) void ensureRoomKey(me, conversationId, roomMembers(conversationId)).catch(() => undefined);
     if (!page?.beforeId && !page?.aroundId) return syncRoom(conversationId, page?.wait === true, page?.signal);
     const owner = useAuthStore.getState().currentUser.id;
     try {
@@ -1090,10 +1163,12 @@ export const useChatStore = create<ChatState>((set, get) => ({
       if (page?.aroundId) params.set('aroundId', page.aroundId);
       const payload = await adminFetch(`/api/rooms/${conversationId}/messages${params.size ? `?${params}` : ''}`);
       if (owner !== useAuthStore.getState().currentUser.id) return false;
-      const remote = readRoomMessages(payload, conversationId);
-      if (!remote) {
+      const parsed = readRoomMessages(payload, conversationId);
+      if (!parsed) {
         return false;
       }
+      const remote = await openMessages(owner, parsed);
+      if (owner !== useAuthStore.getState().currentUser.id) return false;
       const previews = new Map(
         get().messages.flatMap((item) => (
           item.conversationId === conversationId && (item.type === 'image' || item.type === 'file') && item.media?.localPreviewUrl
@@ -1149,7 +1224,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
   beginEdit: (messageId) => {
     const me = useAuthStore.getState().currentUser.id;
     const message = get().messages.find((item) => item.id === messageId);
-    if (!message || message.senderId !== me || message.deletedForEveryone || message.event) return;
+    if (!message || message.senderId !== me || message.deletedForEveryone || message.event || message.locked) return;
     if (message.type !== 'text' && message.type !== 'link') return;
     set({ editingId: messageId, replyingTo: null });
   },
@@ -1163,7 +1238,10 @@ export const useChatStore = create<ChatState>((set, get) => ({
     const url = firstUrl(text);
     if (isServerId(message.conversationId)) {
       try {
-        await adminFetch(`/api/rooms/${message.conversationId}/messages/${message.id}`, { method: 'PATCH', body: { text } });
+        const clean = cleanText(text);
+        if (!clean) return false;
+        const sealed = await sealMessageText(me, message.conversationId, message.id, clean, roomMembers(message.conversationId));
+        await adminFetch(`/api/rooms/${message.conversationId}/messages/${message.id}`, { method: 'PATCH', body: { text: sealed } });
         if (me !== useAuthStore.getState().currentUser.id || !useAuthStore.getState().activated) return false;
         patchMessage(messageId, { text, type: 'text', link: url ? linkDraft(url) : undefined, editedAt: new Date().toISOString() });
         if (get().editingId === messageId) set({ editingId: null });

@@ -6,6 +6,7 @@ import type { AuthUser, HomeRoom, RoomMessage, StoredReaction } from './types.ts
 import { GROUP_TURN_MS, groupTurnNotice } from './groupTurn.ts';
 import { wakeRoom } from './roomLive.ts';
 import { cleanBio, cleanAvatar, cleanBanner } from './profile.ts';
+import { cleanHints, cleanSealed, FILE_BYTES_MAX, IMAGE_BYTES_MAX, isSealed, SEALED_FILE_NAME, SEALED_OVERHEAD } from './sealed.ts';
 
 export const GLOBAL_ROOM_ID = '00000000-0000-4000-8000-000000000001';
 export const ROOM_PAGE_SIZE = 30;
@@ -13,8 +14,6 @@ export const ROOM_PAGE_SIZE = 30;
 const ROOM_ID = /^[0-9a-f-]{36}$/i;
 const JPEG_PREFIX = 'data:image/jpeg;base64,/9j/';
 const IMAGE_URL_MAX = 80_000;
-const IMAGE_BYTES_MAX = 60_000;
-const FILE_BYTES_MAX = 262_144;
 const FILE_DATA_MAX = 349_528;
 
 export function cleanFileName(value: unknown) {
@@ -203,6 +202,15 @@ export async function readGroupTurn(deps: Deps, token: string, roomId: string) {
     participantIds: turn.members, holder: memberView(holder) };
 }
 
+export async function dropOrphanPrivate(deps: Deps, input: { token: string; roomId: string }) {
+  const user = await sessionUser(deps, input.token);
+  if (!user) return { ok: false as const, error: 'invalid_credentials' as const };
+  if (!ROOM_ID.test(input.roomId) || input.roomId === GLOBAL_ROOM_ID) return { ok: false as const, error: 'forbidden' as const };
+  const result = await deps.repo.dropOrphanPrivate(input.roomId, user.id);
+  if (result === 'ok') return { ok: true as const };
+  return { ok: false as const, error: result === 'forbidden' ? 'forbidden' as const : 'not_found' as const };
+}
+
 export async function readHome(deps: Deps, token: string) {
   const user = await sessionUser(deps, token);
   if (!user || user.role !== 'member') return { ok: false as const, error: 'invalid_credentials' as const };
@@ -254,10 +262,16 @@ export async function markRoomSeen(deps: Deps, input: { token: string; roomId: s
   return { ok: true as const, unreadCount: rooms.find((room) => room.id === input.roomId)?.unreadCount ?? 0, unreadNotifications };
 }
 
+/** Plain text stays accepted for older app builds; an `e2e1.` prefix must be a well-formed envelope. */
+function cleanMessageBody(value: unknown) {
+  if (typeof value === 'string' && isSealed(value)) return cleanSealed(value);
+  return cleanRoomText(value);
+}
+
 export async function changeMessage(deps: Deps, input: { token: string; roomId: string; messageId: string; text: unknown; deleting: boolean }) {
   const user = await sessionUser(deps, input.token);
   if (!user || user.role !== 'member') return { ok: false as const, error: 'invalid_credentials' as const };
-  const text = input.deleting ? null : cleanRoomText(input.text);
+  const text = input.deleting ? null : cleanMessageBody(input.text);
   if ((!input.deleting && !text) || !ROOM_ID.test(input.roomId) || !ROOM_ID.test(input.messageId)) return { ok: false as const, error: 'invalid_credentials' as const };
   const ok = await deps.repo.changeRoomMessage(input.roomId, user.id, input.messageId, text, new Date(deps.now()));
   if (!ok) return { ok: false as const, error: 'not_found' as const };
@@ -394,17 +408,40 @@ export async function readRoomFile(deps: Deps, input: { token: string; roomId: s
   return { ok: true as const, file };
 }
 
-export async function postRoomMessage(deps: Deps, input: { token: string; roomId: string; id: unknown; text: unknown; replyToId: unknown; image: unknown; file: unknown }) {
+export type SealedMedia = { kind: 'image' | 'file'; bytes: Uint8Array };
+
+function sealedAttachment(media: SealedMedia) {
+  const max = (media.kind === 'image' ? IMAGE_BYTES_MAX : FILE_BYTES_MAX) + SEALED_OVERHEAD;
+  if (media.bytes.byteLength <= SEALED_OVERHEAD || media.bytes.byteLength > max) return null;
+  return media.kind === 'image'
+    ? { image: media.bytes, file: null }
+    : { image: null, file: { name: SEALED_FILE_NAME, bytes: media.bytes } };
+}
+
+export async function postRoomMessage(deps: Deps, input: { token: string; roomId: string; id: unknown; text: unknown; replyToId: unknown; image: unknown; file: unknown; hints?: unknown; sealedMedia?: SealedMedia }) {
   if (!ROOM_ID.test(input.roomId) || typeof input.id !== 'string' || !ROOM_ID.test(input.id)) {
     return { ok: false as const, error: 'invalid_credentials' as const };
   }
-  const image = decodeChatImage(input.image);
-  const file = decodeChatFile(input.file);
-  if (image === false || file === false) return { ok: false as const, error: 'invalid_credentials' as const };
-  const wroteText = typeof input.text === 'string' && input.text.trim().length > 0;
-  if ((image && file) || (image && wroteText) || (file && wroteText)) return { ok: false as const, error: 'invalid_credentials' as const };
-  const text = image || file ? '' : cleanRoomText(input.text);
-  if (!text && !image && !file) return { ok: false as const, error: 'invalid_credentials' as const };
+  const sealed = typeof input.text === 'string' && isSealed(input.text) ? cleanSealed(input.text) : undefined;
+  const hints = cleanHints(input.hints);
+  if (sealed === null || !hints) return { ok: false as const, error: 'invalid_credentials' as const };
+  let image: Uint8Array | null | false;
+  let file: { name: string; bytes: Uint8Array } | null | false;
+  let text: string | null;
+  if (input.sealedMedia) {
+    const attachment = sealed ? sealedAttachment(input.sealedMedia) : null;
+    if (!attachment || input.image != null || input.file != null) return { ok: false as const, error: 'invalid_credentials' as const };
+    ({ image, file } = attachment);
+    text = sealed ?? null;
+  } else {
+    image = decodeChatImage(input.image);
+    file = decodeChatFile(input.file);
+    if (image === false || file === false) return { ok: false as const, error: 'invalid_credentials' as const };
+    const wroteText = typeof input.text === 'string' && input.text.trim().length > 0;
+    if ((image && file) || (image && wroteText) || (file && wroteText)) return { ok: false as const, error: 'invalid_credentials' as const };
+    text = image || file ? '' : sealed ?? cleanRoomText(input.text);
+    if (!text && !image && !file) return { ok: false as const, error: 'invalid_credentials' as const };
+  }
   const replyToId = typeof input.replyToId === 'string' && ROOM_ID.test(input.replyToId) && input.replyToId !== input.id ? input.replyToId : null;
   const user = await sessionUser(deps, input.token);
   if (!user || user.role !== 'member') return { ok: false as const, error: 'invalid_credentials' as const };
@@ -424,6 +461,6 @@ export async function postRoomMessage(deps: Deps, input: { token: string; roomId
   if (saved === 'missing') return { ok: false as const, error: 'not_found' as const };
   if (saved === 'invalid') return { ok: false as const, error: 'invalid_credentials' as const };
   wakeRoom(input.roomId);
-  if (!saved.deleted) await deps.repo.notifyRoomMessage(saved);
+  if (!saved.deleted) await deps.repo.notifyRoomMessage(sealed ? { ...saved, hints } : saved);
   return { ok: true as const, message: messageView(saved) };
 }

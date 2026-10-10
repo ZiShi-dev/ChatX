@@ -35,6 +35,8 @@ export type InboxItem = {
   unread: boolean;
   unreadCount: number;
   suppressed: boolean;
+  /** End-to-end envelope sent with the server placeholder preview; removed once decrypted. */
+  sealed?: string;
 };
 
 const ROOM = new Set<Conversation['type']>(['group', 'global']);
@@ -218,6 +220,7 @@ export function readInboxPayload(payload: unknown): InboxItem[] | null {
       unread: row.unread,
       unreadCount: row.unread ? 1 : 0,
       suppressed: false,
+      ...(typeof row.sealed === 'string' && row.sealed.startsWith('e2e1.') && row.sealed.length <= 16_400 ? { sealed: row.sealed } : {}),
     });
   }
   return items;

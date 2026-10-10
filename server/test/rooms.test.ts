@@ -4,6 +4,7 @@ import { createLimiter, type Deps } from '../src/authService.ts';
 import { loadConfig } from '../src/config.ts';
 import { GLOBAL_ROOM_ID } from '../src/home.ts';
 import { createApi } from '../src/http.ts';
+import { ERASE_OPERATOR_EMAIL } from '../src/eraseMember.ts';
 import { createMemoryRepository } from '../src/memory.ts';
 import { hashSession } from '../src/session.ts';
 import type { AuthUser } from '../src/types.ts';
@@ -144,5 +145,25 @@ describe('rooms', () => {
     const after = await handle(new Request('http://127.0.0.1/api/home', { headers: samiCookie }));
     const afterBody = await after.json() as { conversations: Array<{ id: string }> };
     assert.equal(afterBody.conversations.some((room) => room.id === created.conversation.id), true);
+  });
+
+  it('drops a private chat only after the other account is gone', async () => {
+    const repo = createMemoryRepository();
+    const nora = member('11111111-1111-4111-8111-111111111111', 'نورة');
+    const layla = member('22222222-2222-4222-8222-222222222222', 'ليلى');
+    const owner = member('44444444-4444-4444-8444-444444444444', 'المالك');
+    owner.email = ERASE_OPERATOR_EMAIL;
+    owner.googleSub = 'owner-sub';
+    await repo.insertUser(nora);
+    await repo.insertUser(layla);
+    await repo.insertUser(owner);
+    const roomId = '55555555-5555-4555-8555-555555555555';
+    assert.equal(await repo.createRoom({ id: roomId, kind: 'private', name: null, creatorId: nora.id, memberIds: [layla.id], at: new Date(now) }), roomId);
+    assert.equal(await repo.dropOrphanPrivate(roomId, nora.id), 'forbidden');
+    assert.equal(await repo.eraseMember(owner.id, layla.id, {
+      messages: true, images: true, files: true, reactions: true, privateChats: false, profile: true, membership: true, account: true,
+    }), 'ok');
+    assert.equal(await repo.dropOrphanPrivate(roomId, nora.id), 'ok');
+    assert.equal(await repo.dropOrphanPrivate(roomId, nora.id), 'missing');
   });
 });

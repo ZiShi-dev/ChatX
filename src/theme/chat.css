@@ -766,7 +766,7 @@ html[data-wallpaper='1'] .composer-field::before {
   position: absolute;
   z-index: -1;
   inset: 0;
-  border-radius: 26px;
+  border-radius: 24px;
   background: var(--chatx-bg);
   opacity: 0.88;
 }
@@ -966,6 +966,89 @@ html[data-wallpaper='1'] .composer-input::placeholder {
 
 .conversation-row:active {
   background: var(--chatx-bg);
+}
+
+.conversation-row.is-gone {
+  gap: 4px;
+  padding-inline-end: 8px;
+}
+
+.conversation-row.is-gone .conversation-name,
+.conversation-preview.is-gone {
+  color: var(--chatx-muted);
+}
+
+.gone-avatar {
+  display: grid;
+  place-items: center;
+  width: 52px;
+  height: 52px;
+  flex: none;
+  border-radius: 50%;
+  background: var(--chatx-soft);
+  color: var(--chatx-muted);
+  font-size: 26px;
+}
+
+.conversation-open {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex: 1;
+  min-width: 0;
+  min-height: 56px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: start;
+}
+
+.conversation-remove {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  flex: none;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--chatx-muted);
+}
+
+.conversation-remove ion-icon {
+  font-size: 22px;
+}
+
+.conversation-remove:active {
+  background: var(--chatx-soft);
+}
+
+.deleted-peer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 16px;
+}
+
+.deleted-peer p {
+  margin: 0;
+  font-weight: 800;
+}
+
+.deleted-peer button {
+  flex: none;
+  min-height: 44px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: 14px;
+  background: var(--chatx-soft);
+  color: var(--chatx-text);
+  font: inherit;
+  font-weight: 800;
 }
 
 .member-row {
@@ -2215,19 +2298,23 @@ button.chat-avatar {
   background: var(--chatx-raised);
 }
 
-.composer-field {
+.composer-bar {
   display: flex;
+  direction: ltr;
   align-items: flex-end;
-  gap: 2px;
-  min-height: 52px;
-  padding: 4px;
-  border: 1px solid transparent;
-  border-radius: 26px;
-  background: var(--chatx-surface);
+  gap: 8px;
 }
 
-.composer-field:focus-within {
-  border-color: var(--chatx-accent);
+.composer-field {
+  display: flex;
+  flex: 1;
+  align-items: flex-end;
+  min-width: 0;
+  min-height: 48px;
+  padding: 2px;
+  border: 0;
+  border-radius: 24px;
+  background: var(--chatx-surface);
 }
 
 .composer-input {
@@ -2237,15 +2324,13 @@ button.chat-avatar {
   min-height: 44px;
   max-height: 120px;
   margin: 0;
-  padding: 11px 8px;
+  padding: 11px 4px;
   border: 0;
   resize: none;
   overflow-y: auto;
   outline: none;
   background: transparent;
   color: var(--chatx-text);
-  direction: ltr;
-  text-align: left;
   font: inherit;
   font-size: 16px;
   line-height: 22px;
@@ -2253,8 +2338,6 @@ button.chat-avatar {
 
 .composer-input::placeholder {
   color: var(--chatx-muted);
-  direction: ltr;
-  text-align: left;
 }
 
 .composer-icon,
@@ -2292,29 +2375,13 @@ button.chat-avatar {
   opacity: 1;
 }
 
-.composer-send ion-icon {
-  transform: scaleX(-1);
-}
-
 .composer-send.is-edit ion-icon {
-  transform: none;
   font-size: 26px;
 }
 
 .composer-icon.open,
 .composer-icon.is-on {
-  background: var(--chatx-soft);
   color: var(--chatx-accent);
-}
-
-.composer-icon.open ion-icon {
-  transform: rotate(45deg);
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .composer-icon.open ion-icon {
-    transform: none;
-  }
 }
 
 .composer:has(.emoji-panel) {
@@ -2322,7 +2389,7 @@ button.chat-avatar {
   padding-inline: 0;
 }
 
-.composer:has(.emoji-panel) .composer-field,
+.composer:has(.emoji-panel) .composer-bar,
 .composer:has(.emoji-panel) .attach-tray,
 .composer:has(.emoji-panel) .attach-strip,
 .composer:has(.emoji-panel) .mention-list {
@@ -2749,20 +2816,51 @@ ion-header:has(.message-search) {
   text-transform: uppercase;
 }
 
-.google-slot {
-  display: flex;
-  justify-content: center;
-  min-height: 44px;
+.google-login {
+  position: relative;
+  height: 50px;
   margin-top: 16px;
+  overflow: hidden;
+  border-radius: 16px;
+  background: var(--chatx-accent);
+}
+
+.google-login-face {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  width: 100%;
+  height: 100%;
+  padding: 0;
+  border: 0;
   background: transparent;
-  box-shadow: none;
+  color: var(--chatx-on-accent);
+  font: inherit;
+  font-size: 16px;
+  font-weight: 800;
+  pointer-events: none;
+}
+
+.google-login-face svg {
+  display: block;
+  flex: none;
+  padding: 3px;
+  border-radius: 50%;
+  background: #fff;
+}
+
+.google-slot {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  opacity: 0;
 }
 
 .google-slot > div,
 .google-slot iframe {
-  background: transparent;
-  border: 0;
-  box-shadow: none;
+  width: 100% !important;
+  height: 50px !important;
 }
 
 .account-setup {
@@ -2943,6 +3041,20 @@ ion-header:has(.message-search) {
   margin: 10px 2px 0;
   color: #ff8a80;
   font-size: 13px;
+}
+
+.key-gate .gate-go {
+  margin-top: 14px;
+}
+
+.key-gate .key-warn {
+  margin: 0 0 12px;
+  padding: 10px 12px;
+  border-inline-start: 3px solid #ff8a80;
+  border-radius: 12px;
+  background: var(--chatx-bg);
+  font-size: 13px;
+  line-height: 1.6;
 }
 
 .account-notice {
@@ -4168,8 +4280,9 @@ ion-toolbar.network-toolbar.slow {
 .wa-image {
   display: block;
   width: 100%;
-  height: 148px;
+  height: 168px;
   object-fit: cover;
+  object-position: center;
   background: var(--chatx-bg);
 }
 
@@ -5101,54 +5214,144 @@ ion-toolbar.network-toolbar.slow {
 }
 
 .people-admin h2 {
-  margin: 18px 16px 8px;
-  color: var(--chatx-muted);
-  font-size: 13px;
+  margin: 18px 16px 4px;
+  color: var(--chatx-text);
+  font-size: 15px;
   font-weight: 800;
 }
 
-.owner-group {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  min-height: 56px;
-  margin: 0 16px;
-  color: var(--chatx-text);
+.people-admin h2 span {
+  margin-inline-start: 6px;
+  color: var(--chatx-muted);
+  font-size: 13px;
+  font-weight: 700;
 }
 
-.owner-group strong {
+.owner-done {
+  margin: 0 16px;
+  color: var(--chatx-accent-soft);
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.owner-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: calc(100% - 32px);
+  min-height: 56px;
+  margin: 0 16px;
+  padding: 8px 0;
+  border: 0;
+  border-bottom: 1px solid var(--chatx-frame);
+  background: transparent;
+  color: var(--chatx-text);
+  font: inherit;
+  text-align: start;
+}
+
+.owner-row:active {
+  background: var(--chatx-bg);
+}
+
+.owner-row:focus-visible {
+  outline: 2px solid var(--chatx-accent);
+  outline-offset: 2px;
+}
+
+.owner-row ion-icon {
+  flex: none;
+  color: var(--chatx-danger);
+  font-size: 20px;
+}
+
+.owner-copy {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
   min-width: 0;
+}
+
+.owner-copy strong,
+.owner-copy small {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.owner-copy strong {
   font-size: 16px;
 }
 
-.owner-group .account-delete {
-  width: 44px;
-  height: 44px;
+.owner-copy small {
+  color: var(--chatx-muted);
+  font-size: 13px;
+}
+
+.owner-sheet {
+  display: flex;
+  flex-direction: column;
+  max-height: min(88dvh, 720px);
+}
+
+.owner-sheet .account-actions {
+  position: sticky;
+  bottom: 0;
+  margin-top: 12px;
+  padding-top: 8px;
+  background: var(--chatx-raised);
+}
+
+.owner-sheet .account-actions button:disabled {
+  opacity: 0.55;
+}
+
+.owner-warn {
+  margin: 4px 0 0;
+  color: var(--chatx-muted);
+  font-size: 13px;
+  line-height: 1.45;
 }
 
 .owner-choices {
   display: grid;
-  gap: 4px;
-  margin: 12px 0;
+  min-height: 0;
+  margin: 8px 0 0;
+  overflow: auto;
 }
 
 .owner-choices label {
   display: flex;
   align-items: center;
   gap: 12px;
-  min-height: 44px;
+  min-height: 48px;
+  border-bottom: 1px solid var(--chatx-frame);
   color: var(--chatx-text);
   font-weight: 700;
+}
+
+.owner-choices label.is-locked {
+  opacity: 0.72;
+}
+
+.owner-choices label.is-final {
+  margin-top: 8px;
+  border-bottom: 0;
+  color: var(--chatx-danger);
 }
 
 .owner-choices input {
   width: 22px;
   height: 22px;
   margin: 0;
+  accent-color: var(--chatx-accent);
+}
+
+.owner-choices input:focus-visible {
+  outline: 2px solid var(--chatx-accent);
+  outline-offset: 2px;
 }
 
 ion-toggle {

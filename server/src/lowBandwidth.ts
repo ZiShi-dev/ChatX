@@ -13,7 +13,7 @@ function mapMessage(row: Record<string, unknown>): RoomMessage {
 function mapUpload(row: Record<string, unknown>): Upload {
   return { id: row.id as string, roomId: row.room_id as string, ownerId: row.owner_id as string, kind: row.kind as Upload['kind'],
     name: row.name as string, size: row.size as number, sha256: row.sha256 as string, replyToId: row.reply_to as string | null,
-    bytes: row.bytes as Uint8Array, expiresAt: row.expires_at as Date };
+    bytes: row.bytes as Uint8Array, expiresAt: row.expires_at as Date, sealed: (row.sealed as string | null) ?? null };
 }
 
 export function createLowBandwidthRepository(pool: pg.Pool): Pick<AuthRepository, 'readRoomSync' | 'beginUpload' | 'readUpload' | 'appendUpload' | 'deleteUpload'> {
@@ -57,11 +57,11 @@ export function createLowBandwidthRepository(pool: pg.Pool): Pick<AuthRepository
         await client.query('DELETE FROM message_uploads WHERE expires_at <= $1 AND owner_id=$2', [at, upload.ownerId]);
         if (!(await client.query('SELECT 1 FROM room_members WHERE room_id=$1 AND user_id=$2', [upload.roomId, upload.ownerId])).rowCount) { await client.query('ROLLBACK'); return null; }
         const existing = (await client.query('SELECT * FROM message_uploads WHERE id=$1', [upload.id])).rows[0];
-        if (existing) { await client.query('COMMIT'); const old = mapUpload(existing); return old.ownerId === upload.ownerId && old.roomId === upload.roomId && old.kind === upload.kind && old.name === upload.name && old.sha256 === upload.sha256 && old.size === upload.size && old.replyToId === upload.replyToId ? old : null; }
+        if (existing) { await client.query('COMMIT'); const old = mapUpload(existing); return old.ownerId === upload.ownerId && old.roomId === upload.roomId && old.kind === upload.kind && old.name === upload.name && old.sha256 === upload.sha256 && old.size === upload.size && old.replyToId === upload.replyToId && (old.sealed ?? null) === (upload.sealed ?? null) ? old : null; }
         const quota = await client.query('SELECT count(*)::int AS count FROM message_uploads WHERE owner_id=$1', [upload.ownerId]);
         if (quota.rows[0].count >= 40) { await client.query('ROLLBACK'); return null; }
-        const result = await client.query(`INSERT INTO message_uploads(id,room_id,owner_id,kind,name,size,sha256,reply_to,expires_at)
-          VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING *`, [upload.id, upload.roomId, upload.ownerId, upload.kind, upload.name, upload.size, upload.sha256, upload.replyToId, upload.expiresAt]);
+        const result = await client.query(`INSERT INTO message_uploads(id,room_id,owner_id,kind,name,size,sha256,reply_to,expires_at,sealed)
+          VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING *`, [upload.id, upload.roomId, upload.ownerId, upload.kind, upload.name, upload.size, upload.sha256, upload.replyToId, upload.expiresAt, upload.sealed ?? null]);
         await client.query('COMMIT'); return mapUpload(result.rows[0]);
       } catch (error) { await client.query('ROLLBACK'); throw error; } finally { client.release(); }
     },

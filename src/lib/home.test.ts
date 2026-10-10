@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { conversationTitle, deletedPrivatePeer } from './conversation';
 import { mergeHomeMessages, readHomePayload, readOpenedRoom, readRoomMessages, readRoomReaders, readUpdatedRoom } from './home';
 import { canTakeGroupTurn } from './roles';
 import type { Message } from '../types/message';
@@ -122,6 +123,33 @@ describe('home payload', () => {
     expect(parsed?.[0]?.media?.state).toBe('remote');
     expect(parsed?.[0]?.media?.fileSize).toBe(4);
     expect(parsed?.[0]?.text).toBe('');
+  });
+
+  it('attaches a link card when the text contains a url', () => {
+    const parsed = readRoomMessages({
+      messages: [{
+        id: '33333333-3333-4333-8333-333333333333',
+        conversationId: room,
+        senderId: user,
+        text: 'شوف https://example.com/guide',
+        createdAt: '2026-10-08T12:00:00.000Z',
+        deleted: false,
+      }],
+    }, room);
+    expect(parsed?.[0]?.link?.url).toBe('https://example.com/guide');
+    expect(parsed?.[0]?.link?.preview).toBe('notLoaded');
+  });
+
+  it('labels a private chat when the other account is gone', () => {
+    const conversation = {
+      id: room,
+      type: 'private' as const,
+      participantIds: [user],
+      unreadCount: 0,
+      createdAt: '2026-01-01T00:00:00.000Z',
+    };
+    expect(deletedPrivatePeer(conversation, user, [])).toBe(true);
+    expect(conversationTitle(conversation, user, [])).toBe('حساب محذوف');
   });
 
   it('reads a stored file name without its bytes', () => {

@@ -12,7 +12,14 @@ export type SavedEntry = {
   preview: string;
   createdAt: string;
   savedAt: string;
+  /** End-to-end envelope from the server; removed once decrypted. */
+  sealed?: string;
 };
+
+export function savedPreview(text: string) {
+  const flat = text.replace(/\s+/g, ' ').trim();
+  return flat.length <= 80 ? flat : `${flat.slice(0, 80)}…`;
+}
 
 export function toSavedEntry(
   message: Message,
@@ -68,6 +75,7 @@ export function readSavedPayload(payload: unknown, userId: string): SavedEntry[]
       preview: row.preview,
       createdAt: row.createdAt,
       savedAt: row.savedAt,
+      ...(typeof row.sealed === 'string' && row.sealed.startsWith('e2e1.') && row.sealed.length <= 16_400 ? { sealed: row.sealed } : {}),
     });
   }
   return entries;

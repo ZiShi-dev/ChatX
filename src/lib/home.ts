@@ -1,4 +1,5 @@
 import { readDirectoryUser } from './directory';
+import { firstUrl, linkDraft } from './link';
 import type { Conversation, ConversationType } from '../types/conversation';
 import type { Message, MessageReaction } from '../types/message';
 import type { User } from '../types/user';
@@ -144,10 +145,12 @@ export function readRoomMessages(payload: unknown, conversationId: string): Mess
     const image = row.type === 'image' && !row.deleted;
     const fileName = typeof row.fileName === 'string' && row.fileName.trim() && row.fileName.length <= 120 ? row.fileName : '';
     const file = row.type === 'file' && !row.deleted;
-    if (image && (typeof row.fileSize !== 'number' || !Number.isInteger(row.fileSize) || row.fileSize < 1 || row.fileSize > 60_000)) return null;
-    if (file && (!fileName || typeof row.fileSize !== 'number' || !Number.isInteger(row.fileSize) || row.fileSize < 1 || row.fileSize > 262_144)) return null;
+    // Sealed attachments carry 28 extra bytes of AES-GCM IV and tag.
+    if (image && (typeof row.fileSize !== 'number' || !Number.isInteger(row.fileSize) || row.fileSize < 1 || row.fileSize > 60_028)) return null;
+    if (file && (!fileName || typeof row.fileSize !== 'number' || !Number.isInteger(row.fileSize) || row.fileSize < 1 || row.fileSize > 262_172)) return null;
     const replyToId = typeof row.replyToId === 'string' && SERVER_ID.test(row.replyToId) ? row.replyToId : undefined;
     const reactions = readReactions(row.reactions);
+    const url = !row.deleted && !image && !file && row.event !== true ? firstUrl(row.text) : '';
     messages.push({
       id: row.id,
       conversationId,
@@ -163,6 +166,7 @@ export function readRoomMessages(payload: unknown, conversationId: string): Mess
       ...(typeof row.editedAt === 'string' ? { editedAt: row.editedAt } : {}),
       ...(replyToId ? { replyToId } : {}),
       ...(reactions ? { reactions } : {}),
+      ...(url ? { link: linkDraft(url) } : {}),
     });
   }
   return messages;

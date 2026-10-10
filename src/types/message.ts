@@ -51,4 +51,7 @@ export interface Message {
   retryAt?: number;
   retryable?: boolean;
   prepared?: boolean;
+  /** Room key id of an end-to-end sealed message; its media bytes must be decrypted too. */
+  sealedKey?: string;
+  locked?: boolean;
 }

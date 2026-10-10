@@ -1,14 +1,16 @@
-import { useEffect, useState } from 'react';
+import { memo, useCallback, useEffect, useRef, useState } from 'react';
 import { IonContent, IonHeader, IonIcon, IonPage } from '@ionic/react';
 import { trashOutline } from 'ionicons/icons';
 import { Navigate } from 'react-router-dom';
+import Avatar from '../components/common/Avatar';
 import EmptyState from '../components/common/EmptyState';
 import NetworkStatusBanner from '../components/common/NetworkBanner';
 import PageNav from '../components/common/PageNav';
 import PageSkeleton from '../components/common/PageSkeleton';
-import UserListItem from '../components/users/UserListItem';
+import { useDataSaver } from '../hooks/useDataSaver';
 import { AdminApiError, adminFetch } from '../lib/adminApi';
 import { readDirectoryUsers } from '../lib/directory';
+import { roleLabel } from '../lib/roles';
 import { useChatStore } from '../stores/chatStore';
 import { useUserStore } from '../stores/userStore';
 import type { Message } from '../types/message';
@@ -38,24 +40,9 @@ const GROUP_CHOICES: Array<{ key: GroupChoiceKey; label: string; withGroup?: boo
   { key: 'group', label: 'حذف المجموعة' },
 ];
 
-const EMPTY: Record<ChoiceKey, boolean> = {
-  messages: false,
-  images: false,
-  files: false,
-  reactions: false,
-  privateChats: false,
-  profile: false,
-  membership: false,
-  account: false,
-};
-
-const EMPTY_GROUP: Record<GroupChoiceKey, boolean> = {
-  messages: false,
-  images: false,
-  files: false,
-  reactions: false,
-  group: false,
-};
+const USER_OPTIONS = CHOICES.map((item) => ({ key: item.key, label: item.label, forced: item.withAccount }));
+const GROUP_OPTIONS = GROUP_CHOICES.map((item) => ({ key: item.key, label: item.label, forced: item.withGroup }));
+const GROUP_COLOR = '#3d9b84';
 
 const GROUP_ID = /^[0-9a-f-]{36}$/i;
 
@@ -88,23 +75,238 @@ function failureText(error: unknown, group = false) {
   return 'تعذر الحذف.';
 }
 
+function memberChoices(picked: Record<string, boolean>): Record<ChoiceKey, boolean> {
+  return {
+    messages: Boolean(picked.messages),
+    images: Boolean(picked.images),
+    files: Boolean(picked.files),
+    reactions: Boolean(picked.reactions),
+    privateChats: Boolean(picked.privateChats),
+    profile: Boolean(picked.profile),
+    membership: Boolean(picked.membership),
+    account: Boolean(picked.account),
+  };
+}
+
+function groupChoicesOf(picked: Record<string, boolean>): Record<GroupChoiceKey, boolean> {
+  return {
+    messages: Boolean(picked.messages),
+    images: Boolean(picked.images),
+    files: Boolean(picked.files),
+    reactions: Boolean(picked.reactions),
+    group: Boolean(picked.group),
+  };
+}
+
+function patchMemberMessages(userId: string, picked: Record<ChoiceKey, boolean>) {
+  if (!picked.account && !picked.messages && !picked.images && !picked.files && !picked.reactions) return;
+  const messages = useChatStore.getState().messages;
+  let changed = false;
+  const next = messages.flatMap((message) => {
+    if (dropsMessage(message, userId, picked)) {
+      changed = true;
+      return [];
+    }
+    if (!picked.reactions || !message.reactions?.some((item) => item.userId === userId)) return [message];
+    changed = true;
+    return [{ ...message, reactions: message.reactions.filter((item) => item.userId !== userId) }];
+  });
+  if (changed) useChatStore.setState({ messages: next });
+}
+
+function patchGroupMessages(roomId: string, picked: Record<GroupChoiceKey, boolean>) {
+  const state = useChatStore.getState();
+  if (picked.group) {
+    const conversations = state.conversations.filter((item) => item.id !== roomId);
+    const messages = state.messages.filter((item) => item.conversationId !== roomId);
+    if (conversations.length !== state.conversations.length || messages.length !== state.messages.length) {
+      useChatStore.setState({ conversations, messages });
+    }
+    return;
+  }
+  if (!picked.messages && !picked.images && !picked.files && !picked.reactions) return;
+  let changed = false;
+  const messages = state.messages.flatMap((message) => {
+    if (message.conversationId !== roomId) return [message];
+    if (picked.images && message.type === 'image') {
+      changed = true;
+      return [];
+    }
+    if (picked.files && message.type === 'file') {
+      changed = true;
+      return [];
+    }
+    if (picked.messages && message.type !== 'image' && message.type !== 'file') {
+      changed = true;
+      return [];
+    }
+    if (picked.reactions && message.reactions?.length) {
+      changed = true;
+      return [{ ...message, reactions: [] }];
+    }
+    return [message];
+  });
+  if (changed) useChatStore.setState({ messages });
+}
+
+const OwnerRow = memo(function OwnerRow({
+  id,
+  title,
+  detail,
+  color,
+  photo,
+  label,
+  onOpen,
+}: {
+  id: string;
+  title: string;
+  detail: string;
+  color: string;
+  photo?: string;
+  label: string;
+  onOpen: (id: string) => void;
+}) {
+  return (
+    <button type="button" className="owner-row" aria-label={label} onClick={() => onOpen(id)}>
+      <Avatar name={title} color={color} src={photo} size={40} />
+      <span className="owner-copy">
+        <strong>{title}</strong>
+        {detail ? <small>{detail}</small> : null}
+      </span>
+      <IonIcon icon={trashOutline} aria-hidden="true" />
+    </button>
+  );
+});
+
+function ChoiceSheet({
+  titleId,
+  title,
+  warning,
+  options,
+  lockKey,
+  group,
+  onClose,
+  onApply,
+}: {
+  titleId: string;
+  title: string;
+  warning: string;
+  options: Array<{ key: string; label: string; forced?: boolean }>;
+  lockKey: string;
+  group?: boolean;
+  onClose: () => void;
+  onApply: (picked: Record<string, boolean>) => Promise<void>;
+}) {
+  const [choices, setChoices] = useState<Record<string, boolean>>(() => Object.fromEntries(options.map((item) => [item.key, false])));
+  const [notice, setNotice] = useState('');
+  const [busy, setBusy] = useState(false);
+  const alive = useRef(true);
+  const locked = Boolean(choices[lockKey]);
+  const count = options.reduce((sum, item) => sum + ((item.forced && locked) || choices[item.key] ? 1 : 0), 0);
+
+  useEffect(() => () => {
+    alive.current = false;
+  }, []);
+
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape' && !busy) onClose();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [busy, onClose]);
+
+  const toggle = (key: string) => {
+    setChoices((current) => {
+      const next = { ...current, [key]: !current[key] };
+      if (key === lockKey && next[lockKey]) {
+        for (const item of options) if (item.forced) next[item.key] = true;
+      }
+      return next;
+    });
+  };
+  const apply = () => {
+    if (!count || busy) return;
+    const picked = { ...choices };
+    if (picked[lockKey]) {
+      for (const item of options) if (item.forced) picked[item.key] = true;
+    }
+    setBusy(true);
+    setNotice('');
+    void onApply(picked).then(() => {
+      if (alive.current) onClose();
+    }).catch((error: unknown) => {
+      if (!alive.current) return;
+      setNotice(failureText(error, group));
+      setBusy(false);
+    });
+  };
+
+  return (
+    <div className="app-scrim sheet" onClick={() => { if (!busy) onClose(); }}>
+      <div
+        className="app-sheet admin-confirm owner-sheet"
+        role="dialog"
+        aria-modal="true"
+        aria-busy={busy}
+        aria-labelledby={titleId}
+        onClick={(event) => event.stopPropagation()}
+      >
+        <span className="app-handle" />
+        <h2 id={titleId} dir="auto">{title}</h2>
+        <div className="owner-choices">
+          {options.map((item) => {
+            const held = Boolean(item.forced && locked);
+            return (
+              <label key={item.key} className={item.key === lockKey ? 'is-final' : held ? 'is-locked' : undefined}>
+                <input
+                  type="checkbox"
+                  checked={held || Boolean(choices[item.key])}
+                  disabled={held || busy}
+                  onChange={() => toggle(item.key)}
+                />
+                <span>{item.label}</span>
+              </label>
+            );
+          })}
+        </div>
+        {locked ? <p className="owner-warn">{warning}</p> : null}
+        {notice ? <p className="form-error">{notice}</p> : null}
+        <div className="account-actions">
+          <button type="button" onClick={onClose} disabled={busy}>إلغاء</button>
+          <button type="button" className="danger" onClick={apply} disabled={!count || busy}>
+            {busy ? 'جارٍ الحذف' : count ? `حذف (${count})` : 'حذف'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function PeopleAdminPage() {
   const loadHome = useChatStore((state) => state.loadHome);
   const removeUser = useUserStore((state) => state.removeUser);
+  const updateUser = useUserStore((state) => state.updateUser);
+  const dataSaver = useDataSaver();
+  const alive = useRef(true);
   const [access, setAccess] = useState<'pending' | 'ready' | 'denied'>('pending');
   const [users, setUsers] = useState<User[]>([]);
   const [groups, setGroups] = useState<OwnerGroup[]>([]);
   const [target, setTarget] = useState<User>();
   const [group, setGroup] = useState<OwnerGroup>();
-  const [choices, setChoices] = useState(EMPTY);
-  const [groupChoices, setGroupChoices] = useState(EMPTY_GROUP);
-  const [notice, setNotice] = useState('');
-  const [busy, setBusy] = useState(false);
+  const [done, setDone] = useState('');
 
   useEffect(() => {
-    let alive = true;
+    alive.current = true;
+    return () => {
+      alive.current = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    let current = true;
     void adminFetch('/api/owner/members').then((payload) => {
-      if (!alive) return;
+      if (!current) return;
       const next = readDirectoryUsers(payload);
       if (!next) {
         setAccess('denied');
@@ -114,119 +316,63 @@ export default function PeopleAdminPage() {
       setGroups(readGroups(payload));
       setAccess('ready');
     }).catch(() => {
-      if (alive) setAccess('denied');
+      if (current) setAccess('denied');
     });
     return () => {
-      alive = false;
+      current = false;
     };
   }, []);
 
-  const selected = CHOICES.some((item) => choices[item.key]);
-  const groupSelected = GROUP_CHOICES.some((item) => groupChoices[item.key]);
-  const open = (user: User) => {
-    setChoices(EMPTY);
-    setNotice('');
+  const usersRef = useRef(users);
+  const groupsRef = useRef(groups);
+  usersRef.current = users;
+  groupsRef.current = groups;
+  const closeUser = useCallback(() => setTarget(undefined), []);
+  const closeGroup = useCallback(() => setGroup(undefined), []);
+  const openUser = useCallback((id: string) => {
+    const person = usersRef.current.find((item) => item.id === id);
+    if (!person) return;
+    setDone('');
     setGroup(undefined);
-    setTarget(user);
-  };
-  const openGroup = (item: OwnerGroup) => {
-    setGroupChoices(EMPTY_GROUP);
-    setNotice('');
+    setTarget(person);
+  }, []);
+  const openGroup = useCallback((id: string) => {
+    const room = groupsRef.current.find((item) => item.id === id);
+    if (!room) return;
+    setDone('');
     setTarget(undefined);
-    setGroup(item);
-  };
-  const close = () => {
-    if (busy) return;
-    setTarget(undefined);
-    setGroup(undefined);
-  };
-  const toggle = (key: ChoiceKey) => {
-    setChoices((current) => {
-      const next = { ...current, [key]: !current[key] };
-      if (key === 'account' && next.account) {
-        for (const item of CHOICES) if (item.withAccount) next[item.key] = true;
-      }
-      return next;
-    });
-  };
-  const erase = () => {
-    if (!target || !selected || busy) return;
-    const person = target;
-    const picked = { ...choices };
-    if (picked.account) {
-      for (const item of CHOICES) if (item.withAccount) picked[item.key] = true;
+    setGroup(room);
+  }, []);
+  const erase = useCallback(async (person: User, raw: Record<string, boolean>) => {
+    const picked = memberChoices(raw);
+    await adminFetch('/api/owner/erase', { method: 'POST', body: { userId: person.id, ...picked } });
+    patchMemberMessages(person.id, picked);
+    if (picked.account) removeUser(person.id);
+    else if (picked.profile) updateUser(person.id, { avatarUrl: undefined, bannerUrl: undefined });
+    if (alive.current) {
+      setUsers((list) => (
+        picked.account
+          ? list.filter((item) => item.id !== person.id)
+          : picked.profile
+            ? list.map((item) => (item.id === person.id ? { ...item, avatarUrl: undefined, bannerUrl: undefined } : item))
+            : list
+      ));
+      setDone('تم الحذف.');
     }
-    setBusy(true);
-    setNotice('');
-    void adminFetch('/api/owner/erase', { method: 'POST', body: { userId: person.id, ...picked } }).then(async () => {
-      useChatStore.setState((state) => ({
-        messages: state.messages.flatMap((message) => {
-          if (dropsMessage(message, person.id, picked)) return [];
-          if (!picked.reactions || !message.reactions?.some((item) => item.userId === person.id)) return [message];
-          const reactions = message.reactions.filter((item) => item.userId !== person.id);
-          return [{ ...message, reactions }];
-        }),
-      }));
-      if (picked.account) removeUser(person.id);
-      await loadHome();
-      const payload = await adminFetch('/api/owner/members');
-      const next = readDirectoryUsers(payload);
-      if (next) {
-        setUsers(next);
-        setGroups(readGroups(payload));
-      }
-      setTarget(undefined);
-    }).catch((error: unknown) => {
-      setNotice(failureText(error));
-    }).finally(() => {
-      setBusy(false);
-    });
-  };
-  const toggleGroup = (key: GroupChoiceKey) => {
-    setGroupChoices((current) => {
-      const next = { ...current, [key]: !current[key] };
-      if (key === 'group' && next.group) {
-        for (const item of GROUP_CHOICES) if (item.withGroup) next[item.key] = true;
-      }
-      return next;
-    });
-  };
-  const eraseGroup = () => {
-    if (!group || !groupSelected || busy) return;
-    const room = group;
-    const picked = { ...groupChoices };
-    if (picked.group) {
-      for (const item of GROUP_CHOICES) if (item.withGroup) picked[item.key] = true;
+    if (picked.messages || picked.images || picked.files || picked.reactions || picked.privateChats || picked.membership || picked.account) {
+      void loadHome();
     }
-    setBusy(true);
-    setNotice('');
-    void adminFetch('/api/owner/groups/erase', { method: 'POST', body: { roomId: room.id, ...picked } }).then(async () => {
-      useChatStore.setState((state) => ({
-        conversations: picked.group ? state.conversations.filter((item) => item.id !== room.id) : state.conversations,
-        messages: state.messages.flatMap((message) => {
-          if (message.conversationId !== room.id) return [message];
-          if (picked.group) return [];
-          if (picked.images && message.type === 'image') return [];
-          if (picked.files && message.type === 'file') return [];
-          if (picked.messages && message.type !== 'image' && message.type !== 'file') return [];
-          if (picked.reactions) return [{ ...message, reactions: [] }];
-          return [message];
-        }),
-      }));
-      await loadHome();
-      const payload = await adminFetch('/api/owner/members');
-      const next = readDirectoryUsers(payload);
-      if (next) {
-        setUsers(next);
-        setGroups(readGroups(payload));
-      }
-      setGroup(undefined);
-    }).catch((error: unknown) => {
-      setNotice(failureText(error, true));
-    }).finally(() => {
-      setBusy(false);
-    });
-  };
+  }, [loadHome, removeUser, updateUser]);
+  const eraseGroup = useCallback(async (room: OwnerGroup, raw: Record<string, boolean>) => {
+    const picked = groupChoicesOf(raw);
+    await adminFetch('/api/owner/groups/erase', { method: 'POST', body: { roomId: room.id, ...picked } });
+    patchGroupMessages(room.id, picked);
+    if (alive.current) {
+      if (picked.group) setGroups((list) => list.filter((item) => item.id !== room.id));
+      setDone('تم الحذف.');
+    }
+    if (picked.messages || picked.images || picked.files || picked.reactions || picked.group) void loadHome();
+  }, [loadHome]);
 
   if (access === 'denied') return <Navigate to="/home" replace />;
 
@@ -237,95 +383,64 @@ export default function PeopleAdminPage() {
         <PageNav title="الإدارة" fallback="/account" />
       </IonHeader>
       <IonContent className="people-admin">
-        {access === 'pending' ? <PageSkeleton kind="people" /> : null}
+        {access === 'pending' ? <PageSkeleton kind="settings" /> : null}
         {access === 'ready' ? (
           <>
             <p className="settings-lead">اختر ما تريد حذفه لكل حساب أو مجموعة. محادثة ChatX الرئيسية تبقى.</p>
-            <h2>الأعضاء</h2>
-            {users.length === 0 ? <EmptyState title="لا يوجد أعضاء آخرون" /> : users.map((user) => (
-              <UserListItem key={user.id} user={user} onClick={() => undefined} onDelete={() => open(user)} />
-            ))}
-            <h2>المجموعات</h2>
+            {done ? <p className="owner-done" role="status">{done}</p> : null}
+            <h2>الأعضاء <span>{users.length}</span></h2>
+            {users.length === 0 ? <EmptyState title="لا يوجد أعضاء آخرون" /> : users.map((user) => {
+              const role = roleLabel(user.role);
+              return (
+                <OwnerRow
+                  key={user.id}
+                  id={user.id}
+                  title={user.displayName}
+                  detail={role ? `@${user.username} · ${role}` : `@${user.username}`}
+                  color={user.color}
+                  photo={dataSaver ? undefined : user.avatarUrl}
+                  label={`حذف ${user.displayName}`}
+                  onOpen={openUser}
+                />
+              );
+            })}
+            <h2>المجموعات <span>{groups.length}</span></h2>
             {groups.length === 0 ? <EmptyState title="لا توجد مجموعات" /> : groups.map((item) => (
-              <div className="owner-group" key={item.id}>
-                <strong dir="auto">{item.name}</strong>
-                <button type="button" className="account-delete" aria-label="حذف المجموعة" onClick={() => openGroup(item)}>
-                  <IonIcon icon={trashOutline} />
-                </button>
-              </div>
+              <OwnerRow
+                key={item.id}
+                id={item.id}
+                title={item.name}
+                detail="مجموعة"
+                color={GROUP_COLOR}
+                label={`حذف ${item.name}`}
+                onOpen={openGroup}
+              />
             ))}
           </>
         ) : null}
       </IonContent>
       {target ? (
-        <div className="app-scrim sheet" onClick={close}>
-          <div
-            className="app-sheet admin-confirm"
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="owner-erase-title"
-            onClick={(event) => event.stopPropagation()}
-          >
-            <h2 id="owner-erase-title" dir="auto">حذف {target.displayName}</h2>
-            <div className="owner-choices">
-              {CHOICES.map((item) => {
-                const locked = Boolean(item.withAccount && choices.account);
-                return (
-                  <label key={item.key}>
-                    <input
-                      type="checkbox"
-                      checked={locked || choices[item.key]}
-                      disabled={locked || busy}
-                      onChange={() => toggle(item.key)}
-                    />
-                    <span>{item.label}</span>
-                  </label>
-                );
-              })}
-            </div>
-            {choices.account ? <p>حذف الحساب يزيل رسائله وصوره وملفاته وتفاعلاته.</p> : null}
-            {notice ? <p className="form-error">{notice}</p> : null}
-            <div className="account-actions">
-              <button type="button" onClick={close} disabled={busy}>إلغاء</button>
-              <button type="button" className="danger" onClick={erase} disabled={!selected || busy}>حذف</button>
-            </div>
-          </div>
-        </div>
+        <ChoiceSheet
+          titleId="owner-erase-title"
+          title={`حذف ${target.displayName}`}
+          warning="حذف الحساب يزيل رسائله وصوره وملفاته وتفاعلاته."
+          options={USER_OPTIONS}
+          lockKey="account"
+          onClose={closeUser}
+          onApply={(picked) => erase(target, picked)}
+        />
       ) : null}
       {group ? (
-        <div className="app-scrim sheet" onClick={close}>
-          <div
-            className="app-sheet admin-confirm"
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="owner-group-title"
-            onClick={(event) => event.stopPropagation()}
-          >
-            <h2 id="owner-group-title" dir="auto">حذف {group.name}</h2>
-            <div className="owner-choices">
-              {GROUP_CHOICES.map((item) => {
-                const locked = Boolean(item.withGroup && groupChoices.group);
-                return (
-                  <label key={item.key}>
-                    <input
-                      type="checkbox"
-                      checked={locked || groupChoices[item.key]}
-                      disabled={locked || busy}
-                      onChange={() => toggleGroup(item.key)}
-                    />
-                    <span>{item.label}</span>
-                  </label>
-                );
-              })}
-            </div>
-            {groupChoices.group ? <p>حذف المجموعة يزيل رسائلها وصورها وملفاتها وأعضاءها.</p> : null}
-            {notice ? <p className="form-error">{notice}</p> : null}
-            <div className="account-actions">
-              <button type="button" onClick={close} disabled={busy}>إلغاء</button>
-              <button type="button" className="danger" onClick={eraseGroup} disabled={!groupSelected || busy}>حذف</button>
-            </div>
-          </div>
-        </div>
+        <ChoiceSheet
+          titleId="owner-group-title"
+          title={`حذف ${group.name}`}
+          warning="حذف المجموعة يزيل رسائلها وصورها وملفاتها وأعضاءها."
+          options={GROUP_OPTIONS}
+          lockKey="group"
+          group
+          onClose={closeGroup}
+          onApply={(picked) => eraseGroup(group, picked)}
+        />
       ) : null}
     </IonPage>
   );

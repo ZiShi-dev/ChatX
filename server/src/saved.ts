@@ -1,5 +1,6 @@
 import type { Deps } from './authService.ts';
 import { hashSession } from './session.ts';
+import { isSealed } from './sealed.ts';
 import type { SavedItem } from './types.ts';
 
 export const SAVED_PAGE_SIZE = 30;
@@ -7,6 +8,7 @@ export const SAVED_PAGE_SIZE = 30;
 const MESSAGE_ID = /^[0-9a-f-]{36}$/i;
 
 function preview(text: string) {
+  if (isSealed(text)) return 'رسالة مشفرة';
   const flat = text.replace(/\s+/g, ' ').trim();
   return flat.length <= 80 ? flat : `${flat.slice(0, 80)}…`;
 }
@@ -25,6 +27,7 @@ export function savedView(item: SavedItem) {
     senderName: item.senderName,
     type: 'text' as const,
     preview: preview(item.text),
+    ...(isSealed(item.text) ? { sealed: item.text } : {}),
     createdAt: item.createdAt.toISOString(),
     savedAt: item.savedAt.toISOString(),
   };

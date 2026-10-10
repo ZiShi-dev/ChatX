@@ -213,6 +213,7 @@ function LinkBlock({ message }: { message: Message }) {
   const loadLinkPreview = useChatStore((state) => state.loadLinkPreview);
   const network = useNetworkStore((state) => state.network);
   const dataSaver = useDataSaver();
+  const [imageFailed, setImageFailed] = useState(false);
   const link = message.link;
   useEffect(() => {
     if (dataSaver || link?.preview !== 'notLoaded' || network === 'offline') return;
@@ -220,7 +221,7 @@ function LinkBlock({ message }: { message: Message }) {
   }, [dataSaver, link?.preview, loadLinkPreview, message.id, network]);
   if (!link) return null;
   const host = siteHost(link.url);
-  const image = link.image || previewImage(link.url);
+  const image = imageFailed ? '' : (link.image || previewImage(link.url));
   if (link.preview !== 'loaded') {
     if (dataSaver) {
       return (
@@ -253,7 +254,7 @@ function LinkBlock({ message }: { message: Message }) {
   }
   return (
     <a className="wa-preview" href={link.url} target="_blank" rel="noreferrer">
-      {image && !dataSaver && <img className="wa-image" src={image} alt="" />}
+      {image && !dataSaver && <img className="wa-image" src={image} alt="" onError={() => setImageFailed(true)} />}
       <span className="wa-copy">
         <span className="wa-host">{host}</span>
         <strong>{link.title || host}</strong>

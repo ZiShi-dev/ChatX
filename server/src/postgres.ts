@@ -1,10 +1,12 @@
 import { createLowBandwidthRepository } from './lowBandwidth.ts';
+import { createKeyRepository } from './keyStore.ts';
+import { FILE_BYTES_MAX, IMAGE_BYTES_MAX, SEALED_OVERHEAD } from './sealed.ts';
 import { randomInt } from 'node:crypto';
 import pg from 'pg';
 import { eraseGroupSelection, eraseSelection } from './eraseMember.ts';
 import { GLOBAL_ROOM_ID } from './home.ts';
 import { GROUP_TURN_MS, resolveGroupTurn } from './groupTurn.ts';
-import { messageKind } from './inbox.ts';
+import { noticeKind } from './inbox.ts';
 import type { AuthRepository, AuthRole, AuthUser, HomeRoom, InboxNotice, ProfilePatch, RoomKind, RoomMessage, SavedItem } from './types.ts';
 
 async function syncTurn(client: pg.PoolClient, roomId: string, at: Date) {
@@ -50,16 +52,17 @@ function byteSizeOf(value: unknown, max: number) {
 }
 
 function imageSizeOf(value: unknown) {
-  return byteSizeOf(value, 60_000);
+  return byteSizeOf(value, IMAGE_BYTES_MAX + SEALED_OVERHEAD);
 }
 
 function fileSizeOf(value: unknown) {
-  return byteSizeOf(value, 262_144);
+  return byteSizeOf(value, FILE_BYTES_MAX + SEALED_OVERHEAD);
 }
 
-function jpegBytes(value: unknown): Uint8Array | null {
+function jpegBytes(value: unknown, sealed: boolean): Uint8Array | null {
   const bytes = Buffer.isBuffer(value) ? value : null;
-  if (!bytes || bytes.length < 3 || bytes.length > 60_000) return null;
+  if (!bytes || bytes.length < 3 || bytes.length > IMAGE_BYTES_MAX + (sealed ? SEALED_OVERHEAD : 0)) return null;
+  if (sealed) return bytes.length > SEALED_OVERHEAD ? bytes : null;
   if (bytes[0] !== 0xff || bytes[1] !== 0xd8 || bytes[2] !== 0xff) return null;
   return bytes;
 }
@@ -94,6 +97,7 @@ export function createPool(databaseUrl: string) {
 export function createPostgresRepository(pool: pg.Pool): AuthRepository {
   return {
     ...createLowBandwidthRepository(pool),
+    ...createKeyRepository(pool),
     async findUserByGoogleSub(sub) {
       const result=await pool.query<UserRow>(`SELECT ${USER_COLUMNS} FROM users WHERE google_sub=$1`,[sub]);
       return result.rows[0]?mapUser(result.rows[0]):null;
@@ -453,15 +457,15 @@ export function createPostgresRepository(pool: pg.Pool): AuthRepository {
       finally { client.release(); }
     },
     async readMessageImage(roomId, userId, messageId) {
-      const result = await pool.query<{ bytes: Buffer }>(
-        `SELECT i.bytes
+      const result = await pool.query<{ bytes: Buffer; sealed: boolean }>(
+        `SELECT i.bytes, m.body LIKE 'e2e1.%' AS sealed
          FROM message_images i
          JOIN room_messages m ON m.id = i.message_id
          JOIN room_members rm ON rm.room_id = m.room_id AND rm.user_id = $3
          WHERE i.message_id = $2 AND m.room_id = $1 AND NOT m.deleted`,
         [roomId, messageId, userId],
       );
-      return jpegBytes(result.rows[0]?.bytes);
+      return jpegBytes(result.rows[0]?.bytes, result.rows[0]?.sealed === true);
     },
     async readMessageFile(roomId, userId, messageId) {
       const result = await pool.query<{ name: string; bytes: Buffer }>(
@@ -473,7 +477,7 @@ export function createPostgresRepository(pool: pg.Pool): AuthRepository {
         [roomId, messageId, userId],
       );
       const row = result.rows[0];
-      if (!row || !Buffer.isBuffer(row.bytes) || row.bytes.length < 1 || row.bytes.length > 262_144) return null;
+      if (!row || !Buffer.isBuffer(row.bytes) || row.bytes.length < 1 || row.bytes.length > FILE_BYTES_MAX + SEALED_OVERHEAD) return null;
       if (!row.name || row.name.length > 120) return null;
       return { name: row.name, bytes: row.bytes };
     },
@@ -513,7 +517,7 @@ export function createPostgresRepository(pool: pg.Pool): AuthRepository {
           `INSERT INTO notifications (user_id, message_id, room_id, kind, created_at)
            VALUES ($1, $2, $3, $4, $5)
            ON CONFLICT (user_id, message_id, kind) DO NOTHING`,
-          [member.id, message.id, message.roomId, messageKind(message.text, member.username, parentSender === member.id), message.createdAt],
+          [member.id, message.id, message.roomId, noticeKind(message, member, parentSender === member.id), message.createdAt],
         );
       }
     },
@@ -535,9 +539,10 @@ export function createPostgresRepository(pool: pg.Pool): AuthRepository {
                 CASE
                   WHEN m.deleted THEN ''
                   WHEN n.kind = 'reaction' THEN COALESCE(react.emoji, '')
+                  WHEN EXISTS (SELECT 1 FROM message_images i WHERE i.message_id = m.id) THEN 'صورة'
+                  WHEN m.body LIKE 'e2e1.%' THEN m.body
                   WHEN EXISTS (SELECT 1 FROM message_files f WHERE f.message_id = m.id)
                     THEN (SELECT f.name FROM message_files f WHERE f.message_id = m.id)
-                  WHEN EXISTS (SELECT 1 FROM message_images i WHERE i.message_id = m.id) THEN 'صورة'
                   ELSE m.body
                 END AS body,
                 n.created_at, n.read_at IS NOT NULL AS read, m.deleted
@@ -792,9 +797,10 @@ export function createPostgresRepository(pool: pg.Pool): AuthRepository {
       }>(
         `SELECT s.message_id, m.room_id, m.sender_id, u.display_name AS sender_name,
                 CASE
+                  WHEN EXISTS (SELECT 1 FROM message_images i WHERE i.message_id = m.id) AND (btrim(m.body) = '' OR m.body LIKE 'e2e1.%') THEN 'صورة'
+                  WHEN m.body LIKE 'e2e1.%' THEN m.body
                   WHEN EXISTS (SELECT 1 FROM message_files f WHERE f.message_id = m.id)
                     THEN (SELECT f.name FROM message_files f WHERE f.message_id = m.id)
-                  WHEN EXISTS (SELECT 1 FROM message_images i WHERE i.message_id = m.id) AND btrim(m.body) = '' THEN 'صورة'
                   ELSE m.body
                 END AS body,
                 m.created_at, s.saved_at,
@@ -861,6 +867,18 @@ export function createPostgresRepository(pool: pg.Pool): AuthRepository {
         messageId: row.last_read_message_id,
         readAt: row.last_read_at,
       }));
+    },
+    async dropOrphanPrivate(roomId, userId) {
+      const room = await pool.query<{ kind: string }>('SELECT kind FROM rooms WHERE id = $1', [roomId]);
+      const kind = room.rows[0]?.kind;
+      if (!kind) return 'missing';
+      if (kind !== 'private') return 'forbidden';
+      const member = await pool.query('SELECT 1 FROM room_members WHERE room_id = $1 AND user_id = $2', [roomId, userId]);
+      if (!member.rowCount) return 'missing';
+      const others = await pool.query('SELECT 1 FROM room_members WHERE room_id = $1 AND user_id <> $2', [roomId, userId]);
+      if (others.rowCount) return 'forbidden';
+      const removed = await pool.query(`DELETE FROM rooms WHERE id = $1 AND kind = 'private'`, [roomId]);
+      return removed.rowCount ? 'ok' : 'missing';
     },
     async listPresence(now) {
       const result = await pool.query<{ id: string; presence: 'online' | 'away' | null; last_seen_at: Date | null }>(
