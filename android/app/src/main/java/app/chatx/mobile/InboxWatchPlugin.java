@@ -33,7 +33,7 @@ public class InboxWatchPlugin extends Plugin {
                 String id = rows.optString(index, "");
                 if (!id.isEmpty()) seen.add(id);
             }
-            InboxWatch.prefs(getContext()).edit().putStringSet("seen", seen).putBoolean("primed", true).apply();
+            InboxWatch.markSeen(getContext(), seen);
         }
         call.resolve();
     }

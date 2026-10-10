@@ -1,8 +1,11 @@
 import { useEffect } from 'react';
+import { inboxAlertKey, liveAlertText, useLiveInbox, watchingRoom } from '../lib/liveInbox';
+import { constrainedDevice } from '../lib/deviceBudget';
+import { useNetworkStore } from '../stores/networkStore';
 import { Capacitor } from '@capacitor/core';
 import { startPolling } from '../lib/poll';
 import { isServerId } from '../lib/home';
-import { presentInbox, unseenInboxAlerts } from '../lib/inbox';
+import { presentInbox } from '../lib/inbox';
 import { InboxWatch } from '../lib/inboxWatch';
 import { notifyChatMessage } from '../lib/notifications';
 import { useAuthStore } from '../stores/authStore';
@@ -10,6 +13,9 @@ import { useChatStore } from '../stores/chatStore';
 import { quietLevel, useMuteStore } from '../stores/muteStore';
 import { useSettingsStore } from '../stores/settingsStore';
 import { useUserStore } from '../stores/userStore';
+
+const notified = new Set<string>();
+function watching(conversationId: string) { return watchingRoom(window.location.pathname, conversationId); }
 
 const HTTPS_ORIGIN = /^https:\/\/[A-Za-z0-9.-]+(?::[0-9]{1,5})?$/;
 
@@ -22,7 +28,9 @@ function rememberPhoneWatch() {
     .filter(([, enabled]) => !enabled)
     .map(([kind]) => kind)
     .join(',');
-  const seen = useChatStore.getState().serverInbox.slice(0, 30).map((item) => item.id);
+  const seen = useChatStore.getState().serverInbox.slice(0, 100).flatMap((item) => (
+    !item.unread || notified.has(item.id) || (document.visibilityState !== 'hidden' && watching(item.conversationId)) ? [item.id] : []
+  ));
   void InboxWatch.remember({ origin, quiet, hiddenKinds, seen }).catch(() => undefined);
 }
 
@@ -36,43 +44,66 @@ export function useInboxAlerts() {
     let primed = false;
     let stopped = false;
 
-    const tick = async () => {
-      const result = await useChatStore.getState().loadInbox();
-      if (stopped || result !== 'ok') return;
-      rememberPhoneWatch();
+    const inspect = () => {
+      if (stopped || useAuthStore.getState().currentUser.id !== userId) return;
       const items = presentInbox(
         useChatStore.getState().serverInbox.slice(0, 30),
         useMuteStore.getState().mutes,
         useSettingsStore.getState().notifyTypes,
       );
-      const fresh = unseenInboxAlerts(known, items);
-      known.clear();
-      items.forEach((item) => known.add(item.id));
+      const fresh = items.filter(item => item.unread && !item.suppressed && !known.has(inboxAlertKey(item)));
+      items.forEach((item) => known.add(inboxAlertKey(item)));
+      while (known.size > 300) known.delete(known.values().next().value!);
       if (!primed) {
         primed = true;
+        items.forEach((item) => notified.add(item.id));
+        rememberPhoneWatch();
         return;
       }
-      if (document.visibilityState !== 'hidden') return;
       const users = useUserStore.getState().users;
-      fresh.forEach((item) => {
+      const hidden = document.visibilityState === 'hidden';
+      fresh.filter(item => hidden || !watching(item.conversationId)).slice(0, 3).reverse().forEach((item) => {
+        if (!hidden && watching(item.conversationId)) {
+          notified.add(item.id);
+          return;
+        }
+        notified.add(item.id);
         const sender = users.find((user) => user.id === item.senderId);
+        const alert = liveAlertText(item, sender?.displayName);
+        if (!hidden) {
+          useLiveInbox.getState().push({ key: inboxAlertKey(item), conversationId: item.conversationId, messageId: item.id, title: alert.title, body: alert.body });
+          return;
+        }
         void notifyChatMessage({
           conversationId: item.conversationId,
-          kind: 'group',
-          title: item.senderName || sender?.displayName || 'ChatX',
-          body: item.preview,
-          tag: item.id,
+          kind: useChatStore.getState().conversations.find(room => room.id === item.conversationId)?.type === 'group' ? 'group' : 'private',
+          title: alert.title,
+          body: alert.body,
           mention: item.kind,
-        });
+        }).catch(() => undefined);
       });
+      while (notified.size > 400) notified.delete(notified.values().next().value!);
+      rememberPhoneWatch();
     };
+    const tick = async () => {
+      const result = await useChatStore.getState().loadInbox();
+      if (result === 'ok') inspect();
+      return result;
+    };
+    const unsubscribe = useChatStore.subscribe((state, previous) => { if (state.serverInbox !== previous.serverInbox) inspect(); });
 
-    // Android's native watcher already checks notifications in the background.
-    const stop = startPolling(tick, { background: !Capacitor.isNativePlatform(), economy: true });
+    // Android's native watcher checks the inbox once the app leaves the screen.
+    const stop = startPolling(tick, { background: !Capacitor.isNativePlatform(), interval: () => constrainedDevice() || useSettingsStore.getState().dataSaver || useNetworkStore.getState().network === 'slow' ? 15_000 : 5_000 });
     return () => {
       stopped = true;
       stop();
-      if (Capacitor.isNativePlatform()) void InboxWatch.stop().catch(() => undefined);
+      unsubscribe();
+      useLiveInbox.getState().clear();
+      notified.clear();
+      if (Capacitor.isNativePlatform()) {
+        notified.clear();
+        void InboxWatch.stop().catch(() => undefined);
+      }
     };
   }, [activated, userId]);
 }

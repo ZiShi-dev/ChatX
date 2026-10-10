@@ -25,6 +25,7 @@ const ProfilePage = lazy(() => import('./pages/ProfilePage'));
 const SettingsPage = lazy(() => import('./pages/SettingsPage'));
 const PeopleAdminPage = lazy(() => import('./pages/PeopleAdminPage'));
 import { useInboxAlerts } from './hooks/useInboxAlerts';
+import LiveInboxBanner from './components/common/LiveInboxBanner';
 import { usePresenceSync } from './hooks/usePresenceSync';
 import { InboxWatch } from './lib/inboxWatch';
 import { listenForChatNotificationOpens } from './lib/notifications';
@@ -95,6 +96,7 @@ function AppRoutes() {
   return (
     <BrowserRouter>
       <NativeChrome />
+      <LiveInboxBanner />
       <NotificationPermissionDialog />
       <KeyGate>
         <IonRouterOutlet>

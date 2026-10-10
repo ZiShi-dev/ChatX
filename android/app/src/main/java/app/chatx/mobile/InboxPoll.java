@@ -28,7 +28,12 @@ final class InboxPoll {
     private InboxPoll() {}
 
     static void run(Context context) {
-        if (MainActivity.foreground) return;
+        long lease = InboxLifecycle.begin();
+        if (lease < 0) return;
+        try { check(context, lease); } finally { InboxLifecycle.end(); }
+    }
+
+    private static void check(Context context, long lease) {
         SharedPreferences prefs = InboxWatch.prefs(context);
         String origin = prefs.getString("origin", "");
         if (origin == null || !origin.startsWith("https://")) return;
@@ -40,35 +45,44 @@ final class InboxPoll {
         }
         if (cookie == null || !cookie.contains("chatx_session=")) return;
         String body = request(origin + "/api/notifications", cookie);
+        if (!InboxLifecycle.current(lease)) { validatedEtag = ""; return; }
         if (body == null) return;
         try {
             JSONArray rows = new JSONObject(body).optJSONArray("notifications");
             if (rows == null) return;
             boolean primed = prefs.getBoolean("primed", false);
             Set<String> already = InboxWatch.seen(prefs);
-            Set<String> seen = new HashSet<>();
+            Set<String> seen = new HashSet<>(already);
             int shown = 0;
-            for (int index = 0; index < rows.length(); index += 1) {
+            for (int index = 0; index < rows.length() && InboxLifecycle.current(lease); index += 1) {
                 JSONObject row = rows.optJSONObject(index);
                 if (row == null || !row.optBoolean("unread")) continue;
                 String id = row.optString("id", "");
                 String conversationId = row.optString("conversationId", "");
                 String kind = row.optString("kind", "");
                 if (id.isEmpty() || conversationId.isEmpty()) continue;
+                if (!primed || already.contains(id) || InboxWatch.suppressed(prefs, conversationId, kind)) {
+                    seen.add(id);
+                    continue;
+                }
+                if (shown >= MAX_ALERTS) { validatedEtag = ""; continue; }
+                if (!show(context, row, lease)) continue;
                 seen.add(id);
-                if (!primed || already.contains(id) || shown >= MAX_ALERTS || InboxWatch.suppressed(prefs, conversationId, kind)) continue;
-                show(context, row);
                 shown += 1;
             }
-            prefs.edit().putStringSet("seen", seen).putBoolean("primed", true).apply();
+            synchronized (InboxLifecycle.LOCK) {
+                if (InboxLifecycle.current(lease)) InboxWatch.markSeen(context, seen);
+                else validatedEtag = "";
+            }
         } catch (Exception error) {
+            validatedEtag = "";
             // A bad payload waits for the next check.
         }
     }
 
-    private static void show(Context context, JSONObject row) {
+    private static boolean show(Context context, JSONObject row, long lease) {
         NotificationManager manager = (NotificationManager) context.getSystemService(Context.NOTIFICATION_SERVICE);
-        if (manager == null || MainActivity.foreground) return;
+        if (manager == null || !InboxLifecycle.current(lease)) return false;
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             NotificationChannel channel = new NotificationChannel(CHANNEL, "الرسائل", NotificationManager.IMPORTANCE_HIGH);
             channel.setLockscreenVisibility(Notification.VISIBILITY_PUBLIC);
@@ -98,7 +112,14 @@ final class InboxPoll {
             .setContentIntent(pending)
             .setVisibility(Notification.VISIBILITY_PUBLIC);
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) builder.setPriority(Notification.PRIORITY_HIGH);
-        manager.notify(messageId.hashCode(), builder.build());
+        synchronized (InboxLifecycle.LOCK) {
+            synchronized (InboxWatch.class) {
+                if (!InboxLifecycle.current(lease) || InboxWatch.seen(InboxWatch.prefs(context)).contains(messageId)) return false;
+                manager.notify(messageId.hashCode(), builder.build());
+                InboxWatch.markSeen(context, java.util.Collections.singleton(messageId));
+            }
+        }
+        return true;
     }
 
     private static String request(String address, String cookie) {

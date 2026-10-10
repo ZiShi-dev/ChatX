@@ -33,6 +33,7 @@ final class InboxWatch {
     }
 
     static void stop(Context context) {
+        InboxLifecycle.invalidate();
         AlarmManager alarms = (AlarmManager) context.getSystemService(Context.ALARM_SERVICE);
         if (alarms != null) alarms.cancel(broadcast(context));
         prefs(context).edit().clear().apply();
@@ -78,6 +79,19 @@ final class InboxWatch {
     static Set<String> seen(SharedPreferences prefs) {
         Set<String> stored = prefs.getStringSet("seen", Collections.emptySet());
         return new HashSet<>(stored == null ? Collections.emptySet() : stored);
+    }
+
+    static synchronized void markSeen(Context context, Set<String> incoming) {
+        SharedPreferences prefs = prefs(context);
+        Set<String> merged = seen(prefs);
+        merged.addAll(incoming);
+        if (merged.size() > 400) {
+            Set<String> bounded = new HashSet<>();
+            for (String id : incoming) { if (bounded.size() >= 400) break; bounded.add(id); }
+            for (String id : merged) { if (bounded.size() >= 400) break; bounded.add(id); }
+            merged = bounded;
+        }
+        prefs.edit().putStringSet("seen", new HashSet<>(merged)).putBoolean("primed", true).apply();
     }
 
     private static boolean pending(Context context) {

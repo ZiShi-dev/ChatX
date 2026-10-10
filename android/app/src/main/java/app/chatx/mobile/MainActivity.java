@@ -25,6 +25,7 @@ public class MainActivity extends BridgeActivity {
     public void onResume() {
         super.onResume();
         foreground = true;
+        InboxLifecycle.foreground(true);
         WebView webView = getBridge().getWebView();
         if (webView != null) {
             ViewCompat.requestApplyInsets(webView);
@@ -35,6 +36,7 @@ public class MainActivity extends BridgeActivity {
     @Override
     public void onPause() {
         foreground = false;
+        InboxLifecycle.foreground(false);
         super.onPause();
     }
 
