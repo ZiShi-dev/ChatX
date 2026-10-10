@@ -817,11 +817,12 @@ export const useChatStore = create<ChatState>((set, get) => ({
     const current = get().conversations.find((conversation) => conversation.id === conversationId);
     if (!current) return false;
     if (isServerId(conversationId)) {
-      if (!messageId || get().readCursors[conversationId]?.[useAuthStore.getState().currentUser.id] === messageId) return true;
+      if (!messageId) return true;
       const owner = useAuthStore.getState().currentUser.id;
       const previous = get().messages.find((item) => item.id === get().readCursors[conversationId]?.[owner]);
       const target = get().messages.find((item) => item.id === messageId && item.conversationId === conversationId);
       if (!target) return false;
+      if (get().serverInbox.some(item => item.id === messageId && item.conversationId === conversationId && item.unread)) get().markNotificationsRead([messageId]);
       if (previous && (previous.createdAt > target.createdAt || (previous.createdAt === target.createdAt && previous.id >= target.id))) return true;
         try { queueRoomRead(owner, conversationId, messageId, target.createdAt); }
         catch { set({ lastError: 'تعذر حفظ القراءة على الجهاز.' }); return false; }
