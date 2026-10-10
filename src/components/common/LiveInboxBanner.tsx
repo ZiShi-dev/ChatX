@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { useLiveInbox } from '../../lib/liveInbox';
+import { useLocation, useNavigate } from 'react-router-dom';
+import { useLiveInbox, watchingRoom } from '../../lib/liveInbox';
 import { useMuteStore, roomAllows } from '../../stores/muteStore';
 import { useSettingsStore } from '../../stores/settingsStore';
 import EmojiText from './EmojiText';
@@ -10,14 +10,15 @@ export default function LiveInboxBanner() {
   const dismiss = useLiveInbox(state => state.dismiss);
   const mutes = useMuteStore(state => state.mutes);
   const types = useSettingsStore(state => state.notifyTypes);
-  const allowed = notices.filter(item => types[item.kind ?? 'message'] !== false && roomAllows(mutes, item.conversationId, item.kind ?? 'message'));
+  const path = useLocation().pathname;
+  const allowed = notices.filter(item => types[item.kind ?? 'message'] !== false && roomAllows(mutes, item.conversationId, item.kind ?? 'message') && !watchingRoom(path, item.conversationId));
   const notice = allowed[0];
   const navigate = useNavigate();
   useEffect(() => {
     notices.forEach(item => {
-      if (types[item.kind ?? 'message'] === false || !roomAllows(mutes, item.conversationId, item.kind ?? 'message')) dismiss(item.key);
+      if (types[item.kind ?? 'message'] === false || !roomAllows(mutes, item.conversationId, item.kind ?? 'message') || watchingRoom(path, item.conversationId)) dismiss(item.key);
     });
-  }, [notices, mutes, types, dismiss]);
+  }, [notices, mutes, path, types, dismiss]);
   useEffect(() => {
     if (!notice) return;
     const timer = window.setTimeout(() => dismiss(notice.key), 6500);

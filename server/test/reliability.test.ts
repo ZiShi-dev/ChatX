@@ -102,7 +102,14 @@ async function verify(repo: AuthRepository) {
   assert.equal(await repo.listRoomMessages(roomId, outsider.id, 30), null);
   const context = await repo.listRoomMessages(roomId, bob.id, 30, { aroundId: ids[10] });
   assert.ok(context);
-  assert.equal(context.at(-1)?.id, ids[10]);
+  assert.equal(context[0]?.id, ids[0]);
+  assert.equal(context.at(-1)?.id, ids[29]);
+  assert.ok(context.some((item) => item.id === ids[10]));
+  const anchorOnly = await repo.listRoomMessages(roomId, bob.id, 1, { aroundId: ids[10] });
+  assert.equal(anchorOnly?.[0]?.id, ids[10]);
+  const tail = await repo.listRoomMessages(roomId, bob.id, 30, { aroundId: ids[60] });
+  assert.equal(tail?.at(-1)?.id, ids.at(-1));
+  assert.ok(tail?.some((item) => item.id === ids[60]));
   assert.equal(await repo.changeRoomMessage(roomId, bob.id, ids[0], 'forbidden', now), false);
   assert.equal(await repo.changeRoomMessage(roomId, alice.id, ids[0], 'edited', now), true);
   assert.equal(await repo.markRoomRead(roomId, bob.id, now, ids[10]), true);

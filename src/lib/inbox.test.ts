@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { nextBanner } from './cover';
-import { DEFAULT_NOTIFY_TYPES, formatInboxBadge, groupNotifications, inboxBadgeCount, inboxKind, notificationPresentation, notificationPreview, presentInbox, readInboxPayload, readInboxUnread, resolveMessageFocus, unseenInboxAlerts, type InboxItem } from './inbox';
+import { DEFAULT_NOTIFY_TYPES, formatInboxBadge, groupNotifications, inboxBadgeCount, inboxKind, notificationAlert, notificationAvatars, notificationPresentation, notificationPreview, presentInbox, readInboxPayload, readInboxUnread, resolveMessageFocus, unseenInboxAlerts, type InboxItem } from './inbox';
 import { hasAdminAccess } from './roles';
 import { MAX_NOTIFICATION_PREVIEW_LENGTH } from '../constants/chat';
 import type { Conversation } from '../types/conversation';
@@ -148,6 +148,12 @@ describe('notification presentation', () => {
 
   it('caps the preview and the badge', () => {
     expect(notificationPreview('م'.repeat(MAX_NOTIFICATION_PREVIEW_LENGTH + 12)).length).toBe(MAX_NOTIFICATION_PREVIEW_LENGTH + 1);
+    expect(notificationAlert({ conversationName: 'المساء', senderName: 'نورة', preview: 'مرحبا' })).toEqual({ title: 'المساء', body: 'نورة: مرحبا' });
+    expect(notificationAlert({ senderName: 'نورة', preview: 'مرحبا' })).toEqual({ title: 'نورة', body: 'مرحبا' });
+    const photo = `data:image/jpeg;base64,${'A'.repeat(32)}`;
+    const room = '00000000-0000-4000-8000-000000000001';
+    expect(notificationAvatars([{ id: room, type: 'group', avatarUrl: photo }])).toEqual([{ conversationId: room, jpeg: 'A'.repeat(32) }]);
+    expect(notificationAvatars([{ id: room, type: 'private', avatarUrl: photo }])).toEqual([]);
     expect(formatInboxBadge(0)).toBe('');
     expect(formatInboxBadge(27)).toBe('27');
     expect(formatInboxBadge(120)).toBe('99+');

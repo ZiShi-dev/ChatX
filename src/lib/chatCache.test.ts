@@ -37,6 +37,6 @@ describe('bounded room window', () => {
     const pending = message(999, 'pending');
     const merged = mergeRoomWindow([message(1), pending], [message(500)], 'room', 'latest');
     expect(merged.map((item) => item.id)).toEqual(['00500', '00999']);
-    expect(mergeRoomWindow(merged, [message(20)], 'room', 'around').map((item) => item.id)).toEqual(['00020', '00999']);
+    expect(mergeRoomWindow(merged, [message(20)], 'room', 'around').map((item) => item.id)).toEqual(['00020', '00500', '00999']);
   });
 });

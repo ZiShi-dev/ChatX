@@ -2,17 +2,21 @@ import { useEffect, useRef, useState } from 'react';
 import { FilePicker } from '@capawesome/capacitor-file-picker';
 import { Camera } from '@capacitor/camera';
 import { Capacitor } from '@capacitor/core';
+import { Keyboard } from '@capacitor/keyboard';
 import { IonIcon } from '@ionic/react';
 import { attachOutline, cameraOutline, checkmark, closeOutline, documentOutline, folderOutline, happyOutline, imagesOutline, send } from 'ionicons/icons';
 import PermissionDialog from '../common/PermissionDialog';
 import EmojiPanel from './EmojiPanel';
 import Avatar from '../common/Avatar';
 import EmojiText from '../common/EmojiText';
+import { adminFetch } from '../../lib/adminApi';
+import { isServerId } from '../../lib/home';
 import { activeMention, EVERYONE_HANDLE } from '../../lib/mention';
-import { clipFileName } from '../../lib/chatFile';
+import { clipFileName, VIDEO_BYTES_MAX } from '../../lib/chatFile';
 import { fitChatImage } from '../../lib/chatImage';
 import { prepareMedia } from '../../lib/mediaPreparation';
 import { expectedImageSize, expectedVideoSize, formatBytes, messagePreview } from '../../lib/media';
+import { useDataSaver } from '../../hooks/useDataSaver';
 import { StorageAccess, type StorageFile } from '../../lib/storageAccess';
 import { useAuthStore } from '../../stores/authStore';
 import { useChatStore } from '../../stores/chatStore';
@@ -128,6 +132,7 @@ export default function MessageComposer({ conversationId }: MessageComposerProps
   const setTyping = useChatStore((state) => state.setTyping);
   const imageQuality = useSettingsStore((state) => state.imageQuality);
   const videoQuality = useSettingsStore((state) => state.videoQuality);
+  const dataSaver = useDataSaver();
   const setImageQuality = useSettingsStore((state) => state.setImageQuality);
   const setVideoQuality = useSettingsStore((state) => state.setVideoQuality);
   const [draft, setDraft] = useState('');
@@ -168,14 +173,16 @@ export default function MessageComposer({ conversationId }: MessageComposerProps
   const matches = showEveryone ? [EVERYONE, ...people] : people;
   const activeMatch = Math.min(mentionIndex, Math.max(matches.length - 1, 0));
 
+  const writing = showTyping && draft.trim().length > 0;
   useEffect(() => {
+    if (isServerId(currentUserId) && isServerId(conversationId)) return;
     const mine = currentUserId;
     const dropMine = () => {
       const current = useChatStore.getState().typingByConversation[conversationId] ?? [];
       if (!current.includes(mine)) return;
       setTyping(conversationId, current.filter((userId) => userId !== mine));
     };
-    if (!showTyping || draft.trim().length === 0) {
+    if (!writing) {
       dropMine();
       return;
     }
@@ -183,7 +190,23 @@ export default function MessageComposer({ conversationId }: MessageComposerProps
     if (!current.includes(mine)) setTyping(conversationId, [...current, mine]);
     const timer = window.setTimeout(dropMine, 4000);
     return () => window.clearTimeout(timer);
-  }, [conversationId, currentUserId, draft, setTyping, showTyping]);
+  }, [conversationId, currentUserId, setTyping, writing]);
+  useEffect(() => {
+    if (!isServerId(currentUserId) || !isServerId(conversationId)) return;
+    let alive = true;
+    const send = (on: boolean) => {
+      if (!alive && on) return;
+      void adminFetch(`/api/rooms/${conversationId}/typing`, { method: 'POST', body: { on } }).catch(() => undefined);
+    };
+    send(writing);
+    if (!writing) return () => { alive = false; };
+    const timer = window.setInterval(() => send(true), 3000);
+    return () => {
+      alive = false;
+      window.clearInterval(timer);
+      void adminFetch(`/api/rooms/${conversationId}/typing`, { method: 'POST', body: { on: false } }).catch(() => undefined);
+    };
+  }, [conversationId, currentUserId, writing]);
 
   const resizeField = () => {
     const field = fieldRef.current;
@@ -226,6 +249,31 @@ export default function MessageComposer({ conversationId }: MessageComposerProps
     setEmojiOpen(false);
     fieldRef.current?.focus();
   }, [replying?.id]);
+
+  useEffect(() => {
+    if (!emojiOpen) return;
+    const closeForField = (event: FocusEvent) => {
+      const target = event.target;
+      if (target instanceof HTMLTextAreaElement && target.classList.contains('composer-input')) setEmojiOpen(false);
+    };
+    document.addEventListener('focusin', closeForField);
+    if (!Capacitor.isNativePlatform()) return () => document.removeEventListener('focusin', closeForField);
+    let dropped = false;
+    let handle: { remove: () => Promise<void> } | undefined;
+    void Keyboard.addListener('keyboardDidShow', () => {
+      const active = document.activeElement;
+      if (active instanceof Element && active.closest('.emoji-panel')) return;
+      setEmojiOpen(false);
+    }).then((listener) => {
+      if (dropped) void listener.remove();
+      else handle = listener;
+    });
+    return () => {
+      dropped = true;
+      document.removeEventListener('focusin', closeForField);
+      void handle?.remove();
+    };
+  }, [emojiOpen]);
 
   const openPicker = (input: HTMLInputElement | null) => {
     if (!input) return;
@@ -325,12 +373,17 @@ export default function MessageComposer({ conversationId }: MessageComposerProps
 
   function acceptFiles<T extends { size: number }>(files: T[], kindFor: (file: T) => Attachment['kind']): T[] {
     const available = Math.max(0, 10 - attachmentsRef.current.length);
+    let videos = attachmentsRef.current.filter((item) => item.kind === 'video').length;
     const accepted = files.filter((file) => {
       const kind = kindFor(file);
-      const supported = kind !== 'video' || !/^[0-9a-f-]{36}$/i.test(conversationId);
-      return supported && file.size > 0 && file.size <= (kind === 'file' ? 262_144 : 20 * 1024 * 1024);
+      const limit = kind === 'file' ? 262_144 : kind === 'video' ? VIDEO_BYTES_MAX : 20 * 1024 * 1024;
+      if (file.size <= 0 || file.size > limit) return false;
+      if (kind === 'video' && (dataSaver || videos >= 1)) return false;
+      if (kind === 'video') videos += 1;
+      return true;
     }).slice(0, available);
-    if (accepted.length !== files.length) setPickerError('يمكن اختيار 10 مرفقات كحد أقصى. الصور حتى 20 MB والملفات حتى 256 KB. إرسال الفيديو غير متاح في المحادثات الفعلية.');
+    if (files.some((file) => kindFor(file) === 'video') && dataSaver) setPickerError('لا يمكن إرسال فيديو أثناء توفير البيانات أو الاتصال الضعيف.');
+    else if (accepted.length !== files.length) setPickerError('يمكن اختيار 10 مرفقات كحد أقصى، وفيديو واحد حتى 8 MB. الصور حتى 20 MB والملفات حتى 256 KB.');
     return accepted;
   }
 
@@ -461,6 +514,18 @@ export default function MessageComposer({ conversationId }: MessageComposerProps
     });
   };
 
+  const holdKeyboard = () => {
+    const field = fieldRef.current;
+    if (!field) return;
+    const restore = () => {
+      if (roomRef.current !== conversationId || !field.isConnected) return;
+      field.focus({ preventScroll: true });
+    };
+    restore();
+    window.requestAnimationFrame(restore);
+    window.setTimeout(restore, 80);
+  };
+
   const submit = async () => {
     if (savingEdit) return;
     if (matches.length > 0) {
@@ -468,10 +533,6 @@ export default function MessageComposer({ conversationId }: MessageComposerProps
       return;
     }
     const text = draft.trim();
-    if (/^[0-9a-f-]{36}$/i.test(conversationId) && attachments.some((item) => item.kind === 'video')) {
-      setPickerError('إرسال الفيديو غير متاح حاليًا. أزل الفيديو لإرسال بقية الرسالة.');
-      return;
-    }
     if (editing) {
       if (!text) return;
       setSavingEdit(true);
@@ -482,6 +543,7 @@ export default function MessageComposer({ conversationId }: MessageComposerProps
       setDraft('');
       setEmojiOpen(false);
       if (fieldRef.current) fieldRef.current.style.height = 'auto';
+      holdKeyboard();
       return;
     }
     if (!text && attachments.length === 0) return;
@@ -498,6 +560,7 @@ export default function MessageComposer({ conversationId }: MessageComposerProps
     setAttachments([]);
     setEmojiOpen(false);
     if (fieldRef.current) fieldRef.current.style.height = 'auto';
+    holdKeyboard();
   };
 
   const canSend = !savingEdit && Boolean(draft.trim() || (!editing && attachments.length));
@@ -580,7 +643,7 @@ export default function MessageComposer({ conversationId }: MessageComposerProps
                 onChange={setImageQuality}
               />
             )}
-            {attachments.some((item) => item.kind === 'video') && (
+            {attachments.some((item) => item.kind === 'video') && !isServerId(conversationId) && (
               <QualityChoices
                 label="جودة الفيديو"
                 original={attachments.find((item) => item.kind === 'video')?.size ?? 0}
@@ -647,7 +710,10 @@ export default function MessageComposer({ conversationId }: MessageComposerProps
               aria-expanded={emojiOpen}
               onClick={() => {
                 setMenuOpen(false);
-                if (!emojiOpen) fieldRef.current?.blur();
+                if (!emojiOpen) {
+                  fieldRef.current?.blur();
+                  if (Capacitor.isNativePlatform()) void Keyboard.hide();
+                }
                 setEmojiOpen((open) => !open);
               }}
             >
@@ -667,6 +733,7 @@ export default function MessageComposer({ conversationId }: MessageComposerProps
                 setMentionIndex(0);
                 resizeField();
               }}
+              onFocus={() => setEmojiOpen(false)}
               onSelect={(event) => setCursor(event.currentTarget.selectionStart ?? 0)}
               onKeyDown={(event) => {
                 if (matches.length > 0 && event.key === 'ArrowDown') {
@@ -713,7 +780,14 @@ export default function MessageComposer({ conversationId }: MessageComposerProps
               </button>
             )}
           </div>
-          <button type="submit" className={editing ? 'composer-send is-edit' : 'composer-send'} disabled={!canSend} aria-label={editing ? 'حفظ' : 'إرسال'}>
+          <button
+            type="submit"
+            className={editing ? 'composer-send is-edit' : 'composer-send'}
+            disabled={!canSend}
+            aria-label={editing ? 'حفظ' : 'إرسال'}
+            onMouseDown={(event) => event.preventDefault()}
+            onPointerDown={(event) => event.preventDefault()}
+          >
             <IonIcon icon={editing ? checkmark : send} />
           </button>
         </div>

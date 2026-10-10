@@ -25,6 +25,7 @@ const ProfilePage = lazy(() => import('./pages/ProfilePage'));
 const SettingsPage = lazy(() => import('./pages/SettingsPage'));
 const PeopleAdminPage = lazy(() => import('./pages/PeopleAdminPage'));
 import { useInboxAlerts } from './hooks/useInboxAlerts';
+import { closeTopOverlay } from './lib/overlayBack';
 import LiveInboxBanner from './components/common/LiveInboxBanner';
 import { usePresenceSync } from './hooks/usePresenceSync';
 import { InboxWatch } from './lib/inboxWatch';
@@ -61,23 +62,36 @@ function NativeChrome() {
           navigate(event.messageId ? `/chat/${event.conversationId}?at=${event.messageId}` : `/chat/${event.conversationId}`);
         })
       : Promise.resolve({ remove: async () => undefined });
-    const listener = CapApp.addListener('backButton', () => {
-      const scrim = document.querySelector('.app-scrim');
-      if (scrim instanceof HTMLElement) {
-        scrim.click();
-        return;
-      }
+    const leaveScreen = () => {
       const path = window.location.pathname;
       if (path === '/home' || path === '/activation') {
         void CapApp.exitApp();
         return;
       }
       navigate(-1);
-    });
+    };
+    const onHardwareBack = () => {
+      if (closeTopOverlay()) return;
+      leaveScreen();
+    };
+    const listener = CapApp.addListener('backButton', onHardwareBack);
+    const onIonBack = (event: Event) => {
+      (event as CustomEvent<{ register: (priority: number, handler: (next: () => void) => void) => void }>).detail.register(10, (next) => {
+        if (closeTopOverlay()) return;
+        const path = window.location.pathname;
+        if (path === '/home' || path === '/activation') {
+          void CapApp.exitApp();
+          return;
+        }
+        next();
+      });
+    };
+    document.addEventListener('ionBackButton', onIonBack);
     return () => {
       void opened.then((stop) => stop());
       void inboxOpen.then((handle) => handle.remove());
       void listener.then((handle) => handle.remove());
+      document.removeEventListener('ionBackButton', onIonBack);
     };
   }, [navigate]);
 

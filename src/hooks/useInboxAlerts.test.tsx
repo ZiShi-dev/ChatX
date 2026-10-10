@@ -21,13 +21,13 @@ function mount() {
   renderHook(useInboxAlerts);
   act(() => useChatStore.setState({ serverInbox: [item('history')] }));
 }
-it('does not replay history; shows new current-chat messages even if a read receipt already arrived', () => {
+it('does not replay history or banner the chat already on screen', () => {
   window.history.replaceState({}, '', `/chat/${room}`); mount();
   expect(useLiveInbox.getState().notices).toHaveLength(0);
   act(() => useChatStore.setState({ serverInbox: [item('new'), item('history')] }));
-  expect(useLiveInbox.getState().notices[0]?.messageId).toBe('new');
-  act(() => useChatStore.setState({ serverInbox: [item('new'), item('history')] }));
-  expect(useLiveInbox.getState().notices).toHaveLength(1);
+  expect(useLiveInbox.getState().notices).toHaveLength(0);
+  act(() => useChatStore.setState({ serverInbox: [{ ...item('other'), conversationId: 'cccccccc-cccc-4ccc-8ccc-cccccccccccc' }, item('new'), item('history')] }));
+  expect(useLiveInbox.getState().notices[0]?.messageId).toBe('other');
 });
 it('delivers background unread notifications to the system and honors disabled types', () => {
   vi.spyOn(document, 'visibilityState', 'get').mockReturnValue('hidden'); mount();

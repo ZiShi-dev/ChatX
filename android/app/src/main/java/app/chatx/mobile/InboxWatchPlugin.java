@@ -28,13 +28,25 @@ public class InboxWatchPlugin extends Plugin {
         InboxWatch.remember(getContext(), call.getString("origin", ""), call.getString("quiet", ""), call.getString("hiddenKinds", ""));
         JSONArray rows = call.getArray("seen");
         if (rows != null) {
-            Set<String> seen = new HashSet<>();
-            for (int index = 0; index < Math.min(30, rows.length()); index++) {
+            Set<String> incoming = new HashSet<>();
+            for (int index = 0; index < rows.length() && incoming.size() < 100; index++) {
                 String id = rows.optString(index, "");
-                if (!id.isEmpty()) seen.add(id);
+                if (!id.isEmpty()) incoming.add(id);
             }
-            InboxWatch.markSeen(getContext(), seen);
+            InboxWatch.markSeen(getContext(), incoming);
         }
+        call.resolve();
+    }
+
+    @PluginMethod
+    public void rememberKeys(PluginCall call) {
+        InboxWatch.rememberKeys(getContext(), call.getArray("keys"));
+        call.resolve();
+    }
+
+    @PluginMethod
+    public void rememberAvatars(PluginCall call) {
+        InboxWatch.rememberAvatars(getContext(), call.getArray("avatars"));
         call.resolve();
     }
 

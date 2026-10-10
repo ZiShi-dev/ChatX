@@ -1,4 +1,5 @@
 export const FILE_BYTES_MAX = 262_144;
+export const VIDEO_BYTES_MAX = 8 * 1024 * 1024;
 
 export async function localMediaBytes(source: string): Promise<Uint8Array> {
   if (source.startsWith('data:')) {

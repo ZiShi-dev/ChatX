@@ -18,8 +18,8 @@ export function createNotificationCadence() {
         || connection?.saveData || ['slow-2g', '2g', '3g'].includes(connection?.effectiveType ?? '')
         || (typeof connection?.downlink === 'number' && connection.downlink > 0 && connection.downlink < 0.75)
         || (typeof connection?.rtt === 'number' && connection.rtt >= 600);
-      if (!limited) return hidden ? 10_000 : 5_000;
-      return hidden ? unchanged >= 4 ? 60_000 : 30_000 : unchanged >= 4 ? 30_000 : 15_000;
+      if (!limited) return hidden ? 30_000 : 10_000;
+      return hidden ? unchanged >= 4 ? 90_000 : 45_000 : unchanged >= 4 ? 45_000 : 20_000;
     },
   };
 }

@@ -1,6 +1,6 @@
 import { Fragment, memo, useEffect, useMemo, useState } from 'react';
 import { IonButton } from '@ionic/react';
-import { MESSAGE_PAGE_SIZE } from '../../constants/chat';
+import { CHAT_VISIBLE_WINDOW, MESSAGE_PAGE_SIZE } from '../../constants/chat';
 import { formatMessageDay, unreadDividerLabel, unreadOnScreen, unreadStart } from '../../lib/conversation';
 import { facesOnMessage, type ReceiptRow } from '../../lib/readReceipts';
 import { useChatStore } from '../../stores/chatStore';
@@ -9,7 +9,7 @@ import EventMessage from './EventMessage';
 import type { Message } from '../../types/message';
 import type { User } from '../../types/user';
 
-const WINDOW = 48;
+const WINDOW = CHAT_VISIBLE_WINDOW;
 const NO_SEEN: User[] = [];
 const NO_ROWS: ReceiptRow[] = [];
 const EMPTY_CURSOR: Record<string, string> = {};
@@ -33,6 +33,7 @@ type MessageListProps = {
   users: User[];
   currentUserId: string;
   unreadCount?: number;
+  resumeBack?: number;
   spotlightId?: string;
   filtered?: boolean;
   hasMore?: boolean;
@@ -40,9 +41,9 @@ type MessageListProps = {
   onLoadOlder: () => Promise<boolean>;
 };
 
-function MessageList({ messages, limit, showAuthor, group = false, direct = false, conversationId, memberIds, users, currentUserId, unreadCount = 0, spotlightId = '', filtered = false, hasMore = false, onOpenProfile, onLoadOlder }: MessageListProps) {
+function MessageList({ messages, limit, showAuthor, group = false, direct = false, conversationId, memberIds, users, currentUserId, unreadCount = 0, resumeBack = 0, spotlightId = '', filtered = false, hasMore = false, onOpenProfile, onLoadOlder }: MessageListProps) {
   const [loadingOlder, setLoadingOlder] = useState(false);
-  const [back, setBack] = useState(0);
+  const [back, setBack] = useState(resumeBack);
   const cursor = useChatStore((state) => state.readCursors[conversationId] ?? EMPTY_CURSOR);
   const readAt = useChatStore((state) => state.readTimes[conversationId] ?? EMPTY_CURSOR);
   const tail = useMemo(() => messages.slice(-Math.max(limit, MESSAGE_PAGE_SIZE)), [limit, messages]);
@@ -64,7 +65,7 @@ function MessageList({ messages, limit, showAuthor, group = false, direct = fals
     if (!group && !direct) return grouped;
     const others = memberIds.filter((userId) => userId !== currentUserId);
     for (const message of visible) {
-      if (message.senderId !== currentUserId || message.deletedForEveryone) continue;
+      if (message.deletedForEveryone || message.event || (!group && message.senderId !== currentUserId)) continue;
       grouped.set(
         message.id,
         others.flatMap((userId) => {
@@ -80,6 +81,10 @@ function MessageList({ messages, limit, showAuthor, group = false, direct = fals
   }, [authors, byId, cursor, currentUserId, direct, group, memberIds, readAt, visible]);
 
   useEffect(() => { setBack(0); }, [conversationId]);
+  useEffect(() => {
+    if (filtered) return;
+    setBack(resumeBack);
+  }, [conversationId, filtered, resumeBack]);
   useEffect(() => {
     if (!spotlightId || filtered) return;
     const index = tail.findIndex((message) => message.id === spotlightId);
@@ -123,6 +128,7 @@ function MessageList({ messages, limit, showAuthor, group = false, direct = fals
               group={group}
               direct={direct}
               directSeen={Boolean(direct && otherId && cursorSees(cursor[otherId], byId, message))}
+              groupSeen={Boolean(group && message.senderId === currentUserId && memberIds.some((userId) => userId !== currentUserId && cursorSees(cursor[userId], byId, message)))}
               seenHere={faces.length ? faces : NO_SEEN}
               receiptRows={receiptByMessage.get(message.id) ?? NO_ROWS}
               author={authors.get(message.senderId)}

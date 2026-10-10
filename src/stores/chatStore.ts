@@ -21,7 +21,7 @@ import { loadChatSnapshot, saveChatSnapshot, releaseMedia } from '../lib/chatCac
 import { mergeRoomWindow } from '../lib/chatWindow';
 import { prepareMedia } from '../lib/mediaPreparation';
 import { fitChatImage, jpegDataUrl } from '../lib/chatImage';
-import { bytesToBase64, FILE_BYTES_MAX, localMediaBytes } from '../lib/chatFile';
+import { bytesToBase64, FILE_BYTES_MAX, localMediaBytes, VIDEO_BYTES_MAX } from '../lib/chatFile';
 import { ORIGINAL_IMAGE_SIZE, ORIGINAL_VIDEO_SIZE, expectedImageSize, expectedVideoSize } from '../lib/media';
 import { isPrivateBetween } from '../lib/conversation';
 import { canEditRoom } from '../lib/roles';
@@ -100,7 +100,7 @@ type ChatState = {
   setTyping: (conversationId: string, userIds: string[]) => void;
   openPrivate: (userId: string) => Promise<string>;
   createGroup: (name: string, memberIds: string[]) => Promise<string>;
-  updateGroup: (conversationId: string, patch: { name?: string; bio?: string; avatarUrl?: string; bannerUrl?: string }) => Promise<boolean>;
+  updateGroup: (conversationId: string, patch: { name?: string; bio?: string; avatarUrl?: string; bannerUrl?: string | null }) => Promise<boolean>;
   pauseOutgoing: () => void;
   flushOutgoing: () => void;
   resetMediaCache: () => void;
@@ -120,11 +120,12 @@ type ChatState = {
   forgetUser: (userId: string) => void;
 };
 
-function localGroupLine(actor: string, patch: { name?: string; avatarUrl?: string; bannerUrl?: string }) {
+function localGroupLine(actor: string, patch: { name?: string; avatarUrl?: string; bannerUrl?: string | null }) {
   const clauses: string[] = [];
   if (patch.name) clauses.push(`غيّر اسم المجموعة إلى «${patch.name}»`);
   if (patch.avatarUrl) clauses.push('غيّر صورة المجموعة');
   if (patch.bannerUrl) clauses.push('غيّر غلاف المجموعة');
+  else if (patch.bannerUrl === null) clauses.push('أزال غلاف المجموعة');
   if (!clauses.length) return '';
   return `${actor.trim() || 'عضو'} ${clauses.join(' و')}`;
 }
@@ -243,16 +244,21 @@ function serverFile(message: Pick<Message, 'conversationId' | 'type'>) {
   return isServerId(message.conversationId) && message.type === 'file';
 }
 
+function serverVideo(message: Pick<Message, 'conversationId' | 'type'>) {
+  return isServerId(message.conversationId) && message.type === 'video';
+}
+
 function roomMembers(conversationId: string) {
   return useChatStore.getState().conversations.find((room) => room.id === conversationId)?.participantIds ?? [];
 }
 
 /** The server cannot read sealed text, so the sender declares who must be alerted. */
 function noticeHints(text: string, conversationId: string) {
-  const handles = new Set(mentionedHandles(text));
   const members = new Set(roomMembers(conversationId));
+  const people = useUserStore.getState().users.filter((user) => members.has(user.id));
+  const handles = new Set(mentionedHandles(text, [...people.map((user) => user.username), EVERYONE_HANDLE]));
   const mentions = handles.size
-    ? useUserStore.getState().users.filter((user) => members.has(user.id) && handles.has(user.username.toLowerCase())).map((user) => user.id).slice(0, 50)
+    ? people.filter((user) => handles.has(user.username.toLowerCase())).map((user) => user.id).slice(0, 50)
     : [];
   return { mentions, everyone: handles.has(EVERYONE_HANDLE), signal: text.startsWith('تنبيه') };
 }
@@ -397,6 +403,81 @@ async function publishFile(message: Message) {
   } catch (error) { throw error; }
 }
 
+async function publishVideo(message: Message) {
+  const source = message.media?.localPreviewUrl;
+  const name = message.media?.fileName?.trim();
+  if (!source || !name) {
+    patchMessage(message.id, { status: 'failed' });
+    return;
+  }
+  try {
+    const bytes = await localMediaBytes(source);
+    if (bytes.byteLength < 1 || bytes.byteLength > VIDEO_BYTES_MAX) {
+      patchMessage(message.id, { status: 'failed' });
+      return;
+    }
+    const sealed = await sealMessageMedia(useAuthStore.getState().currentUser.id, message.conversationId, message.id, bytes, name.slice(0, 120), roomMembers(message.conversationId));
+    await uploadResumable({ roomId: message.conversationId, id: message.id, kind: 'video', name, bytes: sealed.bytes, sealed: sealed.body, replyToId: message.replyToId },
+      (uploadProgress) => patchMessage(message.id, { uploadProgress }), yieldToTexts, () => {
+        const current = useChatStore.getState().messages.find((item) => item.id === message.id);
+        return !current || current.status === 'failed' || current.senderId !== useAuthStore.getState().currentUser.id;
+      });
+    const current = useChatStore.getState().messages.find((item) => item.id === message.id);
+    patchMessage(message.id, {
+      status: 'sent',
+      uploadProgress: undefined,
+      media: {
+        fileName: name,
+        fileSize: bytes.byteLength,
+        localPreviewUrl: source,
+        state: 'cached',
+        ...(current?.media?.duration ? { duration: current.media.duration } : {}),
+      },
+    });
+  } catch (error) { throw error; }
+}
+
+function videoMime(name: string) {
+  const lower = name.toLowerCase();
+  if (lower.endsWith('.webm')) return 'video/webm';
+  if (lower.endsWith('.mov')) return 'video/quicktime';
+  return 'video/mp4';
+}
+
+async function pullServerVideo(message: Message) {
+  if (!message.media) return;
+  patchMessage(message.id, {
+    downloadFailed: false,
+    downloadProgress: 0,
+    media: { ...message.media, state: 'downloading' },
+  });
+  try {
+    const owner = useAuthStore.getState().currentUser.id;
+    const cached = await readReceivedMedia(owner, message.id).catch(() => null);
+    const raw = cached ?? await openedBlob(owner, message, await adminFetchBlob(`/api/rooms/${message.conversationId}/messages/${message.id}/file`));
+    if (owner !== useAuthStore.getState().currentUser.id) return;
+    const bytes = new Uint8Array(await raw.arrayBuffer());
+    if (bytes.byteLength < 1 || bytes.byteLength > VIDEO_BYTES_MAX) throw new Error('size');
+    const blob = new Blob([bytes], { type: videoMime(message.media?.fileName || 'video.mp4') });
+    void saveReceivedMedia(owner, message.id, blob).catch(() => undefined);
+    const current = useChatStore.getState().messages.find((item) => item.id === message.id);
+    if (!current?.media) return;
+    patchMessage(message.id, {
+      downloadFailed: false,
+      downloadProgress: undefined,
+      media: { ...current.media, localPreviewUrl: URL.createObjectURL(blob), fileSize: blob.size, state: 'cached' },
+    });
+    if (!cached) useSettingsStore.getState().addUsage('videos', blob.size);
+  } catch {
+    const current = useChatStore.getState().messages.find((item) => item.id === message.id);
+    patchMessage(message.id, {
+      downloadFailed: true,
+      downloadProgress: undefined,
+      media: current?.media ? { ...current.media, state: 'remote' } : undefined,
+    });
+  }
+}
+
 async function pullServerFile(message: Message) {
   if (!message.media) return;
   patchMessage(message.id, {
@@ -468,7 +549,7 @@ async function prepareAndSend(message: Message) {
       if (!fitted || !message.media) throw new Error('invalid_image');
       patchMessage(message.id, { media: { ...message.media, localPreviewUrl: fitted.url, fileSize: fitted.bytes, width: fitted.width, height: fitted.height } });
       if (message.media.localPreviewUrl?.startsWith('blob:')) URL.revokeObjectURL(message.media.localPreviewUrl);
-    } else if (message.type === 'file' && message.media && !message.media.localPreviewUrl?.startsWith('data:')) {
+    }     else if (message.type === 'file' && message.media && !message.media.localPreviewUrl?.startsWith('data:')) {
       if (!message.media.localPreviewUrl || message.media.fileSize > FILE_BYTES_MAX) throw new Error('file_too_large');
       const source = message.media.localPreviewUrl;
       const prepared = await prepareMedia(async () => {
@@ -478,6 +559,8 @@ async function prepareAndSend(message: Message) {
       });
       patchMessage(message.id, { media: { ...message.media, fileSize: prepared.size, localPreviewUrl: `data:application/octet-stream;base64,${prepared.data}` } });
       if (message.media.localPreviewUrl.startsWith('blob:')) URL.revokeObjectURL(message.media.localPreviewUrl);
+    } else if (message.type === 'video' && message.media) {
+      if (!message.media.localPreviewUrl || message.media.fileSize < 1 || message.media.fileSize > VIDEO_BYTES_MAX) throw new Error('file_too_large');
     }
     if (owner !== useAuthStore.getState().currentUser.id || !useAuthStore.getState().activated) return;
     const ready = useChatStore.getState().messages.find((item) => item.id === message.id);
@@ -490,6 +573,7 @@ async function prepareAndSend(message: Message) {
     if (serverText(ready)) await publishText(ready);
     else if (serverImage(ready)) await publishImage(ready);
     else if (serverFile(ready)) await publishFile(ready);
+    else if (serverVideo(ready)) await publishVideo(ready);
     else throw new Error('unsupported_media');
     await removeOutgoing(owner, message.id);
   } catch (error) {
@@ -546,6 +630,7 @@ async function syncRoom(conversationId: string, wait = false, signal?: AbortSign
           }),
         });
         for (const message of incoming) if (message.senderId === owner) void removeOutgoing(owner, message.id).catch(() => undefined);
+        if (delta.typing) useChatStore.getState().setTyping(conversationId, delta.typing.filter((id) => id !== owner));
         roomSyncCursors.set(conversationId, delta.cursor);
         if (!delta.hasMore) return true;
       }
@@ -657,8 +742,31 @@ export const useChatStore = create<ChatState>((set, get) => ({
     });
   },
   sendVideo: (conversationId, quality, picked) => {
-    if (isServerId(accountRoom(conversationId))) {
-      set({ lastError: 'إرسال الفيديو غير متاح بعد. لم يتم إرسال أو حفظ فيديو وهمي.' });
+    const roomId = accountRoom(conversationId);
+    if (isServerId(roomId)) {
+      const saving = useSettingsStore.getState().dataSaver || useNetworkStore.getState().network !== 'online';
+      const size = picked?.fileSize ?? 0;
+      if (saving) {
+        set({ lastError: 'لا يمكن إرسال فيديو أثناء توفير البيانات أو الاتصال الضعيف.' });
+        return;
+      }
+      const tooBig = size < 1 || size > VIDEO_BYTES_MAX;
+      if (tooBig) set({ lastError: 'الفيديو أكبر من 8 MB. اختر مقطعًا أقصر.' });
+      appendMessage({
+        id: crypto.randomUUID(),
+        conversationId: roomId,
+        senderId: useAuthStore.getState().currentUser.id,
+        type: 'video',
+        status: tooBig ? 'failed' : outgoingStatus(),
+        createdAt: new Date().toISOString(),
+        replyToId: takeReply(roomId),
+        media: {
+          fileName: picked?.fileName ?? 'video.mp4',
+          fileSize: size,
+          localPreviewUrl: picked?.previewUrl,
+          state: 'cached',
+        },
+      });
       return;
     }
     useSettingsStore.getState().setVideoQuality(quality);
@@ -743,6 +851,10 @@ export const useChatStore = create<ChatState>((set, get) => ({
       void pullServerImage(message);
       return;
     }
+    if (isServerId(message.conversationId) && message.type === 'video') {
+      void pullServerVideo(message);
+      return;
+    }
     if (isServerId(message.conversationId) && message.type === 'file') {
       void pullServerFile(message);
       return;
@@ -822,18 +934,30 @@ export const useChatStore = create<ChatState>((set, get) => ({
       const previous = get().messages.find((item) => item.id === get().readCursors[conversationId]?.[owner]);
       const target = get().messages.find((item) => item.id === messageId && item.conversationId === conversationId);
       if (!target) return false;
+      const noticeAt = get().serverInbox.filter(item => item.id === messageId && item.conversationId === conversationId)
+        .reduce((latest, item) => item.createdAt > latest ? item.createdAt : latest, target.createdAt);
       if (get().serverInbox.some(item => item.id === messageId && item.conversationId === conversationId && item.unread)) get().markNotificationsRead([messageId]);
-      if (previous && (previous.createdAt > target.createdAt || (previous.createdAt === target.createdAt && previous.id >= target.id))) return true;
-        try { queueRoomRead(owner, conversationId, messageId, target.createdAt); }
-        catch { set({ lastError: 'تعذر حفظ القراءة على الجهاز.' }); return false; }
-        inboxReadVersion++;
-        set(state => {
-          const serverInbox = overlayPendingReads(owner, state.serverInbox);
-          const read = state.serverInbox.filter(item => item.unread).length - serverInbox.filter(item => item.unread).length;
-          return { serverInbox, serverUnread: Math.max(0, state.serverUnread - read) };
-        });
-        cacheInbox(owner, get().serverInbox, get().serverUnread);
-        await syncPendingReadWrites();
+      if (previous && (previous.createdAt > target.createdAt || (previous.createdAt === target.createdAt && previous.id > target.id))) return true;
+      const same = previous?.id === messageId;
+      const stale = same && get().serverInbox.some((item) => item.unread && item.kind !== 'reaction' && item.conversationId === conversationId
+        && (item.createdAt < target.createdAt || (item.createdAt === target.createdAt && item.id <= messageId)));
+      if (same && !stale) return true;
+      try {
+        queueRoomRead(owner, conversationId, messageId, target.createdAt);
+        if (!same) queueNotificationReads(owner, [messageId], undefined, { [messageId]: noticeAt });
+      }
+      catch { set({ lastError: 'تعذر حفظ القراءة على الجهاز.' }); return false; }
+      inboxReadVersion++;
+      set((state) => {
+        const serverInbox = overlayPendingReads(owner, state.serverInbox);
+        const read = state.serverInbox.filter((item) => item.unread).length - serverInbox.filter((item) => item.unread).length;
+        const listed = state.serverInbox.some((item) => item.id === messageId && item.kind !== 'reaction');
+        const extra = !same && target.senderId !== owner && !listed ? 1 : 0;
+        return { serverInbox, serverUnread: Math.max(0, state.serverUnread - read - extra) };
+      });
+      cacheInbox(owner, get().serverInbox, get().serverUnread);
+      void get().loadInbox();
+      await syncPendingReadWrites();
       return !pendingReads(owner).rooms[conversationId];
     }
     set((state) => ({
@@ -996,12 +1120,13 @@ export const useChatStore = create<ChatState>((set, get) => ({
     const current = get().conversations.find((item) => item.id === conversationId);
     const name = patch.name?.trim();
     if (isServerId(conversationId)) {
-      const body: { name?: string; bio?: string; avatar?: string; banner?: string } = {};
+      const body: { name?: string; bio?: string; avatar?: string; banner?: string | null } = {};
       if (name && name !== current?.name) body.name = name;
       if (patch.bio !== undefined && patch.bio.trim() !== (current?.bio ?? '')) body.bio = patch.bio.trim();
       if (patch.avatarUrl) body.avatar = patch.avatarUrl;
       if (patch.bannerUrl) body.banner = patch.bannerUrl;
-      if (!body.name && body.bio === undefined && !body.avatar && !body.banner) return true;
+      else if (patch.bannerUrl === null && current?.bannerUrl) body.banner = null;
+      if (!body.name && body.bio === undefined && !body.avatar && body.banner === undefined) return true;
       try {
         const updated = readUpdatedRoom(await adminFetch(`/api/rooms/${conversationId}`, { method: 'PATCH', body }));
         if (!updated) throw new Error('bad');
@@ -1010,7 +1135,12 @@ export const useChatStore = create<ChatState>((set, get) => ({
         set((state) => ({
           lastError: '',
           conversations: state.conversations.some((item) => item.id === saved.conversation.id)
-            ? state.conversations.map((item) => (item.id === saved.conversation.id ? { ...item, ...saved.conversation, unreadCount: item.unreadCount } : item))
+            ? state.conversations.map((item) => {
+                if (item.id !== saved.conversation.id) return item;
+                const next = { ...item, ...saved.conversation, unreadCount: item.unreadCount };
+                if (patch.bannerUrl === null && !saved.conversation.bannerUrl) delete next.bannerUrl;
+                return next;
+              })
             : [saved.conversation, ...state.conversations],
           messages: saved.message && !state.messages.some((item) => item.id === saved.message?.id)
             ? [...state.messages, saved.message]
@@ -1029,13 +1159,15 @@ export const useChatStore = create<ChatState>((set, get) => ({
         if (conversation.id !== conversationId) return conversation;
         if (conversation.type !== 'group' && conversation.type !== 'global') return conversation;
         if (!canEditRoom(useAuthStore.getState().currentUser, conversation)) return conversation;
-        return {
+        const next = {
           ...conversation,
           ...(name ? { name } : {}),
           ...(patch.bio !== undefined ? { bio: patch.bio.trim() } : {}),
           ...(patch.avatarUrl ? { avatarUrl: patch.avatarUrl } : {}),
           ...(patch.bannerUrl ? { bannerUrl: patch.bannerUrl } : {}),
         };
+        if (patch.bannerUrl === null) delete next.bannerUrl;
+        return next;
       }),
       messages: allowed && line
         ? [...state.messages, {
@@ -1069,7 +1201,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
   loadInbox: async (before) => {
     const me = useAuthStore.getState().currentUser.id;
     if (!isServerId(me)) return 'local';
-    void syncPendingReadWrites();
+    await syncPendingReadWrites();
     const readVersion = inboxReadVersion;
     const query = before ? `?before=${encodeURIComponent(before.at)}&beforeId=${encodeURIComponent(before.id)}` : '';
     try {
@@ -1109,8 +1241,10 @@ export const useChatStore = create<ChatState>((set, get) => ({
       if (!turn || me !== useAuthStore.getState().currentUser.id || !useAuthStore.getState().activated) return 'invalid';
       syncServerClock(turn.serverTime, true);
       const users = useUserStore.getState();
-      if (users.users.some((user) => user.id === turn.holder.id)) users.updateUser(turn.holder.id, turn.holder);
-      else users.addUser(turn.holder);
+      if (users.users.some((user) => user.id === turn.holder.id)) {
+        const { status, ...profile } = turn.holder;
+        users.updateUser(turn.holder.id, profile);
+      } else users.addUser(turn.holder);
       set((state) => ({ conversations: state.conversations.map((room) => room.id === conversationId
         ? { ...room, turnUserId: turn.turnUserId, turnOpensAt: turn.turnOpensAt, participantIds: turn.participantIds } : room) }));
       return 'ok';
@@ -1179,13 +1313,21 @@ export const useChatStore = create<ChatState>((set, get) => ({
       const params = new URLSearchParams();
       if (page?.beforeId) params.set('beforeId', page.beforeId);
       if (page?.aroundId) params.set('aroundId', page.aroundId);
-      const payload = await adminFetch(`/api/rooms/${conversationId}/messages${params.size ? `?${params}` : ''}`);
+      const [payload, latestPayload] = await Promise.all([
+        adminFetch(`/api/rooms/${conversationId}/messages${params.size ? `?${params}` : ''}`),
+        page?.aroundId ? adminFetch(`/api/rooms/${conversationId}/messages`).catch(() => null) : null,
+      ]);
       if (owner !== useAuthStore.getState().currentUser.id) return false;
       const parsed = readRoomMessages(payload, conversationId);
       if (!parsed) {
         return false;
       }
-      const remote = await openMessages(owner, parsed);
+      const opened = await openMessages(owner, parsed);
+      const latestParsed = latestPayload ? readRoomMessages(latestPayload, conversationId) : null;
+      const latest = latestParsed ? await openMessages(owner, latestParsed) : [];
+      const byId = new Map(opened.map((message) => [message.id, message]));
+      for (const message of latest) if (!byId.has(message.id)) byId.set(message.id, message);
+      const remote = [...byId.values()].sort((a, b) => a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id));
       if (owner !== useAuthStore.getState().currentUser.id) return false;
       const previews = new Map(
         get().messages.flatMap((item) => (
@@ -1211,10 +1353,11 @@ export const useChatStore = create<ChatState>((set, get) => ({
         cursors[reader.userId] = reader.messageId;
         times[reader.userId] = reader.readAt;
       }
-      const merged = mergeRoomWindow(get().messages, shown, conversationId, page?.beforeId ? 'older' : page?.aroundId ? 'around' : 'latest');
-      const keptIds = new Set(merged.map((item) => item.id));
-      releaseMedia(get().messages.filter((item) => !keptIds.has(item.id)));
-      set((state) => ({
+      set((state) => {
+        const merged = mergeRoomWindow(state.messages, shown, conversationId, page?.beforeId ? 'older' : page?.aroundId ? 'around' : 'latest');
+        const keptIds = new Set(merged.map((item) => item.id));
+        releaseMedia(state.messages.filter((item) => !keptIds.has(item.id)));
+        return {
         fullRooms: state.fullRooms.includes(conversationId) ? state.fullRooms : [...state.fullRooms, conversationId],
         messages: merged,
         roomHasMore: page?.beforeId || page?.aroundId || state.roomHasMore[conversationId] === undefined
@@ -1222,7 +1365,8 @@ export const useChatStore = create<ChatState>((set, get) => ({
         conversations: state.conversations.map((conversation) => conversation.id === conversationId && !page && last ? { ...conversation, lastMessageId: last.id } : conversation),
         readCursors: { ...state.readCursors, [conversationId]: cursors },
         readTimes: { ...state.readTimes, [conversationId]: times },
-      }));
+        };
+      });
       if (page?.aroundId) get().revealMessage(conversationId, page.aroundId);
       return true;
     } catch {

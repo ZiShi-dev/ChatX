@@ -67,6 +67,7 @@ export interface AuthRepository {
   findUserByGoogleSub(sub:string):Promise<AuthUser | null>;
   bindGoogleSub(id:string,sub:string):Promise<boolean>;
   readRoomSync(roomId: string, userId: string, cursor: string | null): Promise<RoomSync | null>;
+  isRoomMember(roomId: string, userId: string): Promise<boolean>;
   beginUpload(upload: Upload, at: Date): Promise<Upload | null>;
   readUpload(roomId: string, ownerId: string, id: string, at: Date): Promise<Upload | null>;
   appendUpload(roomId: string, ownerId: string, id: string, offset: number, bytes: Uint8Array, at: Date): Promise<Upload | null>;
@@ -95,6 +96,14 @@ export interface AuthRepository {
   readMessageImage(roomId: string, userId: string, messageId: string): Promise<Uint8Array | null>;
   readMessageFile(roomId: string, userId: string, messageId: string): Promise<{ name: string; bytes: Uint8Array } | null>;
   notifyRoomMessage(message: RoomMessage): Promise<void>;
+  listRoomNoticeMembers(roomId: string, exceptUserId: string): Promise<Array<{ id: string; username: string }>>;
+  findRoomMessage(roomId: string, messageId: string): Promise<RoomMessage | null>;
+  readRoomLabel(roomId: string): Promise<{ name: string | null } | null>;
+  savePushToken(userId: string, token: string, platform: string): Promise<void>;
+  deletePushToken(userId: string, token: string): Promise<void>;
+  listPushTokens(userId: string): Promise<string[]>;
+  savePushPrefs(userId: string, quiet: string, hiddenKinds: string): Promise<void>;
+  readPushPrefs(userId: string): Promise<{ quiet: string; hiddenKinds: string }>;
   claimTurnNotice(roomId: string, holderId: string): Promise<boolean>;
   notifyTurnMembers(message: RoomMessage): Promise<void>;
   listNotifications(userId: string, limit: number, before: { at: Date; messageId: string } | null): Promise<InboxNotice[]>;
@@ -112,7 +121,7 @@ export interface AuthRepository {
 }
 
 export type RoomSync = { historyHasMore: boolean; messages: RoomMessage[]; reactions: StoredReaction[]; readers: RoomReader[]; removedIds: string[]; cursor: string; reset: boolean; hasMore: boolean };
-export type Upload = { id: string; roomId: string; ownerId: string; kind: 'image' | 'file'; name: string; size: number; sha256: string; replyToId: string | null; bytes: Uint8Array; expiresAt: Date; sealed?: string | null };
+export type Upload = { id: string; roomId: string; ownerId: string; kind: 'image' | 'file' | 'video'; name: string; size: number; sha256: string; replyToId: string | null; bytes: Uint8Array; expiresAt: Date; sealed?: string | null };
 
 export type RoomKind = 'global' | 'group' | 'private';
 

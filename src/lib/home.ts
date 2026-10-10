@@ -1,4 +1,5 @@
 import { readDirectoryUser } from './directory';
+import { FILE_BYTES_MAX, VIDEO_BYTES_MAX } from './chatFile';
 import { firstUrl, linkDraft } from './link';
 import type { Conversation, ConversationType } from '../types/conversation';
 import type { Message, MessageReaction } from '../types/message';
@@ -66,11 +67,12 @@ function readServerConversation(row: unknown): { conversation: Conversation; mes
   if (typeof message.id !== 'string' || !SERVER_ID.test(message.id)) return null;
   if (typeof message.senderId !== 'string' || !SERVER_ID.test(message.senderId)) return null;
   if (typeof message.text !== 'string' || typeof message.createdAt !== 'string' || typeof message.deleted !== 'boolean') return null;
-  if (message.type != null && message.type !== 'text' && message.type !== 'image' && message.type !== 'file') return null;
+  if (message.type != null && message.type !== 'text' && message.type !== 'image' && message.type !== 'file' && message.type !== 'video') return null;
   const fileName = typeof message.fileName === 'string' && message.fileName.trim() && message.fileName.length <= 120 ? message.fileName : '';
-  if (message.type === 'file' && !message.deleted && !fileName) return null;
+  if ((message.type === 'file' || message.type === 'video') && !message.deleted && !fileName) return null;
   const replyToId = typeof message.replyToId === 'string' && SERVER_ID.test(message.replyToId) ? message.replyToId : undefined;
   const image = message.type === 'image' && !message.deleted;
+  const video = message.type === 'video' && !message.deleted && Boolean(fileName);
   const file = message.type === 'file' && !message.deleted && Boolean(fileName);
   conversation.lastMessageId = message.id;
   return {
@@ -79,12 +81,12 @@ function readServerConversation(row: unknown): { conversation: Conversation; mes
       id: message.id,
       conversationId: data.id,
       senderId: message.senderId,
-      type: image ? 'image' : file ? 'file' : 'text',
+      type: image ? 'image' : video ? 'video' : file ? 'file' : 'text',
       text: message.text,
       status: 'sent',
       createdAt: message.createdAt,
       ...(image ? { media: { fileName: 'photo.jpg', fileSize: 1, state: 'remote' as const } } : {}),
-      ...(file ? { media: { fileName, fileSize: 1, state: 'remote' as const } } : {}),
+      ...(video || file ? { media: { fileName, fileSize: 1, state: 'remote' as const } } : {}),
       ...(message.deleted ? { deletedForEveryone: true } : {}),
       ...(message.event === true ? { event: true } : {}),
       ...(replyToId ? { replyToId } : {}),
@@ -142,26 +144,28 @@ export function readRoomMessages(payload: unknown, conversationId: string): Mess
     if (typeof row.id !== 'string' || !SERVER_ID.test(row.id)) return null;
     if (row.conversationId !== conversationId || typeof row.senderId !== 'string' || !SERVER_ID.test(row.senderId)) return null;
     if (typeof row.text !== 'string' || typeof row.createdAt !== 'string' || typeof row.deleted !== 'boolean') return null;
-    if (row.type != null && row.type !== 'text' && row.type !== 'image' && row.type !== 'file') return null;
+    if (row.type != null && row.type !== 'text' && row.type !== 'image' && row.type !== 'file' && row.type !== 'video') return null;
     const image = row.type === 'image' && !row.deleted;
     const fileName = typeof row.fileName === 'string' && row.fileName.trim() && row.fileName.length <= 120 ? row.fileName : '';
     const file = row.type === 'file' && !row.deleted;
+    const video = row.type === 'video' && !row.deleted;
     // Sealed attachments carry 28 extra bytes of AES-GCM IV and tag.
     if (image && (typeof row.fileSize !== 'number' || !Number.isInteger(row.fileSize) || row.fileSize < 1 || row.fileSize > 60_028)) return null;
-    if (file && (!fileName || typeof row.fileSize !== 'number' || !Number.isInteger(row.fileSize) || row.fileSize < 1 || row.fileSize > 262_172)) return null;
+    if (file && (!fileName || typeof row.fileSize !== 'number' || !Number.isInteger(row.fileSize) || row.fileSize < 1 || row.fileSize > FILE_BYTES_MAX + 28)) return null;
+    if (video && (!fileName || typeof row.fileSize !== 'number' || !Number.isInteger(row.fileSize) || row.fileSize < 1 || row.fileSize > VIDEO_BYTES_MAX + 28)) return null;
     const replyToId = typeof row.replyToId === 'string' && SERVER_ID.test(row.replyToId) ? row.replyToId : undefined;
     const reactions = readReactions(row.reactions);
-    const url = !row.deleted && !image && !file && row.event !== true ? firstUrl(row.text) : '';
+    const url = !row.deleted && !image && !file && !video && row.event !== true ? firstUrl(row.text) : '';
     messages.push({
       id: row.id,
       conversationId,
       senderId: row.senderId,
-      type: image ? 'image' : file ? 'file' : 'text',
+      type: image ? 'image' : video ? 'video' : file ? 'file' : 'text',
       text: row.text,
       status: 'sent',
       createdAt: row.createdAt,
       ...(image ? { media: { fileName: 'photo.jpg', fileSize: row.fileSize as number, state: 'remote' as const } } : {}),
-      ...(file ? { media: { fileName, fileSize: row.fileSize as number, state: 'remote' as const } } : {}),
+      ...(video || file ? { media: { fileName, fileSize: row.fileSize as number, state: 'remote' as const } } : {}),
       ...(row.deleted ? { deletedForEveryone: true } : {}),
       ...(row.event === true ? { event: true } : {}),
       ...(typeof row.editedAt === 'string' ? { editedAt: row.editedAt } : {}),

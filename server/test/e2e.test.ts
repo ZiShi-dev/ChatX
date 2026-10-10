@@ -93,4 +93,22 @@ describe('end-to-end keys', () => {
     const plain = await call(`/rooms/${roomId}/uploads/${randomUUID()}`, 'POST', { ...init, sealed: undefined, kind: 'file', name: 'a.txt', size: 262_150 });
     assert.equal(plain.status, 400);
   });
+
+  it('stores a short sealed video and refuses one past the size limit', async () => {
+    const { roomId, call } = await setup();
+    const bytes = new Uint8Array(120).map((_, index) => index);
+    const id = randomUUID();
+    const body = sealed(randomUUID(), b64(30));
+    const init = { kind: 'video', size: bytes.length, sha256: createHash('sha256').update(bytes).digest('hex'), sealed: body };
+    assert.equal((await (await call(`/rooms/${roomId}/uploads/${id}`, 'POST', init)).json()).offset, 0);
+    assert.equal((await call(`/rooms/${roomId}/uploads/${id}?offset=0`, 'PATCH', bytes)).status, 200);
+    const done = await (await call(`/rooms/${roomId}/uploads/${id}/complete`, 'POST', {})).json() as { message: { type: string; fileName: string } };
+    assert.equal(done.message.type, 'video');
+    assert.equal(done.message.fileName, 'video.bin');
+    const file = await call(`/rooms/${roomId}/messages/${id}/file`);
+    assert.equal(file.status, 200);
+    assert.deepEqual(new Uint8Array(await file.arrayBuffer()), bytes);
+    const huge = await call(`/rooms/${roomId}/uploads/${randomUUID()}`, 'POST', { ...init, size: 8 * 1024 * 1024 + 29 });
+    assert.equal(huge.status, 400);
+  });
 });

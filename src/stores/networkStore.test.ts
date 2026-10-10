@@ -45,6 +45,26 @@ it('uses the available connection estimate without polling the Internet', () => 
   stop();
 });
 
+it('forgets a weak or lost connection caused by leaving the app', () => {
+  vi.useFakeTimers();
+  vi.stubGlobal('navigator', { onLine: true });
+  const stop = observeNetwork();
+  const visibility = vi.spyOn(document, 'visibilityState', 'get');
+  try {
+    visibility.mockReturnValue('hidden');
+    document.dispatchEvent(new Event('visibilitychange'));
+    reportNetworkFailure(true);
+    expect(useNetworkStore.getState().network).toBe('online');
+    visibility.mockReturnValue('visible');
+    document.dispatchEvent(new Event('visibilitychange'));
+    reportNetworkFailure();
+    expect(useNetworkStore.getState().network).toBe('online');
+    vi.advanceTimersByTime(8000);
+    reportNetworkFailure();
+    expect(useNetworkStore.getState().network).toBe('offline');
+  } finally { stop(); }
+});
+
 it('keeps degraded quality until useful responses prove sustained recovery', () => {
   vi.useFakeTimers(); vi.stubGlobal('navigator', { onLine: true });
   for(let i=0;i<3;i++) reportNetworkSuccess(3500);

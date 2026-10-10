@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState, type PointerEvent } from 'react';
+import { dismissOverlayHistory, useOverlayHistory } from '../../lib/overlayBack';
 import { IonIcon, IonModal } from '@ionic/react';
 import { Capacitor } from '@capacitor/core';
 import { addOutline, removeOutline, arrowUndoOutline, bookmark, bookmarkOutline, chevronBackOutline, chevronForwardOutline, closeOutline, downloadOutline, expandOutline, informationCircleOutline, refreshOutline, shareSocialOutline, albumsOutline } from 'ionicons/icons';
@@ -127,11 +128,23 @@ export default function MediaViewer({ messageId, conversationId, onClose }: { me
     try { if(document.pictureInPictureElement)await document.exitPictureInPicture();else await video.current?.requestPictureInPicture(); }
     catch {setNotice('تعذر فتح الفيديو في نافذة عائمة.');}
   };
-  const close = () => { video.current?.pause();if(document.fullscreenElement===root.current)void document.exitFullscreen();onClose(); };
+  const end = useCallback(() => {
+    video.current?.pause();
+    if (document.fullscreenElement === root.current) void document.exitFullscreen();
+    onClose();
+  }, [onClose]);
+  useOverlayHistory(Boolean(current), end);
+  const close = () => {
+    if (window.history.state?.chatxOverlay) dismissOverlayHistory();
+    else end();
+  };
   const isSaved=saved.some((item)=>item.userId===me && item.messageId===currentId);
   const canShare=!!file && (Capacitor.getPlatform()==='android' || !!navigator.canShare?.({files:[file]}));
   if(!current)return null;
-  return <IonModal isOpen className="media-viewer-modal" onDidDismiss={close} aria-label="عارض الوسائط">
+  return <IonModal isOpen canDismiss className="media-viewer-modal" onDidDismiss={() => {
+    if (window.history.state?.chatxOverlay) dismissOverlayHistory();
+    else end();
+  }} aria-label="عارض الوسائط">
     <div ref={root} className={`media-viewer ${chrome?'':'hide-chrome'}`} dir="rtl" onPointerDown={(event)=>event.stopPropagation()} onPointerMove={(event)=>event.stopPropagation()} onPointerUp={(event)=>event.stopPropagation()} onClick={(event)=>event.stopPropagation()} onContextMenu={(event)=>event.stopPropagation()}>
       <header className="mv-header">
         <button type="button" onClick={close} aria-label="إغلاق العارض"><IonIcon icon={closeOutline}/></button>

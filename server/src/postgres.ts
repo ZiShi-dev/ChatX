@@ -1,6 +1,6 @@
 import { createLowBandwidthRepository } from './lowBandwidth.ts';
 import { createKeyRepository } from './keyStore.ts';
-import { FILE_BYTES_MAX, IMAGE_BYTES_MAX, SEALED_OVERHEAD } from './sealed.ts';
+import { FILE_BYTES_MAX, IMAGE_BYTES_MAX, isVideoFileName, SEALED_OVERHEAD, VIDEO_BYTES_MAX } from './sealed.ts';
 import { randomInt } from 'node:crypto';
 import pg from 'pg';
 import { eraseGroupSelection, eraseSelection } from './eraseMember.ts';
@@ -56,7 +56,7 @@ function imageSizeOf(value: unknown) {
 }
 
 function fileSizeOf(value: unknown) {
-  return byteSizeOf(value, FILE_BYTES_MAX + SEALED_OVERHEAD);
+  return byteSizeOf(value, VIDEO_BYTES_MAX + SEALED_OVERHEAD);
 }
 
 function jpegBytes(value: unknown, sealed: boolean): Uint8Array | null {
@@ -98,6 +98,10 @@ export function createPostgresRepository(pool: pg.Pool): AuthRepository {
   return {
     ...createLowBandwidthRepository(pool),
     ...createKeyRepository(pool),
+    async isRoomMember(roomId, userId) {
+      const result = await pool.query('SELECT 1 FROM room_members WHERE room_id = $1 AND user_id = $2', [roomId, userId]);
+      return Boolean(result.rowCount);
+    },
     async findUserByGoogleSub(sub) {
       const result=await pool.query<UserRow>(`SELECT ${USER_COLUMNS} FROM users WHERE google_sub=$1`,[sub]);
       return result.rows[0]?mapUser(result.rows[0]):null;
@@ -372,22 +376,48 @@ export function createPostgresRepository(pool: pg.Pool): AuthRepository {
     async listRoomMessages(roomId, userId, limit, page) {
       const member = await pool.query('SELECT 1 FROM room_members WHERE room_id = $1 AND user_id = $2', [roomId, userId]);
       if ((member.rowCount ?? 0) === 0) return null;
-      const result = await pool.query<{ id: string; sender_id: string; body: string; created_at: Date; deleted: boolean; event: boolean; edited_at: Date | null; reply_to: string | null; image_size: number | null; file_name: string | null; file_size: number | null }>(
-        `SELECT recent.id, recent.sender_id, recent.body, recent.created_at, recent.deleted, recent.event, recent.edited_at, recent.reply_to,
-                (SELECT octet_length(i.bytes)::int FROM message_images i WHERE i.message_id = recent.id) AS image_size,
-                (SELECT f.name FROM message_files f WHERE f.message_id = recent.id) AS file_name,
-                (SELECT octet_length(f.bytes)::int FROM message_files f WHERE f.message_id = recent.id) AS file_size
-         FROM (
-           SELECT id, sender_id, body, created_at, deleted, event, edited_at, reply_to
-           FROM room_messages WHERE room_id = $1
-             AND ($3::uuid IS NULL OR (created_at, id) < (SELECT created_at, id FROM room_messages WHERE id = $3 AND room_id = $1))
-             AND ($4::uuid IS NULL OR (created_at, id) <= (SELECT created_at, id FROM room_messages WHERE id = $4 AND room_id = $1))
-           ORDER BY created_at DESC, id DESC
-           LIMIT $2
-         ) recent
-         ORDER BY recent.created_at ASC, recent.id ASC`,
-        [roomId, limit, page?.beforeId ?? null, page?.aroundId ?? null],
-      );
+      const result = page?.aroundId
+        ? await pool.query<{ id: string; sender_id: string; body: string; created_at: Date; deleted: boolean; event: boolean; edited_at: Date | null; reply_to: string | null; image_size: number | null; file_name: string | null; file_size: number | null }>(
+          `WITH anchor AS (
+             SELECT created_at, id FROM room_messages WHERE id = $3 AND room_id = $1
+           ),
+           before_page AS (
+             SELECT id, sender_id, body, created_at, deleted, event, edited_at, reply_to
+             FROM room_messages m JOIN anchor a ON true
+             WHERE m.room_id = $1 AND $2 > 1 AND (m.created_at, m.id) < (a.created_at, a.id)
+             ORDER BY m.created_at DESC, m.id DESC
+             LIMIT LEAST(15, $2 - 1)
+           ),
+           after_page AS (
+             SELECT id, sender_id, body, created_at, deleted, event, edited_at, reply_to
+             FROM room_messages m JOIN anchor a ON true
+             WHERE m.room_id = $1 AND (m.created_at, m.id) >= (a.created_at, a.id)
+             ORDER BY m.created_at ASC, m.id ASC
+             LIMIT GREATEST($2 - (SELECT count(*) FROM before_page), 1)
+           )
+           SELECT recent.id, recent.sender_id, recent.body, recent.created_at, recent.deleted, recent.event, recent.edited_at, recent.reply_to,
+                  (SELECT octet_length(i.bytes)::int FROM message_images i WHERE i.message_id = recent.id) AS image_size,
+                  (SELECT f.name FROM message_files f WHERE f.message_id = recent.id) AS file_name,
+                  (SELECT octet_length(f.bytes)::int FROM message_files f WHERE f.message_id = recent.id) AS file_size
+           FROM (SELECT * FROM before_page UNION ALL SELECT * FROM after_page) recent
+           ORDER BY recent.created_at ASC, recent.id ASC`,
+          [roomId, limit, page.aroundId],
+        )
+        : await pool.query<{ id: string; sender_id: string; body: string; created_at: Date; deleted: boolean; event: boolean; edited_at: Date | null; reply_to: string | null; image_size: number | null; file_name: string | null; file_size: number | null }>(
+          `SELECT recent.id, recent.sender_id, recent.body, recent.created_at, recent.deleted, recent.event, recent.edited_at, recent.reply_to,
+                  (SELECT octet_length(i.bytes)::int FROM message_images i WHERE i.message_id = recent.id) AS image_size,
+                  (SELECT f.name FROM message_files f WHERE f.message_id = recent.id) AS file_name,
+                  (SELECT octet_length(f.bytes)::int FROM message_files f WHERE f.message_id = recent.id) AS file_size
+           FROM (
+             SELECT id, sender_id, body, created_at, deleted, event, edited_at, reply_to
+             FROM room_messages WHERE room_id = $1
+               AND ($3::uuid IS NULL OR (created_at, id) < (SELECT created_at, id FROM room_messages WHERE id = $3 AND room_id = $1))
+             ORDER BY created_at DESC, id DESC
+             LIMIT $2
+           ) recent
+           ORDER BY recent.created_at ASC, recent.id ASC`,
+          [roomId, limit, page?.beforeId ?? null],
+        );
       return result.rows.map((row): RoomMessage => ({
         id: row.id,
         roomId,
@@ -480,7 +510,8 @@ export function createPostgresRepository(pool: pg.Pool): AuthRepository {
         [roomId, messageId, userId],
       );
       const row = result.rows[0];
-      if (!row || !Buffer.isBuffer(row.bytes) || row.bytes.length < 1 || row.bytes.length > FILE_BYTES_MAX + SEALED_OVERHEAD) return null;
+      const cap = row && isVideoFileName(row.name) ? VIDEO_BYTES_MAX : FILE_BYTES_MAX;
+      if (!row || !Buffer.isBuffer(row.bytes) || row.bytes.length < 1 || row.bytes.length > cap + SEALED_OVERHEAD) return null;
       if (!row.name || row.name.length > 120) return null;
       return { name: row.name, bytes: row.bytes };
     },
@@ -884,6 +915,61 @@ export function createPostgresRepository(pool: pg.Pool): AuthRepository {
       if (others.rowCount) return 'forbidden';
       const removed = await pool.query(`DELETE FROM rooms WHERE id = $1 AND kind = 'private'`, [roomId]);
       return removed.rowCount ? 'ok' : 'missing';
+    },
+    async listRoomNoticeMembers(roomId, exceptUserId) {
+      const result = await pool.query<{ id: string; username: string }>(
+        `SELECT u.id, u.username FROM room_members rm JOIN users u ON u.id = rm.user_id WHERE rm.room_id = $1 AND u.id <> $2`,
+        [roomId, exceptUserId],
+      );
+      return result.rows;
+    },
+    async findRoomMessage(roomId, messageId) {
+      const result = await pool.query<{ id: string; room_id: string; sender_id: string; body: string; created_at: Date; deleted: boolean; reply_to_id: string | null; image_size: number | null; file_name: string | null }>(
+        'SELECT id, room_id, sender_id, body, created_at, deleted, reply_to_id, (SELECT octet_length(bytes) FROM message_images i WHERE i.message_id = m.id) AS image_size, (SELECT name FROM message_files f WHERE f.message_id = m.id) AS file_name FROM room_messages m WHERE id = $2 AND room_id = $1',
+        [roomId, messageId],
+      );
+      const row = result.rows[0];
+      if (!row) return null;
+      return {
+        id: row.id,
+        roomId: row.room_id,
+        senderId: row.sender_id,
+        text: row.body,
+        createdAt: row.created_at,
+        deleted: row.deleted,
+        replyToId: row.reply_to_id,
+        imageSize: row.image_size,
+        fileName: row.file_name,
+        fileBytes: null,
+      };
+    },
+    async readRoomLabel(roomId) {
+      const result = await pool.query<{ name: string | null }>('SELECT name FROM rooms WHERE id = $1', [roomId]);
+      return result.rows[0] ?? null;
+    },
+    async savePushToken(userId, token, platform) {
+      await pool.query(
+        'INSERT INTO push_tokens (user_id, token, platform, updated_at) VALUES ($1, $2, $3, now()) ON CONFLICT (user_id, token) DO UPDATE SET platform = EXCLUDED.platform, updated_at = now()',
+        [userId, token, platform],
+      );
+    },
+    async deletePushToken(userId, token) {
+      await pool.query('DELETE FROM push_tokens WHERE user_id = $1 AND token = $2', [userId, token]);
+    },
+    async listPushTokens(userId) {
+      const result = await pool.query<{ token: string }>('SELECT token FROM push_tokens WHERE user_id = $1', [userId]);
+      return result.rows.map((row) => row.token);
+    },
+    async savePushPrefs(userId, quiet, hiddenKinds) {
+      await pool.query(
+        'INSERT INTO push_prefs (user_id, quiet, hidden_kinds, updated_at) VALUES ($1, $2, $3, now()) ON CONFLICT (user_id) DO UPDATE SET quiet = EXCLUDED.quiet, hidden_kinds = EXCLUDED.hidden_kinds, updated_at = now()',
+        [userId, quiet, hiddenKinds],
+      );
+    },
+    async readPushPrefs(userId) {
+      const result = await pool.query<{ quiet: string; hidden_kinds: string }>('SELECT quiet, hidden_kinds FROM push_prefs WHERE user_id = $1', [userId]);
+      const row = result.rows[0];
+      return { quiet: row?.quiet ?? '', hiddenKinds: row?.hidden_kinds ?? '' };
     },
     async listPresence(now) {
       const result = await pool.query<{ id: string; presence: 'online' | 'away' | null; last_seen_at: Date | null }>(

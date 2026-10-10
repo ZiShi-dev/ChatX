@@ -4,6 +4,7 @@ import { createLimiter, type Deps } from '../src/authService.ts';
 import { loadConfig } from '../src/config.ts';
 import { GLOBAL_ROOM_ID } from '../src/home.ts';
 import { createApi } from '../src/http.ts';
+import { messageKind } from '../src/inbox.ts';
 import { createMemoryRepository } from '../src/memory.ts';
 import { hashSession } from '../src/session.ts';
 import type { AuthUser } from '../src/types.ts';
@@ -251,5 +252,11 @@ describe('inbox', () => {
       headers: { cookie: `chatx_session=${laylaToken}` },
     }));
     assert.equal(bad.status, 401);
+  });
+
+  it('treats both words of a name as one mention', () => {
+    assert.equal(messageKind('@الخالد الامبراطوري', 'الخالد الامبراطوري', false), 'mention');
+    assert.equal(messageKind('@عمر @الخالد الامبراطوري', 'الخالد الامبراطوري', false), 'mention');
+    assert.equal(messageKind('@عمران', 'عمر', false), 'message');
   });
 });

@@ -20,13 +20,17 @@ let slowResponses = 0;
 let fastResponses = 0;
 let recoveryStarted = 0;
 let degraded = false;
+let leftApp = false;
+let resumeGraceUntil = 0;
 
 export function resetNetworkMeasurements() {
   slowResponses = fastResponses = recoveryStarted = 0;
-  degraded = transportFailed = false;
+  degraded = transportFailed = leftApp = false;
+  resumeGraceUntil = 0;
 }
 
 export function reportNetworkFailure(stalled = false) {
+  if (typeof document !== 'undefined' && (document.visibilityState === 'hidden' || Date.now() < resumeGraceUntil)) return;
   transportFailed = true;
   fastResponses = 0;
   if (stalled) degraded = true;
@@ -82,6 +86,7 @@ export function observeNetwork() {
     if (timer === undefined && !controller) timer = window.setTimeout(() => { timer = undefined; void probe(); }, 1000);
   };
   const sync = () => {
+    if (document.visibilityState === 'hidden') return;
     const slow = degraded || connection?.saveData || connection?.effectiveType === 'slow-2g' || connection?.effectiveType === '2g';
     useNetworkStore.getState().setNetwork(navigator.onLine === false ? 'offline' : transportFailed ? 'offline' : slow ? 'slow' : 'online');
     if (navigator.onLine !== false && transportFailed) { window.clearTimeout(timer); timer = undefined; void probe(); }
@@ -89,8 +94,23 @@ export function observeNetwork() {
   sync();
   window.addEventListener('online', sync);
   window.addEventListener('offline', sync);
+  const onVisibility = () => {
+    if (document.visibilityState === 'hidden') {
+      leftApp = true;
+      return;
+    }
+    if (!leftApp) return;
+    leftApp = false;
+    transportFailed = false;
+    degraded = false;
+    slowResponses = 0;
+    fastResponses = 0;
+    recoveryStarted = 0;
+    resumeGraceUntil = Date.now() + 8000;
+    sync();
+  };
   connection?.addEventListener('change', sync);
-  document.addEventListener('visibilitychange', sync);
+  document.addEventListener('visibilitychange', onVisibility);
   return () => {
     stopped = true;
     checkRecovery = undefined;
@@ -99,6 +119,6 @@ export function observeNetwork() {
     window.removeEventListener('online', sync);
     window.removeEventListener('offline', sync);
     connection?.removeEventListener('change', sync);
-    document.removeEventListener('visibilitychange', sync);
+    document.removeEventListener('visibilitychange', onVisibility);
   };
 }

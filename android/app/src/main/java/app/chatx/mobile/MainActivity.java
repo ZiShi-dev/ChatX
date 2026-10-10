@@ -2,6 +2,7 @@ package app.chatx.mobile;
 
 import android.annotation.SuppressLint;
 import android.app.Dialog;
+import android.content.Context;
 import android.os.Bundle;
 import android.os.Message;
 import android.view.ViewGroup;
@@ -20,6 +21,7 @@ import com.getcapacitor.BridgeWebChromeClient;
 public class MainActivity extends BridgeActivity {
     static volatile boolean foreground = false;
     private int navigationExtraPx = 0;
+    private int statusTopPx = 0;
 
     @Override
     public void onResume() {
@@ -38,6 +40,21 @@ public class MainActivity extends BridgeActivity {
         foreground = false;
         InboxLifecycle.foreground(false);
         super.onPause();
+        Context app = getApplicationContext();
+        String origin = InboxWatch.prefs(app).getString("origin", "");
+        if (origin != null && origin.startsWith("https://")) {
+            try {
+                String cookie = CookieManager.getInstance().getCookie(origin);
+                if (cookie != null && cookie.contains("chatx_session=")) {
+                    InboxWatch.prefs(app).edit().putString("cookie", cookie).commit();
+                }
+                CookieManager.getInstance().flush();
+            } catch (RuntimeException error) {
+                // The stored cookie from the last open is still used.
+            }
+        }
+        new Thread(() -> InboxPoll.run(app)).start();
+        InboxWatch.schedule(app);
     }
 
     @Override
@@ -63,22 +80,34 @@ public class MainActivity extends BridgeActivity {
         ViewCompat.setOnApplyWindowInsetsListener(webView, (view, insets) -> {
             boolean keyboard = insets.isVisible(WindowInsetsCompat.Type.ime());
             int extra = 0;
-            if (!keyboard) {
-                int buttons = insets.getInsets(WindowInsetsCompat.Type.navigationBars()).bottom;
-                int gestures = insets.getInsets(WindowInsetsCompat.Type.mandatorySystemGestures()).bottom;
-                extra = Math.max(0, gestures - buttons);
+            if (!keyboard && buttonNavigation(insets)) {
+                int bars = insets.getInsets(WindowInsetsCompat.Type.navigationBars()).bottom;
+                int tappable = insets.getInsets(WindowInsetsCompat.Type.tappableElement()).bottom;
+                extra = Math.max(bars, tappable);
+            }
+            int status = insets.getInsets(WindowInsetsCompat.Type.statusBars()).top;
+            if (status == 0) {
+                WindowInsetsCompat root = ViewCompat.getRootWindowInsets(view);
+                if (root != null) status = root.getInsets(WindowInsetsCompat.Type.statusBars()).top;
             }
             float density = getResources().getDisplayMetrics().density;
             navigationExtraPx = density > 0 ? Math.round(extra / density) : 0;
+            statusTopPx = density > 0 ? Math.round(status / density) : 0;
             publishNavigationExtra(webView);
             return insets;
         });
         ViewCompat.requestApplyInsets(webView);
     }
 
+    private boolean buttonNavigation(WindowInsetsCompat insets) {
+        int id = getResources().getIdentifier("config_navBarInteractionMode", "integer", "android");
+        if (id != 0) return getResources().getInteger(id) != 2;
+        return insets.getInsets(WindowInsetsCompat.Type.tappableElement()).bottom > 0;
+    }
+
     private void publishNavigationExtra(WebView webView) {
         webView.evaluateJavascript(
-            "try{document.documentElement.style.setProperty('--chatx-gesture-extra','" + navigationExtraPx + "px')}catch(e){}",
+            "try{var root=document.documentElement.style;root.setProperty('--chatx-nav-bottom','" + navigationExtraPx + "px');root.setProperty('--chatx-system-bottom','" + navigationExtraPx + "px');root.setProperty('--chatx-status-top','" + statusTopPx + "px');root.setProperty('--chatx-gesture-extra','0px')}catch(e){}",
             null
         );
     }

@@ -45,6 +45,7 @@ describe('group turn', () => {
   });
   it('describes a name and photo change in one line', () => {
     assert.equal(groupChangeLine('نورة', { name: 'الصباح', avatar: 'photo' }), 'نورة غيّر اسم المجموعة إلى «الصباح» وغيّر صورة المجموعة');
+    assert.equal(groupChangeLine('نورة', { banner: null }), 'نورة أزال غلاف المجموعة');
     assert.equal(groupChangeLine('نورة', {}), '');
     assert.equal(groupTurnNotice('ليلى', now, now), 'دور ليلى لتعديل اسم المجموعة وصورتها');
     assert.equal(groupTurnNotice('ليلى', now + GROUP_TURN_MS, now).startsWith('دور ليلى لتعديل اسم المجموعة وصورتها في '), true);

@@ -34,7 +34,7 @@ describe('network polling', () => {
     window.dispatchEvent(new Event('online'));
     expect(task).toHaveBeenCalledTimes(1);
     finish?.();
-    await vi.advanceTimersByTimeAsync(20_000);
+    await vi.advanceTimersByTimeAsync(25_000);
     expect(task).toHaveBeenCalledTimes(2);
     stop();
     finish?.();
@@ -44,7 +44,7 @@ describe('network polling', () => {
   it('backs off repeated failed refreshes and resumes immediately on recovery', async () => {
     const task = vi.fn(async () => 'offline');
     stop = startPolling(task);
-    await vi.advanceTimersByTimeAsync(39999);
+    await vi.advanceTimersByTimeAsync(49_999);
     expect(task).toHaveBeenCalledTimes(1);
     await vi.advanceTimersByTimeAsync(1);
     expect(task).toHaveBeenCalledTimes(2);
@@ -66,11 +66,11 @@ describe('network polling', () => {
     const task = vi.fn(async () => undefined);
     let active = false;
     stop = startPolling(task, { active: () => active });
-    await vi.advanceTimersByTimeAsync(20_000);
+    await vi.advanceTimersByTimeAsync(25_000);
     expect(task).not.toHaveBeenCalled();
     active = true;
     vi.spyOn(document, 'visibilityState', 'get').mockReturnValue('hidden');
-    await vi.advanceTimersByTimeAsync(20_000);
+    await vi.advanceTimersByTimeAsync(25_000);
     expect(task).not.toHaveBeenCalled();
     vi.spyOn(document, 'visibilityState', 'get').mockReturnValue('visible');
     vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(false);
@@ -99,7 +99,7 @@ describe('network polling', () => {
     stop = startPolling(secondary, { economy: true });
     const stopMessages = startPolling(messages);
     try {
-      await vi.advanceTimersByTimeAsync(40_000);
+      await vi.advanceTimersByTimeAsync(50_000);
       expect(secondary).toHaveBeenCalledTimes(2);
       expect(messages).toHaveBeenCalledTimes(3);
     } finally { stopMessages(); useSettingsStore.setState({ dataSaver: previous }); }

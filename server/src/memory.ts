@@ -32,6 +32,8 @@ export function createMemoryRepository(): AuthRepository {
     return Boolean(actor && actor.email.toLowerCase() === ERASE_OPERATOR_EMAIL && actor.googleSub);
   };
   const clearedAt = new Map<string, number>();
+  const pushTokens = new Map<string, { userId: string; token: string; platform: string }>();
+  const pushPrefs = new Map<string, { quiet: string; hiddenKinds: string }>();
   const memberKey = (roomId: string, userId: string) => `${roomId}:${userId}`;
   const syncTurn = (roomId: string, at: number) => {
     const room = rooms.get(roomId);
@@ -101,6 +103,9 @@ export function createMemoryRepository(): AuthRepository {
     async findUserByGoogleSub(sub) { const user=[...users.values()].find((user)=>user.googleSub===sub);return user?copyUser(user):null; },
     async bindGoogleSub(id,sub) {const user=users.get(id);if(!user || user.role!=='member' || user.googleSub && user.googleSub!==sub || [...users.values()].some((other)=>other.id!==id&&other.googleSub===sub))return false;user.googleSub=sub;return true;},
     async deleteUpload(roomId, ownerId, id) { const row = uploads.get(id); if (row?.roomId === roomId && row.ownerId === ownerId) uploads.delete(id); },
+    async isRoomMember(roomId, userId) {
+      return members.has(memberKey(roomId, userId));
+    },
     async readRoomSync(roomId, userId, cursor) {
       if (!members.has(memberKey(roomId, userId))) return null;
       let journal = journals.get(roomId);
@@ -379,12 +384,18 @@ export function createMemoryRepository(): AuthRepository {
     },
     async listRoomMessages(roomId, userId, limit, page) {
       if (!members.has(memberKey(roomId, userId))) return null;
-      const anchorId = page?.beforeId || page?.aroundId;
-      const anchor = anchorId ? messages.find((message) => message.roomId === roomId && message.id === anchorId) : undefined;
-      if (anchorId && !anchor) return [];
       const compare = (a: RoomMessage, b: RoomMessage) => a.createdAt.getTime() - b.createdAt.getTime() || a.id.localeCompare(b.id);
+      if (page?.aroundId) {
+        const room = messages.filter((message) => message.roomId === roomId).sort(compare);
+        const index = room.findIndex((message) => message.id === page.aroundId);
+        if (index < 0) return [];
+        const before = limit <= 1 ? 0 : Math.min(15, limit - 1, index);
+        return room.slice(index - before, index + Math.max(1, limit - before));
+      }
+      const anchor = page?.beforeId ? messages.find((message) => message.roomId === roomId && message.id === page.beforeId) : undefined;
+      if (page?.beforeId && !anchor) return [];
       return messages
-        .filter((message) => message.roomId === roomId && (!anchor || compare(message, anchor) < 0 || (page?.aroundId && message.id === anchor.id)))
+        .filter((message) => message.roomId === roomId && (!anchor || compare(message, anchor) < 0))
         .sort(compare)
         .slice(-limit);
     },
@@ -704,6 +715,38 @@ export function createMemoryRepository(): AuthRepository {
       members.delete(memberKey(roomId, userId));
       rooms.delete(roomId);
       return 'ok';
+    },
+    async listRoomNoticeMembers(roomId, exceptUserId) {
+      return [...members.values()]
+        .filter((member) => member.roomId === roomId && member.userId !== exceptUserId)
+        .map((member) => {
+          const user = users.get(member.userId);
+          return user ? { id: user.id, username: user.username } : null;
+        })
+        .filter((item): item is { id: string; username: string } => item !== null);
+    },
+    async findRoomMessage(roomId, messageId) {
+      const message = messages.find((item) => item.roomId === roomId && item.id === messageId);
+      return message ?? null;
+    },
+    async readRoomLabel(roomId) {
+      const room = rooms.get(roomId);
+      return room ? { name: room.name } : null;
+    },
+    async savePushToken(userId, token, platform) {
+      pushTokens.set(`${userId}:${token}`, { userId, token, platform });
+    },
+    async deletePushToken(userId, token) {
+      pushTokens.delete(`${userId}:${token}`);
+    },
+    async listPushTokens(userId) {
+      return [...pushTokens.values()].filter((item) => item.userId === userId).map((item) => item.token);
+    },
+    async savePushPrefs(userId, quiet, hiddenKinds) {
+      pushPrefs.set(userId, { quiet, hiddenKinds });
+    },
+    async readPushPrefs(userId) {
+      return pushPrefs.get(userId) ?? { quiet: '', hiddenKinds: '' };
     },
     async listPresence(now) {
       return [...users.values()].filter((user) => user.role === 'member').map((user) => {

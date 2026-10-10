@@ -56,6 +56,31 @@ export function notificationPreview(text: string) {
   return `${flat.slice(0, MAX_NOTIFICATION_PREVIEW_LENGTH)}…`;
 }
 
+/** Titre = groupe, texte = expéditeur et contenu. Une discussion privée garde le nom de la personne. */
+const JPEG_PREFIX = 'data:image/jpeg;base64,';
+
+/** Photos de groupe déjà connues, pour les afficher dans la notification sans alourdir la requête. */
+export function notificationAvatars(conversations: Array<{ id: string; type: string; avatarUrl?: string }>) {
+  const photos = [];
+  for (const room of conversations) {
+    if ((room.type !== 'group' && room.type !== 'global') || !room.avatarUrl?.startsWith(JPEG_PREFIX)) continue;
+    const jpeg = room.avatarUrl.slice(JPEG_PREFIX.length);
+    if (!SERVER_ID.test(room.id) || jpeg.length < 8 || jpeg.length > 80_000) continue;
+    photos.push({ conversationId: room.id, jpeg });
+  }
+  return photos;
+}
+
+export function notificationAlert(item: { conversationName?: string; senderName?: string; preview: string }) {
+  const group = item.conversationName?.trim() ?? '';
+  const sender = item.senderName?.trim() ?? '';
+  const content = notificationPreview(item.preview);
+  return {
+    title: group || sender || 'ChatX',
+    body: group && sender ? `${sender}: ${content}` : content,
+  };
+}
+
 export function formatInboxBadge(count: number) {
   if (count <= 0) return '';
   if (count > 99) return '99+';

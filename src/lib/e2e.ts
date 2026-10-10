@@ -1,6 +1,6 @@
 import { adminFetch, AdminApiError } from './adminApi';
 import {
-  createIdentity, importRoomKey, isSealed, newRoomKey, openBytes, openText, restoreIdentity, sealBytes, sealedKeyId, sealText,
+  createIdentity, importRoomKey, isSealed, newRoomKey, openBytes, openText, restoreIdentity, sealBytes, sealedKeyId, sealText, toBase64Url,
   unwrapRoomKey, wrapRoomKey, type Identity, type KeyBackup,
 } from './e2eCrypto';
 import { firstUrl, linkDraft } from './link';
@@ -111,6 +111,23 @@ export async function restoreKeys(owner: string, code: string): Promise<'ok' | '
   if (!identity) return 'wrong';
   await saveIdentity(owner, identity);
   return 'ok';
+}
+
+/** Room keys already stored on this device, so a background notification can open the message text. */
+export async function localRoomKeyRecords(): Promise<Array<{ roomId: string; keyId: string; raw: string }> | null> {
+  try {
+    const rows = await store('readonly', (table) => table.getAll()) as Array<{ key?: string; raw?: Uint8Array }>;
+    const records = [];
+    for (const row of rows) {
+      if (typeof row?.key !== 'string' || !row.key.startsWith('room:') || row.raw?.length !== 32) continue;
+      const parts = row.key.split(':');
+      if (parts.length !== 4 || !parts[2] || !parts[3]) continue;
+      records.push({ roomId: parts[2], keyId: parts[3], raw: toBase64Url(row.raw) });
+    }
+    return records;
+  } catch {
+    return null;
+  }
 }
 
 async function heldKeys(owner: string, roomId: string) {
@@ -266,7 +283,7 @@ async function openOne(owner: string, message: Message): Promise<Message> {
     return { ...message, type: 'text', text: LOCKED_TEXT, locked: true, media: undefined, link: undefined, ...(keyId ? { sealedKey: keyId } : {}) };
   }
   if (message.type === 'image') return { ...message, text: '', sealedKey: keyId };
-  if (message.type === 'file') return { ...message, text: '', sealedKey: keyId, media: message.media ? { ...message.media, fileName: plain.trim().slice(0, 120) || 'ملف' } : undefined };
+  if (message.type === 'file' || message.type === 'video') return { ...message, text: '', sealedKey: keyId, media: message.media ? { ...message.media, fileName: plain.trim().slice(0, 120) || (message.type === 'video' ? 'فيديو' : 'ملف') } : undefined };
   const url = firstUrl(plain);
   return { ...message, text: plain, sealedKey: keyId, link: url ? linkDraft(url) : undefined };
 }

@@ -144,6 +144,39 @@ export function unreadOnScreen(unread: number, total: number, visible: number) {
   return Math.max(0, total - Math.max(firstUnread, firstVisible));
 }
 
+export function unreadScrollTop(anchorTop: number, scrollHeight: number, clientHeight: number) {
+  const bottom = Math.max(0, scrollHeight - clientHeight);
+  const rest = scrollHeight - Math.max(0, anchorTop);
+  if (rest <= clientHeight) return bottom;
+  return Math.min(bottom, Math.max(0, anchorTop - 8));
+}
+
+/** Keep the unread divider inside the rendered tail (WhatsApp-style resume). */
+export function historyLimitForUnread(unread: number, limit: number, total: number) {
+  if (unread <= 0 || total <= 0) return limit;
+  const need = Math.min(300, unread + 16);
+  return Math.min(total, Math.max(limit, need));
+}
+
+/** Unread count used when opening a chat (inbox truth beats stale home badges). */
+export function openUnreadCount(
+  serverUnread: number,
+  inboxUnreadForRoom: number,
+  messages: Pick<Message, 'senderId' | 'status' | 'createdAt' | 'id'>[],
+  userId: string,
+) {
+  if (inboxUnreadForRoom > 0) return inboxUnreadForRoom;
+  const server = Math.max(0, serverUnread);
+  if (server <= 0) return 0;
+  const sent = messages
+    .filter((message) => message.status === 'sent')
+    .sort((a, b) => a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id));
+  if (sent.length === 0) return server;
+  const last = sent[sent.length - 1];
+  if (last.senderId === userId) return 0;
+  return server;
+}
+
 export function resumeMessageId(messageIds: string[], cursorId: string, unread: number) {
   if (unread <= 0 || !cursorId) return '';
   const index = messageIds.indexOf(cursorId);

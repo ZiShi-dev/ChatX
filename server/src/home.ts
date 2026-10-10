@@ -4,12 +4,14 @@ import type { Deps } from './authService.ts';
 import { hashSession } from './session.ts';
 import type { AuthUser, HomeRoom, RoomMessage, StoredReaction } from './types.ts';
 import { GROUP_TURN_MS, groupTurnNotice } from './groupTurn.ts';
+import { sendMessagePush } from './push.ts';
 import { wakeRoom } from './roomLive.ts';
 import { cleanBio, cleanAvatar, cleanBanner } from './profile.ts';
-import { cleanHints, cleanSealed, FILE_BYTES_MAX, IMAGE_BYTES_MAX, isSealed, SEALED_FILE_NAME, SEALED_OVERHEAD } from './sealed.ts';
+import { cleanHints, cleanSealed, FILE_BYTES_MAX, IMAGE_BYTES_MAX, isSealed, isVideoFileName, SEALED_FILE_NAME, SEALED_OVERHEAD, SEALED_VIDEO_NAME, VIDEO_BYTES_MAX } from './sealed.ts';
 
 export const GLOBAL_ROOM_ID = '00000000-0000-4000-8000-000000000001';
 export const ROOM_PAGE_SIZE = 30;
+const AROUND_PAGE_SIZE = 120;
 
 const ROOM_ID = /^[0-9a-f-]{36}$/i;
 const JPEG_PREFIX = 'data:image/jpeg;base64,/9j/';
@@ -95,7 +97,7 @@ function roomView(room: HomeRoom) {
             ...(room.lastMessage.event ? { event: true } : {}),
             ...(!room.lastMessage.deleted && room.lastMessage.imageSize ? { type: 'image' as const } : {}),
             ...(!room.lastMessage.deleted && !room.lastMessage.imageSize && room.lastMessage.fileName
-              ? { type: 'file' as const, fileName: room.lastMessage.fileName }
+              ? { type: isVideoFileName(room.lastMessage.fileName) ? 'video' as const : 'file' as const, fileName: room.lastMessage.fileName }
               : {}),
           },
         }
@@ -118,7 +120,7 @@ export function messageView(message: RoomMessage, reactions: StoredReaction[] = 
     deleted: message.deleted,
     ...(message.editedAt ? { editedAt: message.editedAt.toISOString() } : {}),
     ...(image ? { type: 'image' as const, fileSize: image } : {}),
-    ...(file ? { type: 'file' as const, fileName: file.fileName, fileSize: file.fileSize } : {}),
+    ...(file ? { type: isVideoFileName(file.fileName) ? 'video' as const : 'file' as const, fileName: file.fileName, fileSize: file.fileSize } : {}),
     ...(message.replyToId ? { replyToId: message.replyToId } : {}),
     ...(mine.length ? { reactions: mine } : {}),
     ...(message.event ? { event: true } : {}),
@@ -233,17 +235,20 @@ export async function readRoomMessages(deps: Deps, input: { token: string; roomI
   if ((input.beforeId && !ROOM_ID.test(input.beforeId)) || (input.aroundId && !ROOM_ID.test(input.aroundId)) || (input.beforeId && input.aroundId)) {
     return { ok: false as const, error: 'invalid_credentials' as const };
   }
-  const messages = await deps.repo.listRoomMessages(input.roomId, user.id, ROOM_PAGE_SIZE + 1, {
+  const around = Boolean(input.aroundId);
+  const messages = await deps.repo.listRoomMessages(input.roomId, user.id, around ? AROUND_PAGE_SIZE : ROOM_PAGE_SIZE + 1, {
     beforeId: input.beforeId || undefined, aroundId: input.aroundId || undefined,
   });
   if (!messages) return { ok: false as const, error: 'not_found' as const };
   if (input.aroundId && !messages.some((message) => message.id === input.aroundId)) return { ok: false as const, error: 'not_found' as const };
-  const reactions = await deps.repo.listReactions(input.roomId, messages.slice(-ROOM_PAGE_SIZE).map((message) => message.id));
+  const page = around ? messages : messages.slice(-ROOM_PAGE_SIZE);
+  const older = around && page[0] ? await deps.repo.listRoomMessages(input.roomId, user.id, 1, { beforeId: page[0].id }) : null;
+  const reactions = await deps.repo.listReactions(input.roomId, page.map((message) => message.id));
   const readers = await deps.repo.listReaders(input.roomId);
   return {
     ok: true as const,
-    messages: messages.slice(-ROOM_PAGE_SIZE).map((message) => messageView(message, reactions)),
-    hasMore: messages.length > ROOM_PAGE_SIZE,
+    messages: page.map((message) => messageView(message, reactions)),
+    hasMore: around ? (older?.length ?? 0) > 0 : messages.length > ROOM_PAGE_SIZE,
     readers: readers.map((reader) => ({
       userId: reader.userId,
       messageId: reader.messageId,
@@ -409,14 +414,13 @@ export async function readRoomFile(deps: Deps, input: { token: string; roomId: s
   return { ok: true as const, file };
 }
 
-export type SealedMedia = { kind: 'image' | 'file'; bytes: Uint8Array };
+export type SealedMedia = { kind: 'image' | 'file' | 'video'; bytes: Uint8Array };
 
 function sealedAttachment(media: SealedMedia) {
-  const max = (media.kind === 'image' ? IMAGE_BYTES_MAX : FILE_BYTES_MAX) + SEALED_OVERHEAD;
+  const max = (media.kind === 'image' ? IMAGE_BYTES_MAX : media.kind === 'video' ? VIDEO_BYTES_MAX : FILE_BYTES_MAX) + SEALED_OVERHEAD;
   if (media.bytes.byteLength <= SEALED_OVERHEAD || media.bytes.byteLength > max) return null;
-  return media.kind === 'image'
-    ? { image: media.bytes, file: null }
-    : { image: null, file: { name: SEALED_FILE_NAME, bytes: media.bytes } };
+  if (media.kind === 'image') return { image: media.bytes, file: null };
+  return { image: null, file: { name: media.kind === 'video' ? SEALED_VIDEO_NAME : SEALED_FILE_NAME, bytes: media.bytes } };
 }
 
 export async function postRoomMessage(deps: Deps, input: { token: string; roomId: string; id: unknown; text: unknown; replyToId: unknown; image: unknown; file: unknown; hints?: unknown; sealedMedia?: SealedMedia }) {
@@ -462,6 +466,10 @@ export async function postRoomMessage(deps: Deps, input: { token: string; roomId
   if (saved === 'missing') return { ok: false as const, error: 'not_found' as const };
   if (saved === 'invalid') return { ok: false as const, error: 'invalid_credentials' as const };
   wakeRoom(input.roomId);
-  if (!saved.deleted) await deps.repo.notifyRoomMessage(sealed ? { ...saved, hints } : saved);
+  if (!saved.deleted) {
+    const payload = sealed ? { ...saved, hints } : saved;
+    await deps.repo.notifyRoomMessage(payload);
+    void sendMessagePush(deps, payload);
+  }
   return { ok: true as const, message: messageView(saved) };
 }

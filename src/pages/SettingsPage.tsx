@@ -17,9 +17,9 @@ const imageChoices: Array<{ value: ImageQuality; label: string; hint: string }> 
 ];
 
 const videoChoices: Array<{ value: VideoQuality; label: string; hint: string }> = [
-  { value: '480', label: '480p', hint: 'فيديو خفيف للإرسال.' },
-  { value: '720', label: '720p', hint: 'وضوح أعلى وحجم متوسط.' },
-  { value: 'original', label: 'أصلي', hint: 'الجودة الكاملة، أبطأ في الإرسال.' },
+  { value: '480', label: '480p', hint: 'يُرسل الملف كما هو، حتى 8 MB.' },
+  { value: '720', label: '720p', hint: 'يُرسل الملف كما هو، حتى 8 MB.' },
+  { value: 'original', label: 'أصلي', hint: 'يُرسل الملف كما هو، حتى 8 MB.' },
 ];
 
 type SettingsPageProps = { embedded?: boolean };
@@ -197,7 +197,7 @@ export default function SettingsPage({ embedded = false }: SettingsPageProps) {
           <article className="setting-card">
             <div>
               <strong>أظهر عندما أكتب</strong>
-              <p>لتمكين/تعطيل إعداد «العرض أثناء الكتابة»، انتقل إلى إعدادات التطبيق ← الخصوصية ← تمكين/تعطيل إعداد «العرض أثناء الكتابة».</p>
+              <p>يرى أعضاء المحادثة أنك تكتب. أوقفه ليبقى ذلك مخفيًا.</p>
             </div>
             <IonToggle
               checked={showTyping}

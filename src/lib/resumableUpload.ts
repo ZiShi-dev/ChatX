@@ -6,7 +6,7 @@ function readProgress(payload: unknown, size: number): { offset: number; complet
   if (!row || typeof row.offset !== 'number' || !Number.isInteger(row.offset) || row.offset < 0 || row.offset > size || typeof row.completed !== 'boolean') throw new AdminApiError('invalid_upload', 400);
   return { offset: row.offset, completed: row.completed };
 }
-export async function uploadResumable(input: { roomId: string; id: string; kind: 'file' | 'image'; name: string; bytes: Uint8Array; replyToId?: string; sealed?: string }, progress: (percent: number) => void, yieldToTexts: () => Promise<void> = async () => undefined, cancelled: () => boolean = () => false) {
+export async function uploadResumable(input: { roomId: string; id: string; kind: 'file' | 'image' | 'video'; name: string; bytes: Uint8Array; replyToId?: string; sealed?: string }, progress: (percent: number) => void, yieldToTexts: () => Promise<void> = async () => undefined, cancelled: () => boolean = () => false) {
   const sha = await crypto.subtle.digest('SHA-256', new Uint8Array(input.bytes).buffer);
   const sha256 = [...new Uint8Array(sha)].map((value) => value.toString(16).padStart(2, '0')).join('');
   const path = `/api/rooms/${input.roomId}/uploads/${input.id}`;

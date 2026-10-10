@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto';
 import type { Deps } from './authService.ts';
 import { hashSession, readCookie } from './session.ts';
 import { cleanFileName, messageView, postRoomMessage } from './home.ts';
-import { cleanSealed, FILE_BYTES_MAX, IMAGE_BYTES_MAX, SEALED_FILE_NAME, SEALED_OVERHEAD } from './sealed.ts';
+import { cleanSealed, FILE_BYTES_MAX, IMAGE_BYTES_MAX, isVideoFileName, SEALED_FILE_NAME, SEALED_OVERHEAD, SEALED_VIDEO_NAME, VIDEO_BYTES_MAX } from './sealed.ts';
 
 const ID = /^[0-9a-f-]{36}$/i;
 const fail = (error: string, status: number) => ({ error, status });
@@ -24,9 +24,10 @@ export async function handleTransfer(deps: Deps, request: Request, roomId: strin
     const kind = body.kind; const size = body.size; const sha256 = body.sha256;
     const sealed = body.sealed == null ? null : cleanSealed(body.sealed);
     if (body.sealed != null && (!sealed || sealed.length > 1000)) return fail('invalid_upload', 400);
-    const name = kind === 'image' ? 'photo.jpg' : sealed ? SEALED_FILE_NAME : cleanFileName(body.name);
-    const max = (kind === 'image' ? IMAGE_BYTES_MAX : FILE_BYTES_MAX) + (sealed ? SEALED_OVERHEAD : 0);
-    if ((kind !== 'image' && kind !== 'file') || !name || typeof size !== 'number' || !Number.isInteger(size) || size < 1 || size > max
+    const name = kind === 'image' ? 'photo.jpg' : kind === 'video' ? (sealed ? SEALED_VIDEO_NAME : cleanFileName(body.name)) : sealed ? SEALED_FILE_NAME : cleanFileName(body.name);
+    const plainMax = kind === 'image' ? IMAGE_BYTES_MAX : kind === 'video' && sealed ? VIDEO_BYTES_MAX : FILE_BYTES_MAX;
+    const max = plainMax + (sealed ? SEALED_OVERHEAD : 0);
+    if ((kind !== 'image' && kind !== 'file' && kind !== 'video') || (kind === 'video' && !sealed && !isVideoFileName(name ?? '')) || !name || typeof size !== 'number' || !Number.isInteger(size) || size < 1 || size > max
       || typeof sha256 !== 'string' || !/^[a-f0-9]{64}$/.test(sha256)) return fail('invalid_upload', 400);
     const replyToId = typeof body.replyToId === 'string' && ID.test(body.replyToId) && body.replyToId !== id ? body.replyToId : null;
     const upload = await deps.repo.beginUpload({ id, roomId, ownerId: user.id, kind, name, size, sha256, replyToId, bytes: new Uint8Array(), expiresAt: new Date(at.getTime() + 86_400_000), sealed }, at);
@@ -50,7 +51,7 @@ export async function handleTransfer(deps: Deps, request: Request, roomId: strin
         sealedMedia: { kind: upload.kind, bytes: upload.bytes } })
       : await postRoomMessage(deps, { token, roomId, id, text: undefined, replyToId: upload.replyToId,
         image: upload.kind === 'image' ? `data:image/jpeg;base64,${data}` : undefined,
-        file: upload.kind === 'file' ? { name: upload.name, data } : undefined });
+        file: upload.kind === 'file' || upload.kind === 'video' ? { name: upload.name, data } : undefined });
     if (!result.ok) return fail(result.error, result.error === 'not_found' ? 404 : 400);
     await deps.repo.deleteUpload(roomId, user.id, id);
     return { offset: upload.size, completed: true, message: result.message, status: 200 };

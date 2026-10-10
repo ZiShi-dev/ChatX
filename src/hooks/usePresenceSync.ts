@@ -28,7 +28,7 @@ export function usePresenceSync() {
         });
     };
 
-    const stop = startPolling(beat);
+    const stop = startPolling(beat, { economy: true });
     const onHide = () => {
       if (document.visibilityState === 'hidden' && navigator.onLine !== false) {
         void adminFetch('/api/presence', { method: 'POST', body: { status: 'away' } }).catch(() => undefined);

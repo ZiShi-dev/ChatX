@@ -8,9 +8,13 @@ import { useSettingsStore } from '../../stores/settingsStore';
 import { DEFAULT_NOTIFY_TYPES } from '../../lib/inbox';
 afterEach(() => { cleanup(); useLiveInbox.getState().clear(); useMuteStore.setState({ mutes: [] }); useSettingsStore.setState({ notifyTypes: { ...DEFAULT_NOTIFY_TYPES } }); vi.useRealTimers(); });
 const notice = { key: 'one', conversationId: 'group', messageId: 'one', kind: 'message' as const, title: 'Group', body: 'New message' };
-it('shows a banner inside the current chat and dismissing does not change the route', () => {
+it('hides the banner of the chat already open and shows one from another chat', () => {
   useLiveInbox.getState().push(notice);
-  render(<MemoryRouter initialEntries={['/chat/group']}><LiveInboxBanner /></MemoryRouter>);
+  const here = render(<MemoryRouter initialEntries={['/chat/group']}><LiveInboxBanner /></MemoryRouter>);
+  expect(screen.queryByRole('status')).toBeNull();
+  here.unmount();
+  useLiveInbox.getState().push(notice);
+  render(<MemoryRouter initialEntries={['/home']}><LiveInboxBanner /></MemoryRouter>);
   expect(screen.getByRole('status')).toHaveTextContent('New message');
   fireEvent.click(screen.getByRole('button', { name: 'إخفاء الإشعار' }));
   expect(screen.queryByRole('status')).toBeNull();

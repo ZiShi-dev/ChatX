@@ -1,4 +1,4 @@
-.live-inbox-banner { position: fixed; z-index: 10000; top: calc(env(safe-area-inset-top, 0px) + 8px); inset-inline: 12px; display: flex; align-items: center; gap: 4px; max-width: 440px; margin-inline: auto; border: 1px solid var(--chatx-frame); border-radius: 16px; background: var(--chatx-raised); color: var(--chatx-text); box-shadow: 0 4px 18px #0003; animation: live-inbox-enter 120ms ease-out; }
+.live-inbox-banner { position: fixed; z-index: 10000; top: calc(max(var(--chatx-status-top, 0px), var(--ion-safe-area-top, env(safe-area-inset-top, 0px))) + 16px); inset-inline: 12px; display: flex; align-items: center; gap: 4px; max-width: 440px; margin-inline: auto; border: 1px solid var(--chatx-frame); border-radius: 16px; background: var(--chatx-raised); color: var(--chatx-text); box-shadow: 0 4px 18px #0003; animation: live-inbox-enter 120ms ease-out; }
 .live-inbox-banner button { border: 0; background: transparent; color: inherit; font: inherit; }
 .live-inbox-open { flex: 1; min-width: 0; padding: 12px; text-align: start; }
 .live-inbox-open > span { display: grid; gap: 4px; }

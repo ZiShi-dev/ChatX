@@ -172,6 +172,24 @@ describe('home payload', () => {
     expect(parsed?.[0]?.media?.state).toBe('remote');
   });
 
+  it('reads a video within the size limit and refuses a larger one', () => {
+    const row = {
+      id: '44444444-4444-4444-8444-444444444444',
+      conversationId: room,
+      senderId: user,
+      text: 'e2e1.placeholder',
+      type: 'video',
+      fileName: 'video.bin',
+      fileSize: 8 * 1024 * 1024,
+      createdAt: '2026-10-08T12:00:00.000Z',
+      deleted: false,
+    };
+    const parsed = readRoomMessages({ messages: [row] }, room);
+    expect(parsed?.[0]?.type).toBe('video');
+    expect(parsed?.[0]?.media?.fileSize).toBe(8 * 1024 * 1024);
+    expect(readRoomMessages({ messages: [{ ...row, fileSize: 8 * 1024 * 1024 + 29 }] }, room)).toBeNull();
+  });
+
   it('reads an image as the latest home message', () => {
     const home = readHomePayload({
       conversations: [{

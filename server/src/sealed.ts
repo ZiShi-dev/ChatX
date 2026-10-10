@@ -5,7 +5,16 @@ export const SEALED_TEXT_MAX = 16_400;
 export const SEALED_OVERHEAD = 28;
 export const IMAGE_BYTES_MAX = 60_000;
 export const FILE_BYTES_MAX = 262_144;
+/** Short clips only: a few users share one database, so a video cannot grow without a bound. */
+export const VIDEO_BYTES_MAX = 8 * 1024 * 1024;
 export const SEALED_FILE_NAME = 'file.bin';
+export const SEALED_VIDEO_NAME = 'video.bin';
+
+const VIDEO_EXT = /\.(mp4|webm|mov|mkv|3gp)$/i;
+
+export function isVideoFileName(name: string) {
+  return name === SEALED_VIDEO_NAME || VIDEO_EXT.test(name);
+}
 
 const SEALED = /^e2e1\.[0-9a-f-]{36}\.[A-Za-z0-9_-]{16}\.[A-Za-z0-9_-]{22,16340}$/;
 const ID = /^[0-9a-f-]{36}$/i;

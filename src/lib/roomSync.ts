@@ -2,11 +2,15 @@ import { readRoomMessages, readRoomReaders } from './home';
 import type { Message } from '../types/message';
 
 export function readRoomSync(payload: unknown, roomId: string) {
-  const row = payload as { historyHasMore?: unknown; cursor?: unknown; reset?: unknown; hasMore?: unknown; removedIds?: unknown } | null;
+  const row = payload as { historyHasMore?: unknown; cursor?: unknown; reset?: unknown; hasMore?: unknown; removedIds?: unknown; typing?: unknown } | null;
   if (!row || typeof row.cursor !== 'string' || !/^[0-9a-f-]{36}\.\d+$/.test(row.cursor) || typeof row.reset !== 'boolean' || typeof row.hasMore !== 'boolean'
     || !Array.isArray(row.removedIds) || row.removedIds.some((id) => typeof id !== 'string' || !/^[0-9a-f-]{36}$/i.test(id))) return null;
   const messages = readRoomMessages(payload, roomId); if (!messages) return null;
-  return { historyHasMore: row.historyHasMore === true, cursor: row.cursor, reset: row.reset, hasMore: row.hasMore, removedIds: row.removedIds as string[], messages, readers: readRoomReaders(payload) };
+  const id = /^[0-9a-f-]{36}$/i;
+  const typing = Array.isArray(row.typing)
+    ? [...new Set(row.typing.filter((item): item is string => typeof item === 'string' && id.test(item)))]
+    : undefined;
+  return { historyHasMore: row.historyHasMore === true, cursor: row.cursor, reset: row.reset, hasMore: row.hasMore, removedIds: row.removedIds as string[], messages, readers: readRoomReaders(payload), typing };
 }
 export function mergeRoomDelta(current: Message[], incoming: Message[], removed: string[], roomId: string) {
   const previous = new Map(current.filter((message) => message.conversationId === roomId).map((message) => [message.id, message]));

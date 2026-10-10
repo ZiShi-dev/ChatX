@@ -8,7 +8,6 @@ import Avatar from '../components/common/Avatar';
 import EmptyState from '../components/common/EmptyState';
 import NetworkStatusBanner from '../components/common/NetworkBanner';
 import PageNav from '../components/common/PageNav';
-import UserProfileModal from '../components/users/UserProfileModal';
 import { membersOf } from '../lib/conversation';
 import { connectionLabel } from '../lib/presence';
 import { canEditRoom, canTakeGroupTurn, roleLabel } from '../lib/roles';
@@ -22,7 +21,6 @@ import { useChatStore } from '../stores/chatStore';
 import { useSettingsStore } from '../stores/settingsStore';
 import RoomNotifyPanel from '../components/conversations/RoomNotifyPanel';
 import { useUserStore } from '../stores/userStore';
-import type { User } from '../types/user';
 
 type GroupTab = 'members' | 'notify' | 'photos' | 'videos' | 'links';
 
@@ -46,7 +44,6 @@ export default function GroupProfilePage() {
   const allMessages = useChatStore((state) => state.messages);
   const photoRef = useRef<HTMLInputElement>(null);
   const bannerRef = useRef<HTMLInputElement>(null);
-  const [selected, setSelected] = useState<User>();
   const [editing, setEditing] = useState(false);
   const [draftName, setDraftName] = useState('');
   const [draftBio, setDraftBio] = useState('');
@@ -71,7 +68,7 @@ export default function GroupProfilePage() {
       setTurnRefresh('loading');
       const result = await loadTurn();
       if (alive) { setNow(serverNow()); setTurnRefresh(result); }
-    }, { active: () => location.pathname.replace(/\/$/, '') === `/group/${id}` });
+    }, { active: () => location.pathname.replace(/\/$/, '') === `/group/${id}`, economy: true });
     return () => { alive = false; stop(); };
   }, [id, location.pathname]);
   useEffect(() => {
@@ -93,7 +90,6 @@ export default function GroupProfilePage() {
   );
 
   const messageUser = (userId: string) => {
-    setSelected(undefined);
     void openPrivate(userId).then((conversationId) => {
       if (conversationId) navigate(`/chat/${conversationId}`);
     });
@@ -148,10 +144,17 @@ export default function GroupProfilePage() {
               <div className={conversation.bannerUrl ? 'profile-banner is-photo' : 'profile-banner'} style={{ '--banner': accent } as CSSProperties}>
                 {conversation.bannerUrl ? <img src={conversation.bannerUrl} alt="" /> : null}
                 {canEdit && (
-                  <button type="button" className="banner-pick" aria-label="تغيير الغلاف" onClick={() => bannerRef.current?.click()}>
-                    <IonIcon icon={cameraOutline} />
-                    <span>الغلاف</span>
-                  </button>
+                  <div className="banner-actions">
+                    <button type="button" className="banner-pick" aria-label="تغيير الغلاف" onClick={() => bannerRef.current?.click()}>
+                      <IonIcon icon={cameraOutline} />
+                      <span>الغلاف</span>
+                    </button>
+                    {conversation.bannerUrl && (
+                      <button type="button" className="banner-pick" aria-label="إزالة الغلاف" onClick={() => void updateGroup(conversation.id, { bannerUrl: null })}>
+                        إزالة
+                      </button>
+                    )}
+                  </div>
                 )}
                 <input
                   ref={bannerRef}
@@ -249,34 +252,39 @@ export default function GroupProfilePage() {
             )}
             {tab === 'members' && (
               <section className="member-section" role="tabpanel">
-                {members.map((user) => (
-                  <button key={user.id} type="button" className="group-profile-card" onClick={() => setSelected(user)}>
-                    <Avatar name={user.displayName} color={user.color} size={48} src={user.avatarUrl} />
-                    <span className="group-profile-copy">
-                      <strong>
-                        {user.displayName}
-                        {user.id === currentUser.id && <span className="role-badge">أنت</span>}
-                        {roleLabel(user.role) && <span className="role-badge">{roleLabel(user.role)}</span>}
-                        {user.role === 'member' && user.id === conversation.adminId && <span className="role-badge">مشرف</span>}
-                      </strong>
-                      <small dir="auto">@{user.username}</small>
-                      {user.bio ? <p>{user.bio}</p> : null}
-                    </span>
-                    <span className={`status-dot ${user.status}`}>{connectionLabel(user, { self: user.id === currentUser.id })}</span>
-                  </button>
-                ))}
+                {members.map((user) => {
+                  const self = user.id === currentUser.id;
+                  const presence = self ? currentUser : user;
+                  return (
+                    <button
+                      key={user.id}
+                      type="button"
+                      className="group-profile-card"
+                      aria-label={self ? 'رسائلك' : `محادثة مع ${user.displayName}`}
+                      onClick={() => messageUser(user.id)}
+                    >
+                      <Avatar name={user.displayName} color={user.color} size={48} src={user.avatarUrl} />
+                      <span className="group-profile-copy">
+                        <strong>
+                          <span className="group-profile-name" dir="auto">{user.displayName}</span>
+                          {self && <span className="role-badge">أنت</span>}
+                          {roleLabel(user.role) && <span className="role-badge">{roleLabel(user.role)}</span>}
+                          {user.role === 'member' && user.id === conversation.adminId && <span className="role-badge">مشرف</span>}
+                        </strong>
+                        <span className="group-profile-meta">
+                          <small dir="auto">@{user.username}</small>
+                          <span className={`status-dot ${presence.status}`}>{connectionLabel(presence, { self })}</span>
+                        </span>
+                        {user.bio ? <p>{user.bio}</p> : null}
+                      </span>
+                    </button>
+                  );
+                })}
               </section>
             )}
           </div>
         )}
       </IonContent>
-      <UserProfileModal
-        user={selected}
-        isSelf={selected?.id === currentUser.id}
-        room={conversation && isRoom ? { name: conversation.name ?? 'مجموعة', adminId: conversation.adminId } : undefined}
-        onClose={() => setSelected(undefined)}
-        onMessage={messageUser}
-      />
       {editing &&
         createPortal(
           <div className="app-scrim sheet" onClick={() => setEditing(false)}>

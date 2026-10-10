@@ -1,8 +1,10 @@
 package app.chatx.mobile;
 
 import android.app.Notification;
+import android.graphics.Bitmap;
 import android.app.NotificationChannel;
 import android.app.NotificationManager;
+import androidx.core.app.NotificationManagerCompat;
 import android.app.PendingIntent;
 import android.content.Context;
 import android.content.Intent;
@@ -16,12 +18,18 @@ import java.net.URL;
 import java.nio.charset.StandardCharsets;
 import java.util.HashSet;
 import java.util.Set;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+import javax.crypto.Cipher;
+import javax.crypto.spec.GCMParameterSpec;
+import javax.crypto.spec.SecretKeySpec;
 import org.json.JSONArray;
 import org.json.JSONObject;
 
 final class InboxPoll {
     private static final String CHANNEL = "chatx-messages";
     private static final int MAX_ALERTS = 3;
+    private static final Pattern SEALED = Pattern.compile("^e2e1\\.([0-9a-f-]{36})\\.([A-Za-z0-9_-]{16})\\.([A-Za-z0-9_-]{22,16340})$");
     private static String validatedScope = "";
     private static String validatedEtag = "";
 
@@ -37,20 +45,23 @@ final class InboxPoll {
         SharedPreferences prefs = InboxWatch.prefs(context);
         String origin = prefs.getString("origin", "");
         if (origin == null || !origin.startsWith("https://")) return;
-        String cookie;
-        try {
-            cookie = CookieManager.getInstance().getCookie(origin);
-        } catch (RuntimeException error) {
-            return;
+        String cookie = prefs.getString("cookie", "");
+        if (cookie == null || !cookie.contains("chatx_session=")) {
+            try {
+                cookie = CookieManager.getInstance().getCookie(origin);
+            } catch (RuntimeException error) {
+                return;
+            }
         }
         if (cookie == null || !cookie.contains("chatx_session=")) return;
+        if (!NotificationManagerCompat.from(context).areNotificationsEnabled()) return;
+        if (!prefs.getBoolean("primed", false)) return;
         String body = request(origin + "/api/notifications", cookie, prefs, lease);
         if (!InboxLifecycle.current(lease)) { validatedEtag = ""; return; }
         if (body == null) return;
         try {
             JSONArray rows = new JSONObject(body).optJSONArray("notifications");
             if (rows == null) return;
-            boolean primed = prefs.getBoolean("primed", false);
             Set<String> already = InboxWatch.seen(prefs);
             Set<String> seen = new HashSet<>(already);
             int shown = 0;
@@ -61,7 +72,7 @@ final class InboxPoll {
                 String conversationId = row.optString("conversationId", "");
                 String kind = row.optString("kind", "");
                 if (id.isEmpty() || conversationId.isEmpty()) continue;
-                if (!primed || already.contains(id) || InboxWatch.suppressed(prefs, conversationId, kind)) {
+                if (already.contains(id) || InboxWatch.suppressed(prefs, conversationId, kind)) {
                     seen.add(id);
                     continue;
                 }
@@ -100,14 +111,21 @@ final class InboxPoll {
             open,
             PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE
         );
-        String title = row.optString("senderName", "");
-        if (title.isEmpty()) title = "ChatX";
+        String group = row.optString("conversationName", "").trim();
+        String sender = row.optString("senderName", "").trim();
+        String content = content(context, row);
+        String title = !group.isEmpty() ? group : (!sender.isEmpty() ? sender : "ChatX");
+        String body = !group.isEmpty() && !sender.isEmpty() ? sender + ": " + content : content;
         Notification.Builder builder = Build.VERSION.SDK_INT >= Build.VERSION_CODES.O
             ? new Notification.Builder(context, CHANNEL)
             : new Notification.Builder(context);
         builder.setSmallIcon(R.mipmap.ic_launcher)
             .setContentTitle(title)
-            .setContentText(row.optString("preview", ""))
+            .setContentText(body);
+        Bitmap photo = InboxWatch.avatar(context, conversationId);
+        if (photo != null) builder.setLargeIcon(photo);
+        builder
+            .setStyle(new Notification.BigTextStyle().bigText(body))
             .setAutoCancel(true)
             .setContentIntent(pending)
             .setVisibility(Notification.VISIBILITY_PUBLIC);
@@ -120,6 +138,31 @@ final class InboxPoll {
             }
         }
         return true;
+    }
+
+    private static String content(Context context, JSONObject row) {
+        String opened = openSealed(context, row.optString("conversationId", ""), row.optString("id", ""), row.optString("sealed", ""));
+        String text = opened == null || opened.isEmpty() ? row.optString("preview", "") : opened;
+        text = text.replaceAll("\\s+", " ").trim();
+        if (text.length() <= 80) return text;
+        return text.substring(0, 80) + "…";
+    }
+
+    private static String openSealed(Context context, String roomId, String messageId, String envelope) {
+        Matcher match = SEALED.matcher(envelope);
+        if (!match.matches()) return null;
+        byte[] key = InboxWatch.roomKey(context, roomId, match.group(1));
+        byte[] iv = InboxWatch.base64Url(match.group(2));
+        byte[] data = InboxWatch.base64Url(match.group(3));
+        if (key == null || iv == null || iv.length != 12 || data == null) return null;
+        try {
+            Cipher cipher = Cipher.getInstance("AES/GCM/NoPadding");
+            cipher.init(Cipher.DECRYPT_MODE, new SecretKeySpec(key, "AES"), new GCMParameterSpec(128, iv));
+            cipher.updateAAD((roomId + "|" + messageId).getBytes(StandardCharsets.UTF_8));
+            return new String(cipher.doFinal(data), StandardCharsets.UTF_8);
+        } catch (Exception error) {
+            return null;
+        }
     }
 
     private static void recovered(SharedPreferences prefs, long lease) {

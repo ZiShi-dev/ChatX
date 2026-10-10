@@ -5,13 +5,29 @@ import type { InboxKind, InboxNotice, RoomMessage } from './types.ts';
 
 export const INBOX_PAGE_SIZE = 30;
 
-const HANDLE = /(?:^|\s)@([\p{L}\p{N}_]+)/gu;
 const ID = /^[0-9a-f-]{36}$/i;
 
+function mentionsHandle(text: string, username: string) {
+  const name = username.trim().toLowerCase();
+  if (!name) return false;
+  const hay = text.toLowerCase();
+  const needle = `@${name}`;
+  let from = 0;
+  while (from < hay.length) {
+    const at = hay.indexOf(needle, from);
+    if (at < 0) return false;
+    const before = at === 0 || /\s/u.test(text[at - 1] ?? '');
+    const after = at + needle.length;
+    const next = text[after] ?? '';
+    if (before && (after >= text.length || !/^[\p{L}\p{N}_]/u.test(next))) return true;
+    from = at + 1;
+  }
+  return false;
+}
+
 export function messageKind(text: string, username: string, repliedToMe: boolean): InboxKind {
-  const handles = new Set([...text.matchAll(HANDLE)].map((match) => match[1].toLowerCase()));
-  if (username && handles.has(username.toLowerCase())) return 'mention';
-  if (handles.has('everyone')) return 'everyone';
+  if (username && mentionsHandle(text, username)) return 'mention';
+  if (mentionsHandle(text, 'everyone')) return 'everyone';
   if (repliedToMe) return 'reply';
   if (text.startsWith('تنبيه')) return 'signal';
   return 'message';

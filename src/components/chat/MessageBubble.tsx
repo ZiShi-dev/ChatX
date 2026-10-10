@@ -14,7 +14,7 @@ import { previewImage, textParts, siteHost } from '../../lib/link';
 import { isSafeExternalUrl } from '../../lib/url';
 import { useDataSaver } from '../../hooks/useDataSaver';
 import { formatBytes, formatDuration, messagePreview } from '../../lib/media';
-import { mentionTone } from '../../lib/mention';
+import { mentionPieces, mentionTone } from '../../lib/mention';
 import EmojiPanel from './EmojiPanel';
 import { groupReactions, QUICK_REACTIONS } from '../../lib/reactions';
 import type { ReceiptRow } from '../../lib/readReceipts';
@@ -37,6 +37,7 @@ type MessageBubbleProps = {
   group?: boolean;
   direct?: boolean;
   directSeen?: boolean;
+  groupSeen?: boolean;
   seenHere?: User[];
   receiptRows?: ReceiptRow[];
   author?: User;
@@ -118,6 +119,9 @@ function MediaBlock({ message }: { message: Message }) {
   const poster = media.localPreviewUrl;
   const playable = ready && message.type === 'video' && poster && !poster.endsWith('.svg') && !poster.startsWith('data:image/');
   const ratio = media.width && media.height ? `${media.width} / ${media.height}` : undefined;
+  const layout = () => {
+    window.dispatchEvent(new CustomEvent('chatx-thread-layout', { detail: { conversationId: message.conversationId } }));
+  };
 
   return (
     <>
@@ -128,8 +132,8 @@ function MediaBlock({ message }: { message: Message }) {
           aria-label={ready ? (message.type === 'video' ? 'تشغيل' : 'عرض') : 'تحميل'}
           onClick={() => (ready ? setOpen(true) : downloadMedia(message.id))}
         >
-          {playable ? <video className="media-preview" src={poster} muted playsInline preload="metadata" style={ratio ? { aspectRatio: ratio } : undefined} /> : poster ? (
-            <img className={ready ? 'media-preview' : 'media-preview is-held'} src={poster} alt="" decoding="async" loading="lazy" style={ratio ? { aspectRatio: ratio } : undefined} />
+          {playable ? <video className="media-preview" src={poster} muted playsInline preload="metadata" onLoadedData={layout} style={ratio ? { aspectRatio: ratio } : undefined} /> : poster ? (
+            <img className={ready ? 'media-preview' : 'media-preview is-held'} src={poster} alt="" decoding="async" loading="lazy" onLoad={layout} style={ratio ? { aspectRatio: ratio } : undefined} />
           ) : (
             <span className="media-placeholder" style={ratio ? { aspectRatio: ratio } : undefined} />
           )}
@@ -181,9 +185,10 @@ function MessageText({ text, username, onOpenProfile }: { text: string; username
             </span>
           );
         }
-        return part.split(/(@[\p{L}\p{N}_]+)/gu).filter(Boolean).map((piece, pieceIndex) => {
-          if (!piece.startsWith('@')) return <span key={`${index}-${pieceIndex}`}><EmojiText text={piece} /></span>;
-          const handle = piece.slice(1).toLowerCase();
+        const names = [...users.map((user) => user.username), 'everyone'];
+        return mentionPieces(part, names).map((piece, pieceIndex) => {
+          if (!piece.handle) return <span key={`${index}-${pieceIndex}`}><EmojiText text={piece.text} /></span>;
+          const handle = piece.handle;
           const person = users.find((user) => user.username.toLowerCase() === handle);
           const tone = handle === 'everyone' ? 'is-everyone' : handle === username.toLowerCase() ? 'is-direct' : '';
           if (person && onOpenProfile) {
@@ -198,11 +203,11 @@ function MessageText({ text, username, onOpenProfile }: { text: string; username
                   onOpenProfile(person);
                 }}
               >
-                {piece}
+                {piece.text}
               </button>
             );
           }
-          return <span key={`${index}-${pieceIndex}`} className={tone ? `bubble-mention ${tone}` : 'bubble-mention'} dir="auto">{piece}</span>;
+          return <span key={`${index}-${pieceIndex}`} className={tone ? `bubble-mention ${tone}` : 'bubble-mention'} dir="auto">{piece.text}</span>;
         });
       })}
     </p>
@@ -349,7 +354,7 @@ function PersonName({ user, onOpen }: { user: User; onOpen?: (user: User) => voi
   );
 }
 
-function MessageBubble({ message, mine, showAuthor, group = false, direct = false, directSeen = false, seenHere = NO_SEEN_USERS, receiptRows = NO_RECEIPTS, author, spotlight = false, onOpenProfile }: MessageBubbleProps) {
+function MessageBubble({ message, mine, showAuthor, group = false, direct = false, directSeen = false, groupSeen = false, seenHere = NO_SEEN_USERS, receiptRows = NO_RECEIPTS, author, spotlight = false, onOpenProfile }: MessageBubbleProps) {
   const currentUserId = useAuthStore((state) => state.currentUser.id);
   const username = useAuthStore((state) => state.currentUser.username);
   const replyToMe = useChatStore((state) => {
@@ -378,6 +383,7 @@ function MessageBubble({ message, mine, showAuthor, group = false, direct = fals
   const holdTimer = useRef<number | undefined>(undefined);
   const lastTap = useRef(0);
   const suppressClick = useRef(false);
+  const bornSending = useRef(mine && (message.status === 'pending' || message.status === 'sending'));
   const stackRef = useRef<HTMLDivElement>(null);
   const shiftRef = useRef<HTMLDivElement>(null);
   const swipeIconRef = useRef<HTMLSpanElement>(null);
@@ -599,7 +605,7 @@ function MessageBubble({ message, mine, showAuthor, group = false, direct = fals
     <div
       ref={stackRef}
       id={`msg-${message.id}`}
-      className={`bubble-stack ${mine ? 'mine' : 'theirs'}${menuOpen ? ' is-picked' : ''}${direct && canSeeReceipts ? ' is-receipt' : ''}${spotlight ? ' is-target' : ''}${reactionTotal > 0 ? ' has-reactions' : ''}`}
+      className={`bubble-stack ${mine ? 'mine' : 'theirs'}${menuOpen ? ' is-picked' : ''}${direct && canSeeReceipts ? ' is-receipt' : ''}${spotlight ? ' is-target' : ''}${reactionTotal > 0 ? ' has-reactions' : ''}${bornSending.current ? ' is-new' : ''}`}
       onContextMenu={(event) => {
         if (!canOpenMenu) return;
         event.preventDefault();
@@ -742,7 +748,7 @@ function MessageBubble({ message, mine, showAuthor, group = false, direct = fals
           )}
           {message.editedAt && <span className="edited-mark">تم التعديل</span>}
           {formatMessageTime(message.createdAt)}
-          {mine && !failed && <StatusMark message={message} seen={direct && canSeeReceipts && directSeen} />}
+          {mine && !failed && <StatusMark message={message} seen={canSeeReceipts && ((direct && directSeen) || (group && groupSeen))} />}
           {mine && mediaSending && (
             <button type="button" className="media-cancel" onClick={() => cancelMessage(message.id)}>
               إلغاء

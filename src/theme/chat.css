@@ -165,15 +165,15 @@ ion-header:has(.home-toolbar) {
   padding-top: 4px;
 }
 
-.home-scroll {
-  --padding-bottom: 96px;
+ion-page > ion-content.home-scroll {
+  --padding-bottom: calc(96px + var(--chatx-nav-bottom, 0px));
 }
 
 .user-dock {
   position: absolute;
   z-index: 6;
   inset-inline: 16px;
-  bottom: 10px;
+  bottom: calc(10px + var(--chatx-nav-bottom, 0px));
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -292,9 +292,9 @@ ion-header:has(.home-toolbar) {
   line-height: 16px;
 }
 
-.inbox-page {
+ion-page > ion-content.inbox-page {
   --background: var(--chatx-bg);
-  --padding-bottom: calc(36px + var(--ion-safe-area-bottom, env(safe-area-inset-bottom, 0px)));
+  --padding-bottom: calc(36px + var(--chatx-nav-bottom, 0px));
 }
 
 .inbox-tools {
@@ -1525,6 +1525,10 @@ button.chat-nav-main {
   text-align: center;
 }
 
+ion-content.chat-scroll::part(scroll) {
+  overflow-anchor: none;
+}
+
 .chat-thread {
   display: flex;
   flex-direction: column;
@@ -1532,7 +1536,12 @@ button.chat-nav-main {
   gap: 8px;
   min-height: 100%;
   padding: 14px 12px 8px;
+  overflow-anchor: none;
   background: var(--chatx-bg);
+}
+
+.chat-thread * {
+  overflow-anchor: none;
 }
 
 .bubble-stack {
@@ -1542,6 +1551,7 @@ button.chat-nav-main {
   gap: 4px;
   width: fit-content;
   max-width: min(82%, 300px);
+  overflow-anchor: none;
   touch-action: pan-y;
 }
 
@@ -1558,6 +1568,17 @@ button.chat-nav-main {
 
 .bubble-stack.mine .swipe-shift {
   align-items: flex-end;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .bubble-stack.mine.is-new .swipe-shift {
+    animation: send-bubble 200ms ease-out;
+  }
+}
+
+@keyframes send-bubble {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: none; }
 }
 
 .swipe-reply {
@@ -2319,7 +2340,7 @@ button.chat-avatar {
 
 .composer-input {
   flex: 1;
-  align-self: center;
+  align-self: flex-end;
   min-width: 0;
   min-height: 44px;
   max-height: 120px;
@@ -3067,8 +3088,8 @@ ion-header:has(.message-search) {
   --background: var(--chatx-bg);
 }
 
-.group-profile-scroll {
-  --padding-bottom: 32px;
+ion-page > ion-content.group-profile-scroll {
+  --padding-bottom: calc(32px + var(--chatx-nav-bottom, 0px));
 }
 
 .profile-frame {
@@ -3081,17 +3102,17 @@ ion-header:has(.message-search) {
   display: flex;
   flex-direction: column;
   align-items: center;
-  padding: 128px 20px 4px;
+  padding: 0 20px 4px;
   text-align: center;
 }
 
 .profile-banner {
-  position: absolute;
+  position: relative;
   z-index: 0;
-  top: 0;
-  inset-inline: 0;
-  height: 188px;
+  align-self: stretch;
+  height: 180px;
   overflow: hidden;
+  border-radius: 18px;
   background:
     radial-gradient(90% 80% at 100% 0%, var(--banner, var(--chatx-accent)) 0%, transparent 58%),
     radial-gradient(70% 80% at 0% 80%, var(--chatx-accent) 0%, transparent 55%),
@@ -3099,6 +3120,7 @@ ion-header:has(.message-search) {
 }
 
 .profile-banner img {
+  display: block;
   width: 100%;
   height: 100%;
   object-fit: cover;
@@ -3108,7 +3130,7 @@ ion-header:has(.message-search) {
   content: '';
   position: absolute;
   inset: 0;
-  background: linear-gradient(180deg, transparent 40%, var(--chatx-bg) 100%);
+  background: linear-gradient(180deg, transparent 68%, var(--chatx-bg) 100%);
   pointer-events: none;
 }
 
@@ -3172,6 +3194,11 @@ ion-header:has(.message-search) {
 .profile-hero .group-edit {
   position: relative;
   z-index: 1;
+}
+
+.profile-hero .profile-photo,
+.profile-hero .group-hero-photo {
+  margin-top: -48px;
 }
 
 .profile-hero .avatar {
@@ -3294,7 +3321,7 @@ ion-header:has(.message-search) {
 }
 
 .member-sheet .user-card-banner {
-  height: 120px;
+  height: 148px;
 }
 
 .member-chips {
@@ -3603,8 +3630,12 @@ ion-header:has(.message-search) {
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
-.account-scroll {
-  --padding-bottom: 104px;
+ion-page > ion-content.account-scroll {
+  --padding-bottom: 0px;
+}
+
+.account-end {
+  height: calc(120px + var(--chatx-nav-bottom, 0px));
 }
 
 .direct-media-hero {
@@ -3655,7 +3686,7 @@ ion-header:has(.message-search) {
   position: absolute;
   z-index: 6;
   inset-inline: 16px;
-  bottom: 12px;
+  bottom: calc(12px + var(--chatx-nav-bottom, 0px));
   gap: 4px;
   margin: 0;
   padding: 4px;
@@ -3833,25 +3864,61 @@ ion-header:has(.message-search) {
   display: flex;
   flex: 1;
   flex-direction: column;
+  align-items: flex-start;
   gap: 2px;
   min-width: 0;
+  text-align: start;
 }
 
 .group-profile-copy strong {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
   font-size: 15px;
   font-weight: 700;
 }
 
+.group-profile-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.group-profile-copy .role-badge {
+  flex: none;
+  margin: 0;
+}
+
+.group-profile-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
 .group-profile-copy small {
+  overflow: hidden;
   color: var(--chatx-accent-soft);
   font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.group-profile-meta .status-dot {
+  flex: none;
 }
 
 .group-profile-copy p {
+  width: 100%;
   margin: 2px 0 0;
+  overflow: hidden;
   color: var(--chatx-muted);
   font-size: 13px;
   line-height: 1.4;
+  text-align: start;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .invite-card {
@@ -4363,7 +4430,7 @@ ion-toolbar.network-toolbar.slow {
 }
 
 .status-mark.seen {
-  color: var(--chatx-accent-soft);
+  color: var(--chatx-read, #53bdeb);
 }
 
 .bubble-stack.is-receipt .bubble {
@@ -4373,7 +4440,8 @@ ion-toolbar.network-toolbar.slow {
 .seen-faces {
   display: flex;
   align-items: center;
-  margin: 1px 2px 0;
+  justify-content: flex-end;
+  margin: 0 2px;
   padding: 0;
   border: 0;
   background: transparent;
@@ -4467,9 +4535,8 @@ ion-toolbar.network-toolbar.slow {
 }
 
 .user-card-banner {
-  width: calc(100% + 8px);
-  height: 96px;
-  margin: 0 -4px 0;
+  align-self: stretch;
+  height: 148px;
   overflow: hidden;
   border-radius: 16px;
   background:
@@ -4479,13 +4546,14 @@ ion-toolbar.network-toolbar.slow {
 }
 
 .user-card-banner img {
+  display: block;
   width: 100%;
   height: 100%;
   object-fit: cover;
 }
 
 .profile-pop .user-card-banner + .avatar {
-  margin-top: -36px;
+  margin-top: -42px;
   box-shadow: 0 0 0 4px var(--chatx-frame);
 }
 

@@ -167,6 +167,38 @@ describe('rooms', () => {
     assert.equal(await repo.dropOrphanPrivate(roomId, nora.id), 'missing');
   });
 
+  it('tells the other member who is typing and stops when asked', async () => {
+    const deps = testDeps();
+    const nora = member('11111111-1111-4111-8111-111111111111', 'نورة');
+    const layla = member('22222222-2222-4222-8222-222222222222', 'ليلى');
+    await deps.repo.insertUser(nora);
+    await deps.repo.insertUser(layla);
+    await deps.repo.createSession(hashSession('nora-token'), nora.id, new Date(now + 60_000));
+    await deps.repo.createSession(hashSession('layla-token'), layla.id, new Date(now + 60_000));
+    const handle = createApi(deps);
+    const headers = (token: string) => ({ cookie: `chatx_session=${token}`, 'content-type': 'application/json', 'x-chatx-request': '1' });
+    const opened = await handle(new Request('http://127.0.0.1/api/rooms', {
+      method: 'POST', headers: headers('nora-token'), body: JSON.stringify({ kind: 'private', userId: layla.id }),
+    }));
+    const roomId = ((await opened.json()) as { conversation: { id: string } }).conversation.id;
+    const post = (on: boolean, token = 'nora-token') => handle(new Request(`http://127.0.0.1/api/rooms/${roomId}/typing`, {
+      method: 'POST', headers: headers(token), body: JSON.stringify({ on }),
+    }));
+    assert.equal((await post(true)).status, 200);
+    const seen = await (await handle(new Request(`http://127.0.0.1/api/rooms/${roomId}/sync`, { headers: { cookie: 'chatx_session=layla-token' } }))).json() as { typing: string[] };
+    assert.deepEqual(seen.typing, [nora.id]);
+    const mine = await (await handle(new Request(`http://127.0.0.1/api/rooms/${roomId}/sync`, { headers: { cookie: 'chatx_session=nora-token' } }))).json() as { typing: string[] };
+    assert.deepEqual(mine.typing, []);
+    assert.equal((await post(false)).status, 200);
+    const cleared = await (await handle(new Request(`http://127.0.0.1/api/rooms/${roomId}/sync`, { headers: { cookie: 'chatx_session=layla-token' } }))).json() as { typing: string[] };
+    assert.deepEqual(cleared.typing, []);
+    assert.equal((await post(true, 'layla-token')).status, 200);
+    const outsider = member('33333333-3333-4333-8333-333333333333', 'سامي');
+    await deps.repo.insertUser(outsider);
+    await deps.repo.createSession(hashSession('sami-token'), outsider.id, new Date(now + 60_000));
+    assert.equal((await post(true, 'sami-token')).status, 404);
+  });
+
   it('opens one chat with oneself and keeps it apart from a deleted peer', async () => {
     const deps = testDeps();
     const nora = member('11111111-1111-4111-8111-111111111111', 'نورة');

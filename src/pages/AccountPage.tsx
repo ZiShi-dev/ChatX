@@ -67,6 +67,7 @@ export default function AccountPage() {
         {tab === 'profile' && notice ? <p className="form-error account-notice">{notice}</p> : null}
         {tab === 'profile' && <ProfilePage embedded onShowSettings={() => select('settings')} />}
         {tab === 'settings' && <SettingsPage embedded />}
+        <div className="account-end" aria-hidden="true" />
       </IonContent>
       <div className={`group-tabs account-tabs ${owner ? 'is-three' : 'is-two'}`} role="tablist" aria-label="الحساب">
         <button type="button" role="tab" aria-selected={tab === 'profile'} className={tab === 'profile' ? 'is-on' : undefined} onClick={() => select('profile')}>

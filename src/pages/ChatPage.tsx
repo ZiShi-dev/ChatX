@@ -13,12 +13,16 @@ import TypingIndicator from '../components/chat/TypingIndicator';
 import PageNav from '../components/common/PageNav';
 import GroupHeader from '../components/groups/GroupHeader';
 import UserProfileModal from '../components/users/UserProfileModal';
+import type { Message } from '../types/message';
 import type { User } from '../types/user';
-import { MESSAGE_HIGHLIGHT_DURATION, MESSAGE_PAGE_SIZE, SKELETON_DELAY_MS } from '../constants/chat';
+import { CHAT_VISIBLE_WINDOW, MESSAGE_HIGHLIGHT_DURATION, MESSAGE_PAGE_SIZE, SKELETON_DELAY_MS } from '../constants/chat';
 import { GLOBAL_CHAT_ID } from '../data/conversations';
 import { isServerId, SERVER_GLOBAL_ROOM_ID } from '../lib/home';
-import { catchUpLabel, deletedPrivatePeer, membersOf, otherParticipant, unreadAbove } from '../lib/conversation';
+import { catchUpLabel, deletedPrivatePeer, historyLimitForUnread, membersOf, openUnreadCount, otherParticipant, unreadAbove, unreadScrollTop } from '../lib/conversation';
 import { resolveMessageFocus } from '../lib/inbox';
+import { observeComposerViewport } from '../lib/composerViewport';
+import { dismissOverlayHistory, registerOverlayClose, useOverlayHistory } from '../lib/overlayBack';
+import '../components/chat/ComposerLayout.css';
 import { matchingMessages } from '../lib/messageSearch';
 import { connectionLabel, getUserPresence } from '../lib/presence';
 import { useAuthStore } from '../stores/authStore';
@@ -31,6 +35,104 @@ const NO_TYPING: string[] = [];
 
 function pinBottom(scroller: HTMLElement) {
   scroller.scrollTop = scroller.scrollHeight;
+}
+
+let glideToken = 0;
+let glideUntil = 0;
+let glideTop = -1;
+let followSendUntil = 0;
+
+function stillMotion() {
+  return window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false;
+}
+
+function bottomTop(scroller: HTMLElement) {
+  return Math.max(0, scroller.scrollHeight - scroller.clientHeight);
+}
+
+function glideBottom(scroller: HTMLElement, ms = 260) {
+  const token = ++glideToken;
+  const targetNow = bottomTop(scroller);
+  if (stillMotion() || ms <= 0 || Math.abs(targetNow - scroller.scrollTop) < 2) {
+    scroller.scrollTop = targetNow;
+    glideTop = targetNow;
+    glideUntil = 0;
+    return;
+  }
+  const startTop = scroller.scrollTop;
+  const start = performance.now();
+  glideUntil = start + ms;
+  const step = (now: number) => {
+    if (token !== glideToken) return;
+    const t = Math.min(1, (now - start) / ms);
+    const ease = 1 - (1 - t) ** 3;
+    const target = bottomTop(scroller);
+    const next = startTop + (target - startTop) * ease;
+    glideTop = next;
+    scroller.scrollTop = next;
+    if (t < 1) window.requestAnimationFrame(step);
+    else {
+      const end = bottomTop(scroller);
+      glideTop = end;
+      scroller.scrollTop = end;
+      if (token === glideToken) glideUntil = 0;
+    }
+  };
+  window.requestAnimationFrame(step);
+}
+
+function beginSendGlide(scroller: HTMLElement, followMs = 700) {
+  followSendUntil = performance.now() + followMs;
+  glideBottom(scroller, 280);
+}
+
+function sendFollow(scroller: HTMLElement) {
+  if (performance.now() >= followSendUntil) return false;
+  if (glideUntil <= performance.now()) glideBottom(scroller, 180);
+  return true;
+}
+
+function stickThread(scroller: HTMLElement, following: { current: boolean }) {
+  if (sendFollow(scroller)) return;
+  if (following.current || performance.now() < followSendUntil) pinBottom(scroller);
+}
+
+function noteSendScroll(scrollTop: number) {
+  if (glideUntil <= performance.now() || glideTop < 0) return false;
+  if (scrollTop >= glideTop - 24) return false;
+  glideToken += 1;
+  glideUntil = 0;
+  glideTop = -1;
+  followSendUntil = 0;
+  return true;
+}
+
+function pinToUnread(scroller: HTMLElement) {
+  const anchor = document.getElementById('unread-anchor');
+  if (!anchor) return false;
+  const top = scroller.scrollTop + anchor.getBoundingClientRect().top - scroller.getBoundingClientRect().top;
+  scroller.scrollTop = unreadScrollTop(top, scroller.scrollHeight, scroller.clientHeight);
+  return true;
+}
+
+function roomUnreadCount(roomId: string, userId: string, list: Message[]) {
+  const state = useChatStore.getState();
+  const server = state.conversations.find((item) => item.id === roomId)?.unreadCount ?? 0;
+  const inbox = state.serverInbox.filter((item) => item.conversationId === roomId && item.unread && item.kind !== 'reaction').length;
+  return openUnreadCount(server, inbox, list, userId);
+}
+
+function settleBottom(scroller: HTMLElement, onDone: () => void) {
+  let tries = 0;
+  const step = () => {
+    pinBottom(scroller);
+    tries += 1;
+    const gap = scroller.scrollHeight - scroller.scrollTop - scroller.clientHeight;
+    const overflow = scroller.scrollHeight > scroller.clientHeight + 8;
+    if (tries < 16 && (!overflow || gap > 4)) window.requestAnimationFrame(step);
+    else onDone();
+  };
+  step();
 }
 
 export default function ChatPage() {
@@ -47,14 +149,20 @@ export default function ChatPage() {
   const placedRef = useRef(false);
   const scrollerRef = useRef<HTMLElement | null>(null);
   const lengthRef = useRef(0);
+  const seenIds = useRef(new Set<string>());
+  const openedUnread = useRef(0);
+  const markedFocus = useRef('');
+  const pinnedFocus = useRef('');
   const currentUser = useAuthStore((state) => state.currentUser);
   const users = useUserStore((state) => state.users);
   const conversations = useChatStore((state) => state.conversations);
   const allMessages = useChatStore((state) => state.messages);
+  const serverInbox = useChatStore((state) => state.serverInbox);
   const typingMap = useChatStore((state) => state.typingByConversation);
   const loadOlder = useChatStore((state) => state.loadOlder);
   const revealMessage = useChatStore((state) => state.revealMessage);
   const historyLimit = useChatStore((state) => state.historyLimit);
+  const roomHistoryLimit = historyLimit[id] ?? MESSAGE_PAGE_SIZE;
   const hasMore = useChatStore((state) => state.roomHasMore[id] ?? false);
   const markRead = useChatStore((state) => state.markRead);
   const setTyping = useChatStore((state) => state.setTyping);
@@ -98,11 +206,28 @@ export default function ChatPage() {
   );
   const messagesRef = useRef(messages);
   messagesRef.current = messages;
+  const resumeBack = useMemo(() => {
+    if (arrivalUnread <= 0) return 0;
+    const need = Math.min(messages.length, arrivalUnread + 14);
+    return need > CHAT_VISIBLE_WINDOW ? need - CHAT_VISIBLE_WINDOW : 0;
+  }, [arrivalUnread, messages.length]);
 
   useEffect(() => {
     setSearchOpen(false);
     setSearchQuery('');
   }, [id]);
+
+  const closeSearch = useCallback(() => {
+    setSearchOpen(false);
+    setSearchQuery('');
+  }, []);
+
+  useOverlayHistory(searchOpen, closeSearch);
+
+  useEffect(() => {
+    if (!searchOpen) return;
+    return registerOverlayClose(closeSearch);
+  }, [closeSearch, searchOpen]);
 
   useEffect(() => {
     if (!searching) return;
@@ -175,14 +300,51 @@ export default function ChatPage() {
   }, [id, cancelEdit]);
 
   useEffect(() => {
-    const count = useChatStore.getState().conversations.find((item) => item.id === id)?.unreadCount ?? 0;
+    if (!ready || !isServerId(id) || !isServerId(focusId) || markedFocus.current === `${id}:${focusId}`) return;
+    const target = allMessages.find((message) => message.id === focusId && message.conversationId === id && message.status === 'sent');
+    if (!target) return;
+    markedFocus.current = `${id}:${focusId}`;
+    void markRead(id, focusId);
+  }, [allMessages, focusId, id, markRead, ready]);
+
+  useEffect(() => {
+    const list = useChatStore.getState().messages.filter((message) => message.conversationId === id);
+    const count = roomUnreadCount(id, useAuthStore.getState().currentUser.id, list);
+    openedUnread.current = count;
+    seenIds.current = new Set();
     setArrivalUnread(count);
     setFresh(0);
     setAway(false);
     lengthRef.current = 0;
     placedRef.current = false;
-    stickRef.current = true;
+    stickRef.current = count <= 0;
+    if (count <= 0) {
+      const limit = useChatStore.getState().historyLimit[id] ?? MESSAGE_PAGE_SIZE;
+      if (limit > MESSAGE_PAGE_SIZE) {
+        useChatStore.setState((state) => ({ historyLimit: { ...state.historyLimit, [id]: MESSAGE_PAGE_SIZE } }));
+      }
+    }
   }, [id]);
+
+  useEffect(() => {
+    if (!ready || focusId) return;
+    const count = roomUnreadCount(id, currentUser.id, messages);
+    if (count === openedUnread.current && (placedRef.current || count > 0)) return;
+    openedUnread.current = count;
+    setArrivalUnread(count);
+    stickRef.current = count <= 0;
+    if (count > 0) {
+      if (!placedRef.current) return;
+      return;
+    }
+    void contentRef.current?.getScrollElement().then((scroller) => {
+      if (!scroller) return;
+      stickRef.current = true;
+      settleBottom(scroller, () => {
+        placedRef.current = true;
+      });
+    });
+  }, [conversation?.unreadCount, currentUser.id, focusId, id, messages, ready, serverInbox]);
 
   useEffect(() => {
     if (!id || typingIds.length === 0) return;
@@ -213,24 +375,28 @@ export default function ChatPage() {
   }, [allMessages, focusId, focusMissing, historyLimit, id, ready, revealMessage]);
 
   useEffect(() => {
+    pinnedFocus.current = '';
+  }, [focusId, id]);
+
+  useEffect(() => {
     if (!ready || !focusId) return;
+    const token = `${id}:${focusId}`;
+    if (pinnedFocus.current === token) return;
     const node = document.getElementById(`msg-${focusId}`);
     if (!node) return;
+    pinnedFocus.current = token;
     stickRef.current = false;
-    let alive = true;
-    const timer = window.setTimeout(() => {
-      if (!alive) return;
+    window.setTimeout(() => {
+      if (pinnedFocus.current !== token) return;
+      const current = document.getElementById(`msg-${focusId}`);
+      if (!current) return;
       void contentRef.current?.getScrollElement().then((scroller) => {
-        const nodeRect = node.getBoundingClientRect();
+        const nodeRect = current.getBoundingClientRect();
         const scrollRect = scroller.getBoundingClientRect();
         const top = scroller.scrollTop + nodeRect.top - scrollRect.top - (scroller.clientHeight - nodeRect.height) / 2;
         void contentRef.current?.scrollToPoint(0, Math.max(0, top), 280);
       });
     }, 40);
-    return () => {
-      alive = false;
-      window.clearTimeout(timer);
-    };
   }, [focusId, historyLimit, id, messages.length, ready]);
 
   useEffect(() => {
@@ -249,6 +415,9 @@ export default function ChatPage() {
     let scroller: HTMLElement | undefined;
     let readTimer: number | undefined;
     let reading = false;
+    let keepBottom = false;
+    let keepTimer = 0;
+    let scrollerHeight = 0;
     const syncStick = () => {
       if (!scroller) return;
       const gap = scroller.scrollHeight - scroller.scrollTop - scroller.clientHeight;
@@ -257,9 +426,9 @@ export default function ChatPage() {
       setAway((current) => (current === !atEnd ? current : !atEnd));
       if (atEnd) setFresh((count) => (count === 0 ? count : 0));
     };
-    const markVisible = async () => {
-      if (!placedRef.current || !isServerId(id) || reading || !scroller) return;
-      if (document.visibilityState === 'hidden' || window.location.pathname !== `/chat/${id}`) return;
+    const markVisible = async (leaving = false) => {
+      if ((!leaving && !placedRef.current) || !isServerId(id) || reading || !scroller) return;
+      if (!leaving && (document.visibilityState === 'hidden' || window.location.pathname !== `/chat/${id}`)) return;
       const list = messagesRef.current;
       const gap = scroller.scrollHeight - scroller.scrollTop - scroller.clientHeight;
       let targetId = '';
@@ -296,33 +465,84 @@ export default function ChatPage() {
     };
     const onScroll = () => {
       if (!placedRef.current) return;
+      if (scroller && noteSendScroll(scroller.scrollTop)) {
+        stickRef.current = false;
+        keepBottom = false;
+        setAway(true);
+        return;
+      }
+      if (keepBottom) {
+        stickRef.current = true;
+        return;
+      }
       syncStick();
       window.clearTimeout(readTimer);
       readTimer = window.setTimeout(() => void markVisible(), 900);
     };
-    const thread = endRef.current?.parentElement;
-    const observer = thread ? new ResizeObserver(() => {
+    const pinIfStuck = () => {
       const element = scrollerRef.current;
-      if (!element || !stickRef.current) return;
+      if (!element || (!stickRef.current && !keepBottom)) return;
       pinBottom(element);
-    }) : undefined;
-    if (thread && observer) observer.observe(thread);
+    };
+    const holdBottom = () => {
+      if (!stickRef.current && !keepBottom) return;
+      keepBottom = true;
+      stickRef.current = true;
+      window.clearTimeout(keepTimer);
+      pinIfStuck();
+      window.requestAnimationFrame(pinIfStuck);
+      keepTimer = window.setTimeout(() => {
+        pinIfStuck();
+        keepBottom = false;
+      }, 400);
+    };
+    const thread = endRef.current?.parentElement;
+    const observer = new ResizeObserver(() => {
+      const element = scrollerRef.current;
+      if (!element) return;
+      const next = element.clientHeight;
+      const frameChanged = scrollerHeight > 0 && Math.abs(next - scrollerHeight) > 1;
+      scrollerHeight = next;
+      if (frameChanged) return;
+      stickThread(element, stickRef);
+    });
+    if (thread) observer.observe(thread);
+    const viewport = window.visualViewport;
+    viewport?.addEventListener('resize', holdBottom);
+    const onFocus = (event: FocusEvent) => {
+      const target = event.target;
+      if (target instanceof Element && target.closest('.composer, .chat-footer')) holdBottom();
+    };
+    document.addEventListener('focusin', onFocus);
     void contentRef.current?.getScrollElement().then((element) => {
       if (stopped) return;
       scroller = element;
       scrollerRef.current = element;
+      scrollerHeight = element.clientHeight;
+      observer.observe(element);
       scroller.addEventListener('scroll', onScroll, { passive: true });
       readTimer = window.setTimeout(() => void markVisible(), 900);
     });
     const onVisible = () => {
+      if (document.visibilityState === 'hidden') {
+        void markVisible(true);
+        return;
+      }
       window.clearTimeout(readTimer);
       readTimer = window.setTimeout(() => void markVisible(), 900);
     };
+    const onLeave = () => void markVisible(true);
+    window.addEventListener('pagehide', onLeave);
     document.addEventListener('visibilitychange', onVisible);
     return () => {
+      void markVisible(true);
       stopped = true;
       window.clearTimeout(readTimer);
-      observer?.disconnect();
+      window.clearTimeout(keepTimer);
+      observer.disconnect();
+      viewport?.removeEventListener('resize', holdBottom);
+      document.removeEventListener('focusin', onFocus);
+      window.removeEventListener('pagehide', onLeave);
       scroller?.removeEventListener('scroll', onScroll);
       scrollerRef.current = null;
       document.removeEventListener('visibilitychange', onVisible);
@@ -331,33 +551,108 @@ export default function ChatPage() {
 
   useEffect(() => {
     if (!ready) return;
+    let stopped = false;
+    let disconnect: (() => void) | undefined;
+    void contentRef.current?.getScrollElement().then(element => {
+      if (!stopped) disconnect = observeComposerViewport(element, stickRef, contentRef.current?.closest('ion-page')?.querySelector<HTMLElement>('.chat-footer'));
+    });
+    return () => { stopped = true; disconnect?.(); };
+  }, [id, ready]);
+
+  useEffect(() => {
+    if (!id) return;
+    const onLayout = (event: Event) => {
+      const roomId = (event as CustomEvent<{ conversationId?: string }>).detail?.conversationId;
+      if (roomId !== id) return;
+      const scroller = scrollerRef.current;
+      stickRef.current = true;
+      if (scroller) stickThread(scroller, stickRef);
+    };
+    window.addEventListener('chatx-thread-layout', onLayout);
+    return () => window.removeEventListener('chatx-thread-layout', onLayout);
+  }, [id]);
+
+  useEffect(() => {
+    if (!ready || searching) return;
     const previous = lengthRef.current;
     lengthRef.current = messages.length;
+    const added = messages.filter((message) => !seenIds.current.has(message.id));
+    seenIds.current = new Set(messages.map((message) => message.id));
+    const ownSend = added.some((message) => message.senderId === currentUser.id && (message.status === 'pending' || message.status === 'sending'));
+    if (ownSend) {
+      const ownMedia = added.some((message) => message.senderId === currentUser.id && (message.type === 'image' || message.type === 'video'));
+      stickRef.current = true;
+      placedRef.current = true;
+      setAway(false);
+      setFresh(0);
+      if (focusId) setParams({}, { replace: true });
+      const followMs = ownMedia ? 3200 : 700;
+      const scroller = scrollerRef.current;
+      if (scroller) beginSendGlide(scroller, followMs);
+      else void contentRef.current?.getScrollElement().then((element) => {
+        if (element) beginSendGlide(element, followMs);
+      });
+      return;
+    }
     if (focusId) {
       stickRef.current = false;
       placedRef.current = true;
       return;
     }
     if (!placedRef.current && messages.length > 0) {
-      stickRef.current = true;
+      const total = messages.length;
+      let unread = roomUnreadCount(id, currentUser.id, messages);
+      openedUnread.current = unread;
+      if (arrivalUnread !== unread) setArrivalUnread(unread);
+      if (unread <= 0) {
+        const limit = useChatStore.getState().historyLimit[id] ?? MESSAGE_PAGE_SIZE;
+        if (limit > MESSAGE_PAGE_SIZE) {
+          useChatStore.setState((state) => ({ historyLimit: { ...state.historyLimit, [id]: MESSAGE_PAGE_SIZE } }));
+          return;
+        }
+      }
+      if (unread > 0) {
+        const limit = useChatStore.getState().historyLimit[id] ?? MESSAGE_PAGE_SIZE;
+        const next = historyLimitForUnread(unread, limit, total);
+        if (next > limit) {
+          useChatStore.setState((state) => ({ historyLimit: { ...state.historyLimit, [id]: next } }));
+          return;
+        }
+      }
+      stickRef.current = unread <= 0;
       let alive = true;
       let tries = 0;
       const step = async () => {
-        if (!alive) return;
+        if (!alive || placedRef.current) return;
         const scroller = await contentRef.current?.getScrollElement();
         if (!alive || !scroller) return;
-        pinBottom(scroller);
-        tries += 1;
-        requestAnimationFrame(() => {
-          if (!alive) return;
+        unread = roomUnreadCount(id, currentUser.id, messagesRef.current);
+        openedUnread.current = unread;
+        if (arrivalUnread !== unread) setArrivalUnread(unread);
+        if (unread <= 0) {
+          stickRef.current = true;
+          setArrivalUnread(0);
+          settleBottom(scroller, () => {
+            if (!alive) return;
+            placedRef.current = true;
+          });
+          return;
+        }
+        if (pinToUnread(scroller)) {
           const gap = scroller.scrollHeight - scroller.scrollTop - scroller.clientHeight;
-          const overflow = scroller.scrollHeight > scroller.clientHeight + 8;
-          if (tries < 12 && (!overflow || gap > 32)) {
-            void step();
-            return;
-          }
+          stickRef.current = gap < 96;
           placedRef.current = true;
-          if (stickRef.current) pinBottom(scroller);
+          return;
+        }
+        if (tries < 24) {
+          tries += 1;
+          window.requestAnimationFrame(() => { void step(); });
+          return;
+        }
+        stickRef.current = true;
+        settleBottom(scroller, () => {
+          if (!alive) return;
+          placedRef.current = true;
         });
       };
       void step();
@@ -367,11 +662,11 @@ export default function ChatPage() {
     }
     if (messages.length > previous && stickRef.current) {
       const scroller = scrollerRef.current;
-      if (scroller) pinBottom(scroller);
+      if (scroller) stickThread(scroller, stickRef);
       return;
     }
     if (messages.length > previous) setFresh((count) => count + (messages.length - previous));
-  }, [focusId, id, messages.length, ready]);
+  }, [arrivalUnread, conversation?.unreadCount, currentUser.id, focusId, id, messages, ready, resumeBack, roomHistoryLimit, searching, setParams]);
 
   useEffect(() => {
     if (!stickRef.current) return;
@@ -514,8 +809,15 @@ export default function ChatPage() {
                 aria-label="بحث"
                 aria-expanded={searchOpen}
                 onClick={() => {
-                  setSearchQuery('');
-                  setSearchOpen((open) => !open);
+                  setSearchOpen((open) => {
+                    if (open) {
+                      if (window.history.state?.chatxOverlay) dismissOverlayHistory();
+                      else closeSearch();
+                      return false;
+                    }
+                    setSearchQuery('');
+                    return true;
+                  });
                 }}
               >
                 <IonIcon icon={searchOutline} />
@@ -556,6 +858,7 @@ export default function ChatPage() {
               users={users}
               currentUserId={currentUser.id}
               unreadCount={arrivalUnread}
+              resumeBack={resumeBack}
               spotlightId={spotlight}
               onOpenProfile={setProfile}
               onLoadOlder={revealOlder}

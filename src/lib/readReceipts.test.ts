@@ -40,6 +40,7 @@ describe('read receipts', () => {
     ]);
     expect(facesOnMessage({ amina: 'new' }, messages[1], 'me', users).map((user) => user.id)).toEqual(['amina']);
     expect(facesOnMessage({ amina: 'new' }, messages[0], 'me', users)).toEqual([]);
+    expect(facesOnMessage({ amina: 'new' }, { ...messages[1], senderId: 'karim' }, 'me', users).map((user) => user.id)).toEqual(['amina']);
   });
 
   it('keeps the time when someone sees a message', () => {

@@ -5,6 +5,9 @@ import {
   recentConversations,
   catchUpLabel,
   resumeMessageId,
+  unreadScrollTop,
+  historyLimitForUnread,
+  openUnreadCount,
   unreadAbove,
   unreadDividerLabel,
   unreadOnScreen,
@@ -125,5 +128,12 @@ describe('unread', () => {
     expect(resumeMessageId(['a', 'b', 'c'], 'c', 0)).toBe('');
     expect(resumeMessageId(['a', 'b', 'c'], 'c', 1)).toBe('');
     expect(resumeMessageId(['a', 'b', 'c'], '', 2)).toBe('');
+    expect(unreadScrollTop(1000, 1600, 500)).toBe(992);
+    expect(unreadScrollTop(1200, 1600, 500)).toBe(1100);
+    expect(historyLimitForUnread(50, 30, 200)).toBe(66);
+    expect(historyLimitForUnread(0, 30, 200)).toBe(30);
+    expect(openUnreadCount(5, 0, [{ id: 'a', senderId: 'me', status: 'sent', createdAt: '1' }], 'me')).toBe(0);
+    expect(openUnreadCount(5, 0, [{ id: 'a', senderId: 'x', status: 'sent', createdAt: '1' }], 'me')).toBe(5);
+    expect(openUnreadCount(0, 2, [], 'me')).toBe(2);
   });
 });

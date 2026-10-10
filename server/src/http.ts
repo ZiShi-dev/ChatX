@@ -19,8 +19,10 @@ import { messageView, openRoom, postRoomMessage, readHome, readGroupTurn, readRo
 import { keepMessage, readSaved } from './saved.ts';
 import { addRoomKeys, readKeys, readRoomKeys, saveKeys } from './keys.ts';
 import { clearInbox, markInboxRead, readInbox } from './inbox.ts';
+import { registerPushToken, savePushPrefs, unregisterPushToken } from './pushApi.ts';
 import { clearSessionCookie, hashSession, readCookie, sessionCookie } from './session.ts';
 import { armRoomWatch, LIVE_HOLD_MS } from './roomLive.ts';
+import { publishTyping, roomTyping } from './typing.ts';
 import { cachedLinkCard } from './linkPreview.ts';
 
 const PROFILE_BODY_LIMIT = 280_000;
@@ -188,10 +190,21 @@ async function route(deps: Deps, request: Request) {
     } else watch?.cancel();
     if (!result) return failure(deps, 'not_found');
     return json({ ...result, messages: result.messages.map((message) => messageView(message, result.reactions)), reactions: undefined,
-      readers: result.readers.map((reader) => ({ ...reader, readAt: reader.readAt.toISOString() })) });
+      readers: result.readers.map((reader) => ({ ...reader, readAt: reader.readAt.toISOString() })),
+      typing: roomTyping(roomId, deps.now(), user.id) });
   }
   const body = await readBody(request, requestBodyLimit(path));
   if (!body) return failure(deps, 'invalid_credentials');
+  const typingPath = path.match(/^\/api\/rooms\/([0-9a-f-]{36})\/typing$/i);
+  if (typingPath && request.method === 'POST') {
+    const token = readCookie(request.headers.get('cookie'), 'chatx_session');
+    const user = token ? await deps.repo.findSessionUser(hashSession(token), new Date(deps.now())) : null;
+    if (!user || user.role !== 'member') return failure(deps, 'invalid_credentials');
+    const roomId = typingPath[1]!;
+    if (!await deps.repo.isRoomMember(roomId, user.id)) return failure(deps, 'not_found');
+    publishTyping(roomId, user.id, body.on === true, deps.now());
+    return json({ ok: true });
+  }
   const mutating = request.method === 'POST' || request.method === 'PATCH' || request.method === 'DELETE';
   const origin = request.headers.get('origin');
   if (mutating && (request.headers.get('x-chatx-request') !== '1' || (origin !== null && !trustedOrigin(origin, deps)))) {
@@ -352,6 +365,21 @@ async function route(deps: Deps, request: Request) {
   }
   if (request.method === 'POST' && path === '/api/notifications/clear') {
     const result = await clearInbox(deps, readCookie(request.headers.get('cookie'), 'chatx_session'), body.until);
+    if (!result.ok) return failure(deps, result.error);
+    return json({ ok: true });
+  }
+  if (request.method === 'POST' && path === '/api/push/register') {
+    const result = await registerPushToken(deps, typeof body.token === 'string' ? body.token : undefined, typeof body.platform === 'string' ? body.platform : undefined, readCookie(request.headers.get('cookie'), 'chatx_session'));
+    if (!result.ok) return failure(deps, result.error);
+    return json({ ok: true });
+  }
+  if (request.method === 'POST' && path === '/api/push/unregister') {
+    const result = await unregisterPushToken(deps, typeof body.token === 'string' ? body.token : undefined, readCookie(request.headers.get('cookie'), 'chatx_session'));
+    if (!result.ok) return failure(deps, result.error);
+    return json({ ok: true });
+  }
+  if (request.method === 'POST' && path === '/api/push/prefs') {
+    const result = await savePushPrefs(deps, typeof body.quiet === 'string' ? body.quiet : undefined, typeof body.hiddenKinds === 'string' ? body.hiddenKinds : undefined, readCookie(request.headers.get('cookie'), 'chatx_session'));
     if (!result.ok) return failure(deps, result.error);
     return json({ ok: true });
   }

@@ -65,7 +65,7 @@ export function facesOnMessage(
   currentUserId: string,
   users: Map<string, User>,
 ) {
-  if (message.senderId !== currentUserId || message.status !== 'sent' || message.deletedForEveryone) return [];
+  if (message.status !== 'sent' || message.deletedForEveryone || message.event) return [];
   const faces: User[] = [];
   for (const [userId, messageId] of Object.entries(cursorByUser)) {
     if (userId === currentUserId || messageId !== message.id) continue;
