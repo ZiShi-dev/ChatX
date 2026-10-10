@@ -21,6 +21,7 @@ import { GLOBAL_CHAT_ID } from '../data/conversations';
 import { isServerId, SERVER_GLOBAL_ROOM_ID } from '../lib/home';
 import { catchUpLabel, deletedPrivatePeer, historyLimitForUnread, membersOf, openUnreadCount, otherParticipant, unreadAbove, unreadScrollTop } from '../lib/conversation';
 import { resolveMessageFocus } from '../lib/inbox';
+import { watchingRoom } from '../lib/liveInbox';
 import { observeComposerViewport } from '../lib/composerViewport';
 import { dismissOverlayHistory, registerOverlayClose, useOverlayHistory } from '../lib/overlayBack';
 import '../components/chat/ComposerLayout.css';
@@ -277,7 +278,7 @@ export default function ChatPage() {
     const wait = (ms: number) => new Promise((resolve) => { window.setTimeout(resolve, ms); });
     const run = async () => {
       while (!stopped) {
-        const quiet = document.visibilityState === 'hidden' || window.location.pathname !== `/chat/${id}` || useNetworkStore.getState().network === 'offline';
+        const quiet = document.visibilityState === 'hidden' || !watchingRoom(window.location.pathname, id) || useNetworkStore.getState().network === 'offline';
         if (quiet) {
           await wait(1_000);
           continue;
@@ -428,6 +429,7 @@ export default function ChatPage() {
     let scroller: HTMLElement | undefined;
     let readTimer: number | undefined;
     let reading = false;
+    let readAgain = false;
     let keepBottom = false;
     let keepTimer = 0;
     let scrollerHeight = 0;
@@ -440,8 +442,9 @@ export default function ChatPage() {
       if (atEnd) setFresh((count) => (count === 0 ? count : 0));
     };
     const markVisible = async (leaving = false) => {
-      if ((!leaving && !placedRef.current) || !isServerId(id) || reading || !scroller) return;
-      if (!leaving && (document.visibilityState === 'hidden' || window.location.pathname !== `/chat/${id}`)) return;
+      if ((!leaving && !placedRef.current) || !isServerId(id) || !scroller) return;
+      if (!leaving && (document.visibilityState === 'hidden' || !watchingRoom(window.location.pathname, id))) return;
+      if (reading) { readAgain = true; return; }
       const list = messagesRef.current;
       const gap = scroller.scrollHeight - scroller.scrollTop - scroller.clientHeight;
       let targetId = '';
@@ -474,7 +477,14 @@ export default function ChatPage() {
         if (index < 0) return;
         const remaining = list.slice(index + 1).filter((message) => message.status === 'sent' && message.senderId !== currentUser.id).length;
         setArrivalUnread((current) => (current > remaining ? remaining : current));
-      } finally { reading = false; }
+      } finally {
+        reading = false;
+        if (readAgain && !stopped) {
+          readAgain = false;
+          window.clearTimeout(readTimer);
+          readTimer = window.setTimeout(() => void markVisible(), 900);
+        }
+      }
     };
     const onScroll = () => {
       if (!placedRef.current) return;

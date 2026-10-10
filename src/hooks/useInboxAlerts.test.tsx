@@ -7,9 +7,11 @@ import { useLiveInbox } from '../lib/liveInbox';
 import { useMuteStore } from '../stores/muteStore';
 import { useSettingsStore } from '../stores/settingsStore';
 import { DEFAULT_NOTIFY_TYPES, type InboxItem } from '../lib/inbox';
+import * as inbox from '../lib/inbox';
+const poll = vi.hoisted(() => vi.fn<(task: () => Promise<unknown>) => () => void>(() => () => undefined));
 const notify = vi.hoisted(() => vi.fn(async () => undefined));
 vi.mock('../lib/notifications', () => ({ notifyChatMessage: notify }));
-vi.mock('../lib/poll', () => ({ startPolling: () => () => undefined }));
+vi.mock('../lib/poll', () => ({ startPolling: poll }));
 const owner = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
 const room = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
 const initialAuth = useAuthStore.getState();
@@ -21,6 +23,28 @@ function mount() {
   renderHook(useInboxAlerts);
   act(() => useChatStore.setState({ serverInbox: [item('history')] }));
 }
+it('inspects each changed inbox once and still primes an unchanged initial inbox', async () => {
+  poll.mockClear();
+  const decorate = vi.spyOn(inbox, 'presentInbox');
+  const load = vi.spyOn(useChatStore.getState(), 'loadInbox').mockResolvedValue('ok');
+  useAuthStore.setState({ activated: true, currentUser: { ...initialAuth.currentUser, id: owner } });
+  useChatStore.setState({ serverInbox: [item('history')] });
+  renderHook(useInboxAlerts);
+  const tick = poll.mock.calls[0][0];
+  await act(async () => { await tick(); });
+  expect(decorate).toHaveBeenCalledOnce();
+  decorate.mockClear();
+  load.mockImplementation(async () => {
+    useChatStore.setState({ serverInbox: [item('new')] });
+    return 'ok';
+  });
+  await act(async () => { await tick(); });
+  expect(decorate).toHaveBeenCalledOnce();
+  decorate.mockClear();
+  load.mockResolvedValue('ok');
+  await act(async () => { await tick(); });
+  expect(decorate).not.toHaveBeenCalled();
+});
 it('does not replay history or banner the chat already on screen', () => {
   window.history.replaceState({}, '', `/chat/${room}`); mount();
   expect(useLiveInbox.getState().notices).toHaveLength(0);

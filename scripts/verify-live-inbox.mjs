@@ -19,16 +19,23 @@ await repo.createSession(hashSession('live-test'), alice.id, new Date(Date.now()
 const config = loadConfig({ DATABASE_URL: 'unused' });
 const api = createApi({ repo, config, now: () => Date.now(), rateLimit: createLimiter(config, () => Date.now()) });
 const browser = await chromium.launch({ headless: true, executablePath: process.env.CHATX_CHROME_PATH });
+let releaseRead;
 try {
   const context = await browser.newContext({ viewport: { width: 360, height: 740 } });
   await context.addInitScript(alice => localStorage.setItem('chatx.auth', JSON.stringify({ activated: true, currentUser: alice, accounts: [alice] })), alice);
   const page = await context.newPage(); const errors = [];
   page.on('pageerror', error => errors.push(error.message));
   let inboxReads = 0;
+  let delayedMessageId = '', readStarted = false;
+  const delayedAck = new Promise(resolve => { releaseRead = resolve; });
   await page.route('**/api/**', async route => {
     const request = route.request();
     if (new URL(request.url()).pathname === '/api/notifications') inboxReads++;
     const response = await api(new Request(request.url(), { method: request.method(), headers: { ...request.headers(), cookie: 'chatx_session=live-test' }, body: request.postDataBuffer() || undefined }));
+    if (new URL(request.url()).pathname === `/api/rooms/${privateId}/read` && request.postDataJSON()?.messageId === delayedMessageId) {
+      readStarted = true;
+      await delayedAck;
+    }
     if (response.status >= 400) console.log('API failure', new URL(request.url()).pathname, response.status, await response.clone().text());
     await route.fulfill({ status: response.status, headers: Object.fromEntries(response.headers), body: Buffer.from(await response.arrayBuffer()) });
   });
@@ -62,12 +69,22 @@ try {
   await page.waitForURL(`**/chat/${privateId}?at=${message.id}`);
   await page.waitForTimeout(500);
   const second = { ...message, id: randomUUID(), text: 'Current chat live message', createdAt: new Date() };
+  delayedMessageId = second.id;
+  await page.evaluate(() => history.replaceState({}, '', location.pathname + '/' + location.search));
   await repo.addRoomMessage(second); await repo.notifyRoomMessage(second);
   await page.getByText('Current chat live message', { exact: true }).waitFor({ timeout: 65000 });
   assert.equal(await banner.filter({ hasText: 'Current chat live message' }).count(), 0);
+  for (let i = 0; i < 130 && !readStarted; i++) await page.waitForTimeout(500);
+  assert.ok(readStarted, 'Reading must also work with a trailing slash in the chat URL');
+  const third = { ...message, id: randomUUID(), text: 'Arrived during slow read acknowledgement', createdAt: new Date() };
+  await repo.addRoomMessage(third); await repo.notifyRoomMessage(third);
+  await page.getByText(third.text, { exact: true }).waitFor({ timeout: 65000 });
+  await page.waitForTimeout(1500);
+  releaseRead();
   let read = false;
   for (let i = 0; i < 40; i++) {
-    read = (await repo.listNotifications(alice.id, 30, null)).find(item => item.messageId === second.id)?.read === true;
+    const notices = await repo.listNotifications(alice.id, 30, null);
+    read = [second, third].every(message => notices.find(item => item.messageId === message.id)?.read === true);
     if (read) break;
     await page.waitForTimeout(500);
   }
@@ -80,5 +97,5 @@ try {
   await page.locator('.live-inbox-open').click();
   await page.waitForURL(`**/chat/${groupId}?at=${groupMessage.id}`);
   assert.deepEqual(errors, []);
-  console.log('PASS repeated emoji picks, cursor/keyboard stability, private recent emoji, and banners in both directions between group/private chats without premature reads; CPU 6x');
-} finally { await browser.close(); }
+  console.log('PASS emoji stability, cross-chat banners without premature reads, trailing-slash chat sync, and visible arrivals during a slow read acknowledgement; CPU 6x');
+} finally { releaseRead?.(); await browser.close(); }

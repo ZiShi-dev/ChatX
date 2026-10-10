@@ -114,7 +114,8 @@ export function useInboxAlerts() {
       if (result === 'ok') {
         const state = useChatStore.getState();
         cadence.observe(state.serverInbox, state.serverUnread);
-        inspect();
+        // Changed inboxes were already inspected by the store subscription.
+        if (!primed) inspect();
       }
       return result;
     };
@@ -125,6 +126,7 @@ export function useInboxAlerts() {
     let stopState = () => {};
     if (Capacitor.isNativePlatform()) {
       void CapApp.addListener('appStateChange', ({ isActive }) => {
+        if (stopped) return;
         phoneActive = isActive;
         if (!isActive) rememberPhoneWatch();
       }).then((handle) => {

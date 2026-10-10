@@ -10,6 +10,8 @@ ChatX conserve la récupération périodique de sa boîte de notifications et le
 - Android : le contrôle JavaScript s’arrête lorsque l’application est inactive ; le contrôle natif prend le relais. Les alarmes sont annulées à l’ouverture puis reprogrammées à la sortie, pour éviter des réveils inutiles en premier plan. L’intervalle nominal en arrière-plan reste de 45 secondes, avec espacement des tentatives après erreur.
 - Les protections existantes contre les doublons, les conversations désactivées et les messages déjà lus sont conservées. Le départ d’un compte retire aussi les écouteurs ajoutés tardivement.
 - La lecture des messages visibles se vérifie aussi lorsqu’un message est ajouté sans défilement ni changement de hauteur du chat. Ces vérifications sont regroupées après 900 ms et les observateurs sont retirés à la sortie de la conversation.
+- Un changement de boîte n’est inspecté qu’une seule fois, par l’abonnement au store ; le cycle de récupération ne répète plus cette inspection ni sa synchronisation native. Le premier chargement reste traité même si le store ne change pas.
+- Si une vérification de lecture arrive pendant une confirmation lente, une seule nouvelle vérification est retenue et exécutée ensuite sur les messages alors visibles. Les liens terminés par `/` suivent les mêmes règles de réception en direct et de lecture que les autres liens de chat.
 
 Les intervalles sont des délais de programmation après la fin d’une requête, pas une garantie de livraison instantanée. Android peut retarder les alarmes selon la veille et les restrictions batterie ; un arrêt forcé empêche l’exécution jusqu’à la prochaine ouverture. Aucun service Firebase n’est nécessaire pour ce fonctionnement.
 
