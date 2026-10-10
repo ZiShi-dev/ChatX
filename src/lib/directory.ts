@@ -24,8 +24,10 @@ export function readDirectoryUser(value: unknown): User | null {
   if (typeof data.id !== 'string' || !ID.test(data.id) || !role) return null;
   if (typeof data.displayName !== 'string' || data.displayName.trim().length < 1 || data.displayName.length > 40) return null;
   if (typeof data.username !== 'string') return null;
+  // eslint-disable-next-line no-control-regex -- Strip control characters from untrusted input.
   const username = data.username.replace(/[\u0000-\u001f]/g, '').trim();
   if (username.length < 2 || username.length > 40) return null;
+  // eslint-disable-next-line no-control-regex -- Strip control characters from untrusted input.
   const bio = typeof data.bio === 'string' ? data.bio.replace(/[\u0000-\u001f\u007f]/g, '').trim() : '';
   if (bio.length > 160) return null;
   const bannerUrl = typeof data.bannerUrl === 'string' ? data.bannerUrl : '';

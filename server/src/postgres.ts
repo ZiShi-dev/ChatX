@@ -392,14 +392,14 @@ export function createPostgresRepository(pool: pg.Pool): AuthRepository {
              SELECT created_at, id FROM room_messages WHERE id = $3 AND room_id = $1
            ),
            before_page AS (
-             SELECT id, sender_id, body, created_at, deleted, event, edited_at, reply_to
+             SELECT m.id, m.sender_id, m.body, m.created_at, m.deleted, m.event, m.edited_at, m.reply_to
              FROM room_messages m JOIN anchor a ON true
              WHERE m.room_id = $1 AND $2 > 1 AND (m.created_at, m.id) < (a.created_at, a.id)
              ORDER BY m.created_at DESC, m.id DESC
              LIMIT LEAST(15, $2 - 1)
            ),
            after_page AS (
-             SELECT id, sender_id, body, created_at, deleted, event, edited_at, reply_to
+             SELECT m.id, m.sender_id, m.body, m.created_at, m.deleted, m.event, m.edited_at, m.reply_to
              FROM room_messages m JOIN anchor a ON true
              WHERE m.room_id = $1 AND (m.created_at, m.id) >= (a.created_at, a.id)
              ORDER BY m.created_at ASC, m.id ASC

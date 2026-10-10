@@ -1,3 +1,4 @@
+import { prepareTestIdentity } from './browser-test-keys.mjs';
 import {readFile} from 'node:fs/promises';
 import assert from 'node:assert/strict';
 import {createRequire} from 'node:module';
@@ -24,7 +25,7 @@ try{
   Object.defineProperty(navigator,'share',{value:async data=>{window.__shared={name:data.files[0].name,size:data.files[0].size};},configurable:true});
  },{alice,room,messages});
  await page.route('**/api/**',route=>{const path=new URL(route.request().url()).pathname;const body=path==='/api/home'?{conversations:[room],users:[alice]}:path==='/api/profile'?{user:alice}:path.endsWith('/sync')?{messages:[],readers:[],removedIds:[],reset:true,hasMore:false,historyHasMore:false,cursor:'cccccccc-cccc-4ccc-8ccc-cccccccccccc.0'}:{ok:true,notifications:[],unreadCount:0,saved:[],presence:[]};return route.fulfill({json:body});});
- await page.goto('http://127.0.0.1:4186/chat/'+roomId);await page.evaluate(async({owner,messages})=>{const db=await new Promise(resolve=>{const req=indexedDB.open('chatx-durable-v1',2);req.onsuccess=()=>resolve(req.result);});await new Promise(resolve=>{const tx=db.transaction('outgoing','readwrite');for(const message of messages)tx.objectStore('outgoing').put({key:owner+':'+message.id,owner,message:{...message,status:'failed',prepared:true,retryable:false}});tx.oncomplete=resolve;});db.close();},{owner:alice.id,messages});await page.reload();await page.locator('.startup-screen').waitFor({state:'detached'});
+ await page.goto('http://127.0.0.1:4186/chat/'+roomId);await prepareTestIdentity(page,alice.id);await page.evaluate(async({owner,messages})=>{const db=await new Promise(resolve=>{const req=indexedDB.open('chatx-durable-v1',2);req.onsuccess=()=>resolve(req.result);});await new Promise(resolve=>{const tx=db.transaction('outgoing','readwrite');for(const message of messages)tx.objectStore('outgoing').put({key:owner+':'+message.id,owner,message:{...message,status:'failed',prepared:true,retryable:false}});tx.oncomplete=resolve;});db.close();},{owner:alice.id,messages});await page.reload();await page.locator('.startup-screen').waitFor({state:'detached'});
  await page.locator('.media-open').first().click();await page.locator('.mv-stage img').waitFor();await page.getByRole('button',{name:'تنزيل على الجهاز'}).isEnabled();
  await page.getByRole('button',{name:'تكبير',exact:true}).click();await page.getByRole('button',{name:'إعادة ضبط التكبير'}).getByText('150%').waitFor();
  await page.getByRole('button',{name:'تدوير الصورة'}).click();assert.ok((await page.locator('.mv-stage img').getAttribute('style')).includes('rotate(90deg)'));

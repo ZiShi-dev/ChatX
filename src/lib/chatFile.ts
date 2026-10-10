@@ -14,6 +14,7 @@ export async function localMediaBytes(source: string): Promise<Uint8Array> {
 
 export function clipFileName(value: string) {
   const parts = value
+    // eslint-disable-next-line no-control-regex -- Strip control characters from untrusted input.
     .replace(/[\u0000-\u001f\u007f]/g, '')
     .replace(/\\/g, '/')
     .replace(/^\/+/, '')

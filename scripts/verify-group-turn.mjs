@@ -1,3 +1,4 @@
+import { prepareTestIdentity } from './browser-test-keys.mjs';
 import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
 
@@ -36,6 +37,7 @@ try {
     await route.fulfill({ json: body, headers: { date: 'Fri, 09 Oct 2026 12:00:00 GMT' } });
   });
   await page.goto(`${base}/group/${id}/`);
+  await prepareTestIdentity(page, alice.id);
   await page.getByText('انتهى الدور — تعذر تحميل بيانات الدور التالي', { exact: true }).waitFor();
   assert.equal(await page.getByText('انتهى الدور — جارٍ تحديث الدور التالي', { exact: true }).count(), 0);
   mode = 'offline';

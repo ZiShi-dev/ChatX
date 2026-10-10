@@ -265,6 +265,7 @@ function noticeHints(text: string, conversationId: string) {
 }
 
 function cleanText(value: string | undefined) {
+  // eslint-disable-next-line no-control-regex -- Strip control characters from untrusted input.
   const text = (value ?? '').replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/g, '').trim();
   return text.length <= 4000 ? text : '';
 }
@@ -275,20 +276,18 @@ async function publishText(message: Message) {
     patchMessage(message.id, { status: 'failed' });
     return;
   }
-  try {
-    const owner = useAuthStore.getState().currentUser.id;
-    const sealed = await sealMessageText(owner, message.conversationId, message.id, text, roomMembers(message.conversationId));
-    await adminFetch(`/api/rooms/${message.conversationId}/messages`, {
-      method: 'POST',
-      body: {
-        id: message.id,
-        text: sealed,
-        hints: noticeHints(text, message.conversationId),
-        ...(message.replyToId && isServerId(message.replyToId) ? { replyToId: message.replyToId } : {}),
-      },
-    });
-    patchMessage(message.id, { status: 'sent', uploadProgress: undefined });
-  } catch (error) { throw error; }
+  const owner = useAuthStore.getState().currentUser.id;
+  const sealed = await sealMessageText(owner, message.conversationId, message.id, text, roomMembers(message.conversationId));
+  await adminFetch(`/api/rooms/${message.conversationId}/messages`, {
+    method: 'POST',
+    body: {
+      id: message.id,
+      text: sealed,
+      hints: noticeHints(text, message.conversationId),
+      ...(message.replyToId && isServerId(message.replyToId) ? { replyToId: message.replyToId } : {}),
+    },
+  });
+  patchMessage(message.id, { status: 'sent', uploadProgress: undefined });
 }
 
 async function publishImage(message: Message) {
@@ -299,16 +298,14 @@ async function publishImage(message: Message) {
   }
   const current = useChatStore.getState().messages.find((item) => item.id === message.id);
   if (!current?.media) throw new Error('invalid_image');
-  try {
-    const plain = await localMediaBytes(source);
-    const sealed = await sealMessageMedia(useAuthStore.getState().currentUser.id, message.conversationId, message.id, plain, '', roomMembers(message.conversationId));
-    await uploadResumable({ roomId: message.conversationId, id: message.id, kind: 'image', name: 'photo.jpg', bytes: sealed.bytes, sealed: sealed.body, replyToId: message.replyToId },
-      (uploadProgress) => patchMessage(message.id, { uploadProgress }), yieldToTexts, () => {
-        const current = useChatStore.getState().messages.find((item) => item.id === message.id);
-        return !current || current.status === 'failed' || current.senderId !== useAuthStore.getState().currentUser.id;
-      });
-    patchMessage(message.id, { status: 'sent', uploadProgress: undefined });
-  } catch (error) { throw error; }
+  const plain = await localMediaBytes(source);
+  const sealed = await sealMessageMedia(useAuthStore.getState().currentUser.id, message.conversationId, message.id, plain, '', roomMembers(message.conversationId));
+  await uploadResumable({ roomId: message.conversationId, id: message.id, kind: 'image', name: 'photo.jpg', bytes: sealed.bytes, sealed: sealed.body, replyToId: message.replyToId },
+    (uploadProgress) => patchMessage(message.id, { uploadProgress }), yieldToTexts, () => {
+      const current = useChatStore.getState().messages.find((item) => item.id === message.id);
+      return !current || current.status === 'failed' || current.senderId !== useAuthStore.getState().currentUser.id;
+    });
+  patchMessage(message.id, { status: 'sent', uploadProgress: undefined });
 }
 
 /** Received media is cached already decrypted, so a cache hit never needs the room key. */
@@ -376,32 +373,30 @@ async function publishFile(message: Message) {
     patchMessage(message.id, { status: 'failed' });
     return;
   }
-  try {
-    const bytes = await localMediaBytes(source);
-    if (bytes.byteLength < 1 || bytes.byteLength > FILE_BYTES_MAX) {
-      patchMessage(message.id, { status: 'failed' });
-      return;
-    }
-    const sealed = await sealMessageMedia(useAuthStore.getState().currentUser.id, message.conversationId, message.id, bytes, name.slice(0, 120), roomMembers(message.conversationId));
-    await uploadResumable({ roomId: message.conversationId, id: message.id, kind: 'file', name, bytes: sealed.bytes, sealed: sealed.body, replyToId: message.replyToId },
-      (uploadProgress) => patchMessage(message.id, { uploadProgress }), yieldToTexts, () => {
-        const current = useChatStore.getState().messages.find((item) => item.id === message.id);
-        return !current || current.status === 'failed' || current.senderId !== useAuthStore.getState().currentUser.id;
-      });
-    const current = useChatStore.getState().messages.find((item) => item.id === message.id);
-    patchMessage(message.id, {
-      status: 'sent',
-      uploadProgress: undefined,
-      media: {
-        fileName: name,
-        fileSize: bytes.byteLength,
-        localPreviewUrl: source,
-        state: 'cached',
-        ...(current?.media?.width ? { width: current.media.width } : {}),
-        ...(current?.media?.height ? { height: current.media.height } : {}),
-      },
+  const bytes = await localMediaBytes(source);
+  if (bytes.byteLength < 1 || bytes.byteLength > FILE_BYTES_MAX) {
+    patchMessage(message.id, { status: 'failed' });
+    return;
+  }
+  const sealed = await sealMessageMedia(useAuthStore.getState().currentUser.id, message.conversationId, message.id, bytes, name.slice(0, 120), roomMembers(message.conversationId));
+  await uploadResumable({ roomId: message.conversationId, id: message.id, kind: 'file', name, bytes: sealed.bytes, sealed: sealed.body, replyToId: message.replyToId },
+    (uploadProgress) => patchMessage(message.id, { uploadProgress }), yieldToTexts, () => {
+      const current = useChatStore.getState().messages.find((item) => item.id === message.id);
+      return !current || current.status === 'failed' || current.senderId !== useAuthStore.getState().currentUser.id;
     });
-  } catch (error) { throw error; }
+  const current = useChatStore.getState().messages.find((item) => item.id === message.id);
+  patchMessage(message.id, {
+    status: 'sent',
+    uploadProgress: undefined,
+    media: {
+      fileName: name,
+      fileSize: bytes.byteLength,
+      localPreviewUrl: source,
+      state: 'cached',
+      ...(current?.media?.width ? { width: current.media.width } : {}),
+      ...(current?.media?.height ? { height: current.media.height } : {}),
+    },
+  });
 }
 
 async function publishVideo(message: Message) {
@@ -411,31 +406,29 @@ async function publishVideo(message: Message) {
     patchMessage(message.id, { status: 'failed' });
     return;
   }
-  try {
-    const bytes = await localMediaBytes(source);
-    if (bytes.byteLength < 1 || bytes.byteLength > VIDEO_BYTES_MAX) {
-      patchMessage(message.id, { status: 'failed' });
-      return;
-    }
-    const sealed = await sealMessageMedia(useAuthStore.getState().currentUser.id, message.conversationId, message.id, bytes, name.slice(0, 120), roomMembers(message.conversationId));
-    await uploadResumable({ roomId: message.conversationId, id: message.id, kind: 'video', name, bytes: sealed.bytes, sealed: sealed.body, replyToId: message.replyToId },
-      (uploadProgress) => patchMessage(message.id, { uploadProgress }), yieldToTexts, () => {
-        const current = useChatStore.getState().messages.find((item) => item.id === message.id);
-        return !current || current.status === 'failed' || current.senderId !== useAuthStore.getState().currentUser.id;
-      });
-    const current = useChatStore.getState().messages.find((item) => item.id === message.id);
-    patchMessage(message.id, {
-      status: 'sent',
-      uploadProgress: undefined,
-      media: {
-        fileName: name,
-        fileSize: bytes.byteLength,
-        localPreviewUrl: source,
-        state: 'cached',
-        ...(current?.media?.duration ? { duration: current.media.duration } : {}),
-      },
+  const bytes = await localMediaBytes(source);
+  if (bytes.byteLength < 1 || bytes.byteLength > VIDEO_BYTES_MAX) {
+    patchMessage(message.id, { status: 'failed' });
+    return;
+  }
+  const sealed = await sealMessageMedia(useAuthStore.getState().currentUser.id, message.conversationId, message.id, bytes, name.slice(0, 120), roomMembers(message.conversationId));
+  await uploadResumable({ roomId: message.conversationId, id: message.id, kind: 'video', name, bytes: sealed.bytes, sealed: sealed.body, replyToId: message.replyToId },
+    (uploadProgress) => patchMessage(message.id, { uploadProgress }), yieldToTexts, () => {
+      const current = useChatStore.getState().messages.find((item) => item.id === message.id);
+      return !current || current.status === 'failed' || current.senderId !== useAuthStore.getState().currentUser.id;
     });
-  } catch (error) { throw error; }
+  const current = useChatStore.getState().messages.find((item) => item.id === message.id);
+  patchMessage(message.id, {
+    status: 'sent',
+    uploadProgress: undefined,
+    media: {
+      fileName: name,
+      fileSize: bytes.byteLength,
+      localPreviewUrl: source,
+      state: 'cached',
+      ...(current?.media?.duration ? { duration: current.media.duration } : {}),
+    },
+  });
 }
 
 function videoMime(name: string) {
@@ -645,28 +638,6 @@ async function syncRoom(conversationId: string, wait = false, signal?: AbortSign
 function accountRoom(conversationId: string) {
   const me = useAuthStore.getState().currentUser.id;
   return isServerId(me) && conversationId === GLOBAL_CHAT_ID ? SERVER_GLOBAL_ROOM_ID : conversationId;
-}
-
-function placeLoadedRoom(conversations: Conversation[], conversationId: string, last?: Message) {
-  const mapped = conversations.map((conversation) => (
-    conversation.id === conversationId
-      ? { ...conversation, unreadCount: 0, ...(last ? { lastMessageId: last.id } : {}) }
-      : conversation
-  ));
-  if (mapped.some((conversation) => conversation.id === conversationId) || conversationId !== SERVER_GLOBAL_ROOM_ID) return mapped;
-  const me = useAuthStore.getState().currentUser.id;
-  return [
-    {
-      id: SERVER_GLOBAL_ROOM_ID,
-      type: 'global' as const,
-      name: 'ChatX',
-      participantIds: isServerId(me) ? [me] : [],
-      unreadCount: 0,
-      createdAt: '2026-01-01T00:00:00.000Z',
-      ...(last ? { lastMessageId: last.id } : {}),
-    },
-    ...mapped.filter((conversation) => conversation.id !== GLOBAL_CHAT_ID),
-  ];
 }
 
 function outgoingStatus(): MessageStatus {

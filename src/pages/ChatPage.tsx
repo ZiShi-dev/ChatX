@@ -518,6 +518,9 @@ export default function ChatPage() {
       scrollerHeight = next;
       if (frameChanged) return;
       stickThread(element, stickRef);
+      // Incoming messages can be visible without causing a scroll event.
+      window.clearTimeout(readTimer);
+      readTimer = window.setTimeout(() => void markVisible(), 900);
     });
     if (thread) observer.observe(thread);
     const viewport = window.visualViewport;

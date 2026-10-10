@@ -6,6 +6,7 @@ import { createMemoryRepository } from '../server/src/memory.ts';
 import { createLimiter } from '../server/src/authService.ts';
 import { loadConfig } from '../server/src/config.ts';
 import { hashSession } from '../server/src/session.ts';
+import { prepareTestIdentity } from './browser-test-keys.mjs';
 const require = createRequire(import.meta.url);
 const { chromium } = require(process.env.CHATX_PLAYWRIGHT_PATH || 'playwright');
 const repo = createMemoryRepository(); let clock = Date.now();
@@ -40,6 +41,7 @@ try {
     await route.fulfill({ status: response.status, headers: Object.fromEntries(response.headers), body: Buffer.from(await response.arrayBuffer()) });
   });
   await page.goto('http://127.0.0.1:4186/notifications');
+  await prepareTestIdentity(page, alice.id, publicKey => repo.saveUserKeys(alice.id, publicKey, { salt: 'a'.repeat(22), iv: 'a'.repeat(16), data: 'a'.repeat(32), iterations: 100000 }, false));
   await page.locator('.inbox-row.is-unread').first().waitFor();
   await page.locator('.startup-screen').waitFor({ state: 'detached' });
   await page.evaluate(async () => { await navigator.serviceWorker.ready; if (!navigator.serviceWorker.controller) await new Promise(resolve => navigator.serviceWorker.addEventListener('controllerchange', resolve, { once: true })); });

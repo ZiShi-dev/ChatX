@@ -1,3 +1,4 @@
+import { prepareTestIdentity } from './browser-test-keys.mjs';
 import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
 import { createApi } from '../server/src/http.ts';
@@ -27,6 +28,7 @@ try {
     await route.fulfill({ status: response.status, headers: Object.fromEntries(response.headers), body: Buffer.from(await response.arrayBuffer()) });
   });
   await page.goto(`http://127.0.0.1:4186/chat/${roomId}`);
+  await prepareTestIdentity(page, alice.id, publicKey => repo.saveUserKeys(alice.id, publicKey, { salt: 'a'.repeat(22), iv: 'a'.repeat(16), data: 'a'.repeat(32), iterations: 100000 }, false));
   await page.getByPlaceholder('اكتب رسالة').waitFor();
   const png = await page.evaluate(() => { const canvas = document.createElement('canvas'); canvas.width = 400; canvas.height = 1200; const ctx = canvas.getContext('2d'); ctx.fillStyle = '#123456'; ctx.fillRect(0, 0, 400, 1200); return canvas.toDataURL('image/png').split(',')[1]; });
   await page.locator('input[type=file][accept*="image"]').first().setInputFiles({ name: 'photo.png', mimeType: 'image/png', buffer: Buffer.from(png, 'base64') });

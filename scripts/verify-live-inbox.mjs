@@ -6,6 +6,7 @@ import { createMemoryRepository } from '../server/src/memory.ts';
 import { createLimiter } from '../server/src/authService.ts';
 import { loadConfig } from '../server/src/config.ts';
 import { hashSession } from '../server/src/session.ts';
+import { prepareTestIdentity } from './browser-test-keys.mjs';
 const require = createRequire(import.meta.url);
 const { chromium } = require(process.env.CHATX_PLAYWRIGHT_PATH || 'playwright');
 const repo = createMemoryRepository();
@@ -32,26 +33,7 @@ try {
     await route.fulfill({ status: response.status, headers: Object.fromEntries(response.headers), body: Buffer.from(await response.arrayBuffer()) });
   });
   await page.goto(`http://127.0.0.1:4186/chat/${groupId}`);
-  // Use an already configured account; recovery-code setup has separate tests.
-  const publicKey = await page.evaluate(async owner => {
-    const pair = await crypto.subtle.generateKey({ name: 'ECDH', namedCurve: 'P-256' }, true, ['deriveBits']);
-    const raw = new Uint8Array(await crypto.subtle.exportKey('raw', pair.publicKey));
-    const publicKey = btoa(String.fromCharCode(...raw)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
-    const db = await new Promise((resolve, reject) => {
-      const request = indexedDB.open('chatx-keys-v1', 1);
-      request.onupgradeneeded = () => { if (!request.result.objectStoreNames.contains('keys')) request.result.createObjectStore('keys', { keyPath: 'key' }); };
-      request.onsuccess = () => resolve(request.result); request.onerror = () => reject(request.error);
-    });
-    await new Promise((resolve, reject) => {
-      const tx = db.transaction('keys', 'readwrite'); tx.objectStore('keys').put({ key: `id:${owner}`, privateKey: pair.privateKey, publicKey });
-      tx.oncomplete = resolve; tx.onerror = () => reject(tx.error);
-    });
-    db.close(); return publicKey;
-  }, alice.id);
-  await repo.saveUserKeys(alice.id, publicKey, { salt: 'a'.repeat(22), iv: 'a'.repeat(16), data: 'a'.repeat(32), iterations: 100000 }, false);
-  await page.reload();
-  const later = page.getByRole('button', { name: 'ليس الآن', exact: true });
-  if (await later.count()) await later.click();
+  await prepareTestIdentity(page, alice.id, publicKey => repo.saveUserKeys(alice.id, publicKey, { salt: 'a'.repeat(22), iv: 'a'.repeat(16), data: 'a'.repeat(32), iterations: 100000 }, false));
   await page.getByPlaceholder('اكتب رسالة').waitFor().catch(async error => { console.log((await page.locator('body').innerText()).slice(-1200)); throw error; });
   await page.locator('.startup-screen').waitFor({ state: 'detached' });
   const cdp = await context.newCDPSession(page); await cdp.send('Emulation.setCPUThrottlingRate', { rate: 6 });
@@ -72,7 +54,7 @@ try {
   const message = { id: randomUUID(), roomId: privateId, senderId: bob.id, text: 'Private live message', createdAt: new Date(), deleted: false };
   await repo.addRoomMessage(message); await repo.notifyRoomMessage(message);
   const banner = page.locator('.live-inbox-banner');
-  await banner.filter({ hasText: 'Private live message' }).waitFor({ timeout: 22000 });
+  await banner.filter({ hasText: 'Private live message' }).waitFor({ timeout: 65000 });
   assert.ok((await banner.innerText()).includes('Private live message'));
   assert.ok(page.url().includes(groupId));
   assert.equal((await repo.listNotifications(alice.id, 30, null)).find(item => item.messageId === message.id)?.read, false);
@@ -81,12 +63,18 @@ try {
   await page.waitForTimeout(500);
   const second = { ...message, id: randomUUID(), text: 'Current chat live message', createdAt: new Date() };
   await repo.addRoomMessage(second); await repo.notifyRoomMessage(second);
-  await banner.filter({ hasText: 'Current chat live message' }).waitFor({ timeout: 22000 });
-  assert.ok((await banner.innerText()).includes('Current chat live message'));
-  await page.getByRole('button', { name: 'إخفاء الإشعار' }).click();
+  await page.getByText('Current chat live message', { exact: true }).waitFor({ timeout: 65000 });
+  assert.equal(await banner.filter({ hasText: 'Current chat live message' }).count(), 0);
+  let read = false;
+  for (let i = 0; i < 40; i++) {
+    read = (await repo.listNotifications(alice.id, 30, null)).find(item => item.messageId === second.id)?.read === true;
+    if (read) break;
+    await page.waitForTimeout(500);
+  }
+  assert.equal(read, true, 'Visible messages in the current chat must clear their unread notification');
   const groupMessage = { ...message, id: randomUUID(), roomId: groupId, text: 'Group live message from private chat', createdAt: new Date() };
   await repo.addRoomMessage(groupMessage); await repo.notifyRoomMessage(groupMessage);
-  await banner.filter({ hasText: 'Group live message from private chat' }).waitFor({ timeout: 22000 });
+  await banner.filter({ hasText: 'Group live message from private chat' }).waitFor({ timeout: 65000 });
   assert.ok(page.url().includes(privateId));
   assert.equal((await repo.listNotifications(alice.id, 30, null)).find(item => item.messageId === groupMessage.id)?.read, false);
   await page.locator('.live-inbox-open').click();

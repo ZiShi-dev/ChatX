@@ -11,7 +11,6 @@ import { conversationTitle, formatNotificationTime } from '../../lib/conversatio
 import { formatBytes } from '../../lib/media';
 import { toSavedEntry } from '../../lib/saved';
 import { mediaFile, exportMedia } from '../../lib/mediaExport';
-import type { Message } from '../../types/message';
 import './MediaViewer.css';
 
 export default function MediaViewer({ messageId, conversationId, onClose }: { messageId:string; conversationId:string; onClose:()=>void }) {
@@ -58,7 +57,8 @@ export default function MediaViewer({ messageId, conversationId, onClose }: { me
     reset();setRotation(0);setInfo(false);setNotice('');setChrome(true);setFile(null);setFailed(false);setSpeed(1);points.current.clear();
     let alive = true;
     if(current && ready && (image || playable)) void mediaFile(current).then((value)=>{if(alive)setFile(value);}).catch(()=>{if(alive)setNotice('تعذر تجهيز الملف. حاول إعادة تحميله.');});
-    return () => {alive=false;video.current?.pause();};
+    const player = video.current;
+    return () => {alive=false;player?.pause();};
   },[currentId,source,ready]);
   useEffect(() => {
     if(!current)onClose();
