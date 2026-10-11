@@ -1,5 +1,16 @@
 export const EVERYONE_HANDLE = 'everyone';
 
+/** Expand a role mention locally before encrypting; only conversation members are eligible. */
+export function mentionRecipients(text: string, people: readonly { id: string; username: string; role?: string; customRoleLabel?: string }[]) {
+  const names = (person: typeof people[number]) => [person.username, person.customRoleLabel ?? '', ...(person.role === 'admin' ? ['admin'] : person.role === 'creator' ? ['creator', 'المنشئ'] : [])].filter(Boolean);
+  const handles = new Set(mentionedHandles(text, [...people.flatMap(names), EVERYONE_HANDLE]));
+  return {
+    mentions: people.filter((person) => names(person).some((name) => handles.has(name.trim().toLowerCase()))).map((person) => person.id).slice(0, 50),
+    everyone: handles.has(EVERYONE_HANDLE),
+    signal: text.startsWith('تنبيه'),
+  };
+}
+
 const ACTIVE = /(^|\s)@([^\n@]*)$/u;
 const TOKEN = /^[\p{L}\p{N}_]+/u;
 

@@ -38,6 +38,7 @@ async function ensureAndroidChannel() {
     description: 'إشعارات المجموعات والمحادثات الخاصة',
     importance: 4,
     visibility: 1,
+    vibration: true,
   });
 }
 

@@ -28,6 +28,16 @@ function mount() {
   renderHook(useInboxAlerts);
   act(() => useChatStore.setState({ serverInbox: [item('history')] }));
 }
+it.each(['mention', 'everyone', 'message', 'reply'] as const)('sends a system banner for an unread %s while outside the app', (kind) => {
+  vi.spyOn(document, 'visibilityState', 'get').mockReturnValue('hidden');
+  mount();
+  const incoming = { ...item(`background-${kind}`), kind, unread: true, unreadCount: 1 };
+  act(() => useChatStore.setState({ serverInbox: [incoming] }));
+  expect(notify).toHaveBeenCalledWith(expect.objectContaining({ conversationId: room, mention: kind }));
+  expect(useLiveInbox.getState().notices).toHaveLength(0);
+  act(() => useChatStore.setState({ serverInbox: [{ ...incoming }] }));
+  expect(notify).toHaveBeenCalledOnce();
+});
 it('inspects each changed inbox once and still primes an unchanged initial inbox', async () => {
   poll.mockClear();
   const decorate = vi.spyOn(inbox, 'presentInbox');

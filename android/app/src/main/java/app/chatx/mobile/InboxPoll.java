@@ -98,6 +98,7 @@ final class InboxPoll {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             NotificationChannel channel = new NotificationChannel(CHANNEL, "الرسائل", NotificationManager.IMPORTANCE_HIGH);
             channel.setLockscreenVisibility(Notification.VISIBILITY_PUBLIC);
+            channel.enableVibration(true);
             manager.createNotificationChannel(channel);
         }
         String conversationId = row.optString("conversationId");
@@ -128,9 +129,13 @@ final class InboxPoll {
         builder
             .setStyle(new Notification.BigTextStyle().bigText(body))
             .setAutoCancel(true)
+            .setCategory(Notification.CATEGORY_MESSAGE)
             .setContentIntent(pending)
             .setVisibility(Notification.VISIBILITY_PUBLIC);
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) builder.setPriority(Notification.PRIORITY_HIGH);
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) {
+            builder.setPriority(Notification.PRIORITY_HIGH);
+            builder.setDefaults(Notification.DEFAULT_ALL);
+        }
         synchronized (InboxLifecycle.LOCK) {
             synchronized (InboxWatch.class) {
                 if (!InboxLifecycle.current(lease) || InboxWatch.seen(InboxWatch.prefs(context)).contains(messageId)) return false;

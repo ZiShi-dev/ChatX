@@ -12,7 +12,7 @@ import { advanceCursor, noteReadTime, type ReadCursors, type ReadTimes } from '.
 import { isServerId, mergeHomeMessages, readHomePayload, readOpenedRoom, readRoomMessages, readRoomReaders, readUpdatedRoom, SERVER_GLOBAL_ROOM_ID } from '../lib/home';
 import { notificationPreview, reactionNotice, readInboxPayload, readInboxUnread, resolveMessageFocus } from '../lib/inbox';
 import { ensureRoomKey, openMessageMedia, openMessages, openPreview, sealMessageMedia, sealMessageText } from '../lib/e2e';
-import { EVERYONE_HANDLE, mentionedHandles } from '../lib/mention';
+import { mentionRecipients } from '../lib/mention';
 import type { InboxItem } from '../lib/inbox';
 import { deletedPrivatePeer } from '../lib/conversation';
 import { firstUrl, linkDraft, readPreviewPayload, siteHost } from '../lib/link';
@@ -257,11 +257,7 @@ function roomMembers(conversationId: string) {
 function noticeHints(text: string, conversationId: string) {
   const members = new Set(roomMembers(conversationId));
   const people = useUserStore.getState().users.filter((user) => members.has(user.id));
-  const handles = new Set(mentionedHandles(text, [...people.map((user) => user.username), EVERYONE_HANDLE]));
-  const mentions = handles.size
-    ? people.filter((user) => handles.has(user.username.toLowerCase())).map((user) => user.id).slice(0, 50)
-    : [];
-  return { mentions, everyone: handles.has(EVERYONE_HANDLE), signal: text.startsWith('تنبيه') };
+  return mentionRecipients(text, people);
 }
 
 function cleanText(value: string | undefined) {
