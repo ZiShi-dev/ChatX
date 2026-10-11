@@ -4,6 +4,22 @@
 .decoration-soul-fire::after { display:none; }
 .soul-fire-back { z-index:0; }
 .soul-fire-front { z-index:2; }
+.jade-dragon-back { z-index:0; }
+.decoration-dragon > .avatar { position:relative; z-index:1; }
+.jade-dragon-front { z-index:2; }
+.decoration-dragon.is-animated .jade-dragon-coil { animation:jade-coil-breathe 6s ease-in-out infinite; transform-origin:60px 60px; }
+.decoration-dragon.is-animated .jade-dragon-head { animation:jade-head-breathe 4.8s ease-in-out infinite; transform-origin:94px 30px; }
+.decoration-dragon.is-animated .jade-dragon-mane { animation:jade-mane-wave 3.2s ease-in-out infinite; transform-origin:95px 32px; }
+.decoration-dragon.is-animated .jade-dragon-whiskers { animation:jade-whisker-wave 3.7s ease-in-out infinite; transform-origin:106px 40px; }
+.decoration-dragon.is-animated .jade-dragon-tail { animation:jade-tail-wave 5.4s ease-in-out infinite; transform-origin:100px 78px; }
+.decoration-dragon.is-animated .jade-dragon-breath { animation:jade-breath-rise 3.6s ease-out infinite; transform-origin:111px 54px; }
+@keyframes jade-coil-breathe { 50% { transform:scale(1.015,.99); } }
+@keyframes jade-head-breathe { 50% { transform:translate(-.5px,1px) rotate(-2deg); } }
+@keyframes jade-mane-wave { 50% { transform:skewY(-5deg) scale(1.04,1); } }
+@keyframes jade-whisker-wave { 50% { transform:rotate(9deg) scale(1,.92); } }
+@keyframes jade-tail-wave { 50% { transform:rotate(-4deg); } }
+@keyframes jade-breath-rise { 0%,100% { transform:translateY(0) scale(.7); opacity:0; } 25% { opacity:.8; } 80% { transform:translate(-2px,5px) scale(1.1); opacity:0; } }
+@media (prefers-reduced-motion:reduce) { .decoration-dragon.is-animated .jade-dragon-coil, .decoration-dragon.is-animated .jade-dragon-head, .decoration-dragon.is-animated .jade-dragon-mane, .decoration-dragon.is-animated .jade-dragon-whiskers, .decoration-dragon.is-animated .jade-dragon-tail, .decoration-dragon.is-animated .jade-dragon-breath { animation:none; } }
 .soul-flame { transform-box:fill-box; transform-origin:50% 100%; }
 .decoration-soul-fire.is-animated .soul-fire-contour { animation:soul-fire-flow 2.4s ease-in-out infinite; animation-delay:var(--flame-delay,0s); }
 .decoration-soul-fire.is-animated .soul-fire-core { animation-duration:1.8s; }
