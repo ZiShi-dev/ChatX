@@ -5736,3 +5736,8 @@ ion-toolbar {
 .has-user-display { font-weight:700; }
 
 .bubble .bubble-url { color:var(--chatx-link,var(--chatx-accent-soft)); }
+
+/* Keep the thread height stable when the typing status starts or stops. */
+.typing-indicator { height:22px; min-height:22px; flex-shrink:0; overflow:hidden; white-space:nowrap; }
+.typing-indicator > span:last-child { overflow:hidden; text-overflow:ellipsis; }
+.typing-indicator.is-idle { opacity:0; }

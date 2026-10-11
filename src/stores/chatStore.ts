@@ -609,6 +609,11 @@ async function syncRoom(conversationId: string, wait = false, signal?: AbortSign
           return previous?.media?.localPreviewUrl && message.media && !message.deletedForEveryone
             ? { ...message, media: { ...message.media, localPreviewUrl: previous.media.localPreviewUrl, state: 'cached' as const } } : message;
         });
+        const ownReactionChanged = incoming.some(message => {
+          if (message.senderId !== owner) return false;
+          const previous = state.messages.find(item => item.id === message.id);
+          return previous && JSON.stringify(previous.reactions ?? []) !== JSON.stringify(message.reactions ?? []);
+        });
         const cursors = { ...(delta.reset ? {} : state.readCursors[conversationId]) };
         const times = { ...(delta.reset ? {} : state.readTimes[conversationId]) };
         for (const reader of delta.readers) { cursors[reader.userId] = reader.messageId; times[reader.userId] = reader.readAt; }
@@ -625,6 +630,7 @@ async function syncRoom(conversationId: string, wait = false, signal?: AbortSign
         });
         for (const message of incoming) if (message.senderId === owner) void removeOutgoing(owner, message.id).catch(() => undefined);
         if (delta.typing) useChatStore.getState().setTyping(conversationId, delta.typing.filter((id) => id !== owner));
+        if (ownReactionChanged) void useChatStore.getState().loadInbox();
         roomSyncCursors.set(conversationId, delta.cursor);
         if (!delta.hasMore) return true;
       }

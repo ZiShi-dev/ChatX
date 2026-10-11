@@ -445,6 +445,18 @@ export default function ChatPage() {
       if ((!leaving && !placedRef.current) || !isServerId(id) || !scroller) return;
       if (!leaving && (document.visibilityState === 'hidden' || !watchingRoom(window.location.pathname, id))) return;
       if (reading) { readAgain = true; return; }
+      // Reactions may arrive on an older visible message, independently of the read cursor.
+      const bounds = scroller.getBoundingClientRect();
+      const visibleReactions = useChatStore.getState().serverInbox.filter(item => {
+        if (!item.unread || item.kind !== 'reaction' || item.conversationId !== id) return false;
+        const node = document.getElementById('msg-' + item.id);
+        if (!node || !contentRef.current?.contains(node)) return false;
+        const reaction = node.querySelector('.reaction-pill');
+        if (!reaction) return false;
+        const rect = reaction.getBoundingClientRect();
+        return rect.height > 0 && Math.min(rect.bottom, bounds.bottom) - Math.max(rect.top, bounds.top) >= 12;
+      });
+      if (visibleReactions.length) useChatStore.getState().markNotificationsRead(visibleReactions.map(item => item.id));
       const list = messagesRef.current;
       const gap = scroller.scrollHeight - scroller.scrollTop - scroller.clientHeight;
       let targetId = '';
@@ -457,7 +469,7 @@ export default function ChatPage() {
         }
       } else {
         const bounds = scroller.getBoundingClientRect();
-        const nodes = scroller.querySelectorAll<HTMLElement>('[id^="msg-"]');
+        const nodes = contentRef.current?.querySelectorAll<HTMLElement>('[id^="msg-"]') ?? [];
         for (let index = nodes.length - 1; index >= 0; index -= 1) {
           const rect = nodes[index].getBoundingClientRect();
           const overlap = Math.max(0, Math.min(rect.bottom, bounds.bottom) - Math.max(rect.top, bounds.top));
@@ -519,6 +531,18 @@ export default function ChatPage() {
         keepBottom = false;
       }, 400);
     };
+    const reactionKey = () => useChatStore.getState().serverInbox
+      .filter(item => item.conversationId === id && item.kind === 'reaction' && item.unread)
+      .map(item => item.id + ':' + item.createdAt).join('|');
+    let lastReactions = reactionKey();
+    const unsubscribeReactions = useChatStore.subscribe((state, previous) => {
+      if (state.serverInbox === previous.serverInbox) return;
+      const next = reactionKey();
+      if (next === lastReactions) return;
+      lastReactions = next;
+      window.clearTimeout(readTimer);
+      readTimer = window.setTimeout(() => void markVisible(), 900);
+    });
     const thread = endRef.current?.parentElement;
     const mutations = new MutationObserver(() => {
       window.clearTimeout(readTimer);
@@ -572,6 +596,7 @@ export default function ChatPage() {
       window.clearTimeout(keepTimer);
       observer.disconnect();
       mutations.disconnect();
+      unsubscribeReactions();
       viewport?.removeEventListener('resize', holdBottom);
       document.removeEventListener('focusin', onFocus);
       window.removeEventListener('pagehide', onLeave);
@@ -699,12 +724,6 @@ export default function ChatPage() {
     }
     if (messages.length > previous) setFresh((count) => count + (messages.length - previous));
   }, [arrivalUnread, conversation?.unreadCount, currentUser.id, focusId, id, messages, ready, resumeBack, roomHistoryLimit, searching, setParams]);
-
-  useEffect(() => {
-    if (!stickRef.current) return;
-    const scroller = scrollerRef.current;
-    if (scroller) pinBottom(scroller);
-  }, [typingIds.length]);
 
   useEffect(() => {
     if (focusId || !stickRef.current) return;

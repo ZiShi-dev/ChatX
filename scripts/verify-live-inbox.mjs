@@ -1,3 +1,4 @@
+import { publishTyping } from '../server/src/typing.ts';
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import { createRequire } from 'node:module';
@@ -65,6 +66,8 @@ try {
   assert.ok((await banner.innerText()).includes('Private live message'));
   assert.ok(page.url().includes(groupId));
   assert.equal((await repo.listNotifications(alice.id, 30, null)).find(item => item.messageId === message.id)?.read, false);
+  const own = { ...message, id: randomUUID(), senderId: alice.id, text: 'Own message for live reaction', createdAt: new Date(message.createdAt.getTime() - 1000) };
+  await repo.addRoomMessage(own);
   await page.locator('.live-inbox-open').click();
   await page.waitForURL(`**/chat/${privateId}?at=${message.id}`);
   await page.waitForTimeout(500);
@@ -89,6 +92,29 @@ try {
     await page.waitForTimeout(500);
   }
   assert.equal(read, true, 'Visible messages in the current chat must clear their unread notification');
+  await page.locator('#msg-' + own.id).scrollIntoViewIfNeeded();
+  await page.waitForTimeout(1200);
+  await repo.setReaction({ roomId: privateId, messageId: own.id, userId: bob.id, emoji: '👍', at: new Date() });
+  await page.locator('#msg-' + own.id + ' .reaction-pill').waitFor({ timeout: 65000 });
+  let reactionRead = false;
+  for (let i = 0; i < 130; i++) {
+    reactionRead = (await repo.listNotifications(alice.id, 30, null)).find(item => item.messageId === own.id && item.kind === 'reaction')?.read === true;
+    if (reactionRead) break;
+    await page.waitForTimeout(500);
+  }
+  assert.equal(reactionRead, true, 'A live reaction on an older visible message must clear its notification');
+  const typing = page.locator('.typing-indicator');
+  const beforeTyping = await typing.evaluate(node => ({ height: node.getBoundingClientRect().height, top: node.getBoundingClientRect().top }));
+  const timer = setInterval(() => publishTyping(privateId, bob.id, true, Date.now()), 2000);
+  try {
+    publishTyping(privateId, bob.id, true, Date.now());
+    await page.waitForFunction(() => document.querySelector('.typing-indicator')?.textContent.includes('Bob'), null, { timeout: 65000 });
+    const duringTyping = await typing.evaluate(node => ({ height: node.getBoundingClientRect().height, top: node.getBoundingClientRect().top }));
+    assert.equal(duringTyping.height, beforeTyping.height);
+    assert.ok(Math.abs(duringTyping.top - beforeTyping.top) < 1, 'Typing must not move the thread');
+  } finally { clearInterval(timer); publishTyping(privateId, bob.id, false, Date.now()); }
+  const idleHeight = await page.locator('.typing-indicator').evaluate(node => node.getBoundingClientRect().height);
+  assert.equal(idleHeight, 22);
   const groupMessage = { ...message, id: randomUUID(), roomId: groupId, text: 'Group live message from private chat', createdAt: new Date() };
   await repo.addRoomMessage(groupMessage); await repo.notifyRoomMessage(groupMessage);
   await banner.filter({ hasText: 'Group live message from private chat' }).waitFor({ timeout: 65000 });
@@ -97,5 +123,5 @@ try {
   await page.locator('.live-inbox-open').click();
   await page.waitForURL(`**/chat/${groupId}?at=${groupMessage.id}`);
   assert.deepEqual(errors, []);
-  console.log('PASS emoji stability, cross-chat banners without premature reads, trailing-slash chat sync, and visible arrivals during a slow read acknowledgement; CPU 6x');
+  console.log('PASS emoji stability, cross-chat banners without premature reads, trailing-slash chat sync, visible arrivals during a slow read acknowledgement, live reactions on older visible messages, and stable typing layout; CPU 6x');
 } finally { releaseRead?.(); await browser.close(); }
