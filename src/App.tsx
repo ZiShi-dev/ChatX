@@ -35,6 +35,8 @@ import { InboxWatch } from './lib/inboxWatch';
 import { listenForChatNotificationOpens } from './lib/notifications';
 import { useAuthStore } from './stores/authStore';
 import { observeNetwork } from './stores/networkStore';
+import { useMotionTier } from './hooks/useMotionTier';
+import './theme/motion-budget.css';
 
 import '@ionic/react/css/core.css';
 import '@ionic/react/css/normalize.css';
@@ -53,6 +55,7 @@ import './theme/chat.css';
 setupIonicReact({ mode: 'md' });
 
 function NativeChrome() {
+  useMotionTier();
   const navigate = useNavigate();
   useFcmPush();
 

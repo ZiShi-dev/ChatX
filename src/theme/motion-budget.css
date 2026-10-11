@@ -1,0 +1,23 @@
+/* Keep functional loading indicators; reduce decorative motion app-wide. */
+:root[data-motion-tier="static"] .profile-effect *,
+:root[data-motion-tier="static"] .avatar-frame *,
+:root[data-motion-tier="static"] .avatar-frame::after,
+:root[data-motion-tier="static"] .startup-logo,
+:root[data-motion-tier="static"] .startup-name {
+  animation:none !important;
+}
+:root[data-motion-tier="static"] * { scroll-behavior:auto !important; transition-duration:0s !important; }
+:root[data-motion-tier="balanced"] * { transition-duration:100ms !important; }
+:root[data-motion-tier="balanced"] .profile-effect .smoke-ribbon,
+:root[data-motion-tier="balanced"] .profile-effect .atmosphere-veil,
+:root[data-motion-tier="balanced"] .profile-effect .spirit-mote,
+:root[data-motion-tier="balanced"] .profile-effect .sword-seal,
+:root[data-motion-tier="balanced"] .profile-effect .time-seal,
+:root[data-motion-tier="balanced"] .avatar-frame .soul-fire-contour,
+:root[data-motion-tier="balanced"] .avatar-frame .soul-fire-ember,
+:root[data-motion-tier="balanced"] .avatar-frame .hat-rain-back,
+:root[data-motion-tier="balanced"] .avatar-frame .hat-rain-front {
+  animation:none !important;
+}
+:root[data-motion-tier="balanced"] .profile-effect .spirit-mote:nth-child(n+4),
+:root[data-motion-tier="balanced"] .profile-effect .atmosphere-star:nth-child(n+7) { display:none; }
