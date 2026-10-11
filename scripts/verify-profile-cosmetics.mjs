@@ -164,9 +164,17 @@ try {
     assert.equal(await viewer.locator('.user-card-banner .profile-effect').evaluate(node => getComputedStyle(node).zIndex), '2');
     await viewer.screenshot({ path: 'docs/cultivation-' + effect + '-mobile.png' });
     assert.equal(await viewer.locator('.user-card-banner .profile-effect.is-animated').count(), 1);
+    const smoke = viewer.locator('.cultivation-scene .smoke-left');
+    assert.equal(await smoke.evaluate(node => getComputedStyle(node).animationName), 'cultivation-smoke');
+    const firstTransform = await smoke.evaluate(node => getComputedStyle(node).transform);
+    await viewer.waitForTimeout(180);
+    assert.notEqual(await smoke.evaluate(node => getComputedStyle(node).transform), firstTransform, 'Smoke must actually move');
+    assert.equal(await viewer.locator('.cultivation-scene .cultivation-aura').evaluate(node => getComputedStyle(node).animationName), 'cultivation-aura');
+    assert.equal(await viewer.locator('.cultivation-scene rect, .cultivation-scene image').count(), 0, 'The overlay must not replace or darken the banner');
     await viewer.emulateMedia({ reducedMotion: 'reduce' });
     const motion = viewer.locator('.cultivation-scene .celestial-dragon-body, .cultivation-scene .immortal-sword, .cultivation-scene .gu-cicada').first();
     assert.equal(await motion.evaluate(node => getComputedStyle(node).animationName), 'none');
+    assert.equal(await smoke.evaluate(node => getComputedStyle(node).animationName), 'none');
     await viewer.emulateMedia({ reducedMotion: 'no-preference' });
   }
   await page.goto(origin + '/account?tab=settings');

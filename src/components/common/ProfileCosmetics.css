@@ -79,17 +79,42 @@
 .user-card-banner, .profile-editor-banner { position:relative; isolation:isolate; }
 .profile-banner .banner-actions { z-index:4; }
 .cultivation-scene { display:block; width:100%; height:100%; }
-.cultivation-scene { display:grid; place-items:center; overflow:hidden; }
-.cultivation-scene img { display:block; width:100%; height:100%; object-fit:contain; transform-origin:center; }
-.is-animated .celestial-dragon-body { animation:celestial-dragon 9s ease-in-out infinite; }
+.cultivation-halo { opacity:.85; }
+.is-animated .cultivation-halo { animation:spirit-halo 7s ease-in-out infinite; }
+.is-animated .cultivation-mist { animation:spirit-mist 12s ease-in-out infinite alternate; }
+.is-animated .celestial-dragon-body { animation:celestial-dragon 9s ease-in-out infinite; transform-origin:320px 112px; }
+.is-animated .dragon-whiskers { animation:dragon-whiskers 4s ease-in-out infinite; transform-origin:480px 96px; }
+.is-animated .sword-seal, .is-animated .time-seal { animation:spirit-seal 32s linear infinite; transform-origin:320px 118px; }
+.is-animated .time-seal { transform-origin:320px 112px; animation-direction:reverse; }
 .is-animated .immortal-sword { animation:immortal-sword 5s ease-in-out infinite; }
+.is-animated .sword-1, .is-animated .sword-4 { animation-delay:-1.5s; }
+.is-animated .sword-2, .is-animated .sword-3 { animation-delay:-3s; }
 .is-animated .gu-cicada { animation:cicada-hover 6s ease-in-out infinite; }
-@keyframes celestial-dragon { 35% { transform:translate(-4px,-4px) rotate(-1deg); } 70% { transform:translate(4px,2px) rotate(1deg); } }
-@keyframes immortal-sword { 50% { transform:translateY(-6px); } }
-@keyframes cicada-hover { 50% { transform:translateY(-5px) scale(1.025); } }
+.is-animated .wing-left { animation:cicada-left 4s ease-in-out infinite; transform-origin:315px 108px; }
+.is-animated .wing-right { animation:cicada-right 4s ease-in-out infinite; transform-origin:325px 108px; }
+.is-animated .spirit-particles { animation:spirit-particles 7s ease-in-out infinite; }
+@keyframes spirit-halo { 50% { opacity:.5; } }
+@keyframes spirit-mist { to { transform:translateX(14px); opacity:.5; } }
+@keyframes celestial-dragon { 35% { transform:translate(-6px,-7px) rotate(-1deg); } 70% { transform:translate(5px,2px) rotate(1deg); } }
+@keyframes dragon-whiskers { 50% { transform:rotate(-4deg); } }
+@keyframes spirit-seal { to { transform:rotate(360deg); } }
+@keyframes immortal-sword { 50% { transform:translateY(-9px); } }
+@keyframes cicada-hover { 50% { transform:translateY(-7px); } }
+@keyframes cicada-left { 50% { transform:rotate(-5deg); } }
+@keyframes cicada-right { 50% { transform:rotate(5deg); } }
+@keyframes spirit-particles { 50% { transform:translateY(-13px); opacity:.3; } }
 .profile-editor-preview { border:1px solid var(--chatx-frame); border-radius:18px; overflow:hidden; }
 .profile-editor-banner { height:100px; overflow:hidden; background:radial-gradient(ellipse at 80% 0,var(--banner),transparent 85%),var(--chatx-bg); }
 .profile-editor-banner > img { width:100%; height:100%; object-fit:cover; display:block; }
 .profile-editor-preview .cosmetic-preview { margin-top:-28px; min-height:100px; border:0; border-radius:0; background:transparent; }
 @media (max-height:600px) { .profile-editor-banner { height:64px; } .profile-editor-preview .cosmetic-preview { min-height:72px; } }
+@media (prefers-reduced-motion:reduce) { .profile-effect.is-animated .cultivation-scene * { animation:none; } }
+/* Transparent atmosphere leaves the uploaded banner visible underneath. */
+.is-animated .smoke-ribbon { animation:cultivation-smoke 10s ease-in-out infinite; transform-box:fill-box; transform-origin:center; }
+.is-animated .smoke-right { animation-name:cultivation-smoke-reverse; animation-delay:-5s; }
+.is-animated .smoke-high { animation-duration:14s; animation-delay:-7s; }
+.is-animated .cultivation-aura { animation:cultivation-aura 6s ease-in-out infinite; transform-origin:320px 174px; }
+@keyframes cultivation-smoke { 0%,100% { transform:translate(-12px,9px) scale(.97); opacity:.35; } 50% { transform:translate(18px,-13px) scale(1.07); opacity:.9; } }
+@keyframes cultivation-smoke-reverse { 0%,100% { transform:translate(12px,7px) scale(1.02); opacity:.4; } 50% { transform:translate(-18px,-16px) scale(.97); opacity:.85; } }
+@keyframes cultivation-aura { 50% { transform:scale(1.08,.85); opacity:.45; } }
 @media (prefers-reduced-motion:reduce) { .profile-effect.is-animated .cultivation-scene * { animation:none; } }

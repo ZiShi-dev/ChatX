@@ -62,8 +62,11 @@ it('confines cultivation artwork to the banner and keeps it static with data sav
   rerender(<ProfileEffect effect="celestial-dragon" color="#3d9b84" />);
   expect(container.querySelector('.cultivation-scene')).toBeNull();
   rerender(<ProfileEffect effect="sword-domain" color="#3d9b84" placement="banner" />);
-  expect(container.querySelector('.cultivation-scene svg')).toBeNull();
-  expect(container.querySelector('.immortal-sword')?.getAttribute('src')).toBe('/assets/cultivation/sword-domain-v1.webp');
+  expect(container.querySelectorAll('.immortal-sword')).toHaveLength(6);
+  expect(container.querySelector('.cultivation-scene img')).toBeNull();
+  expect(container.querySelectorAll('.smoke-ribbon')).toHaveLength(3);
+  expect(container.querySelector('.cultivation-aura')).not.toBeNull();
+  expect(container.querySelector('rect')).toBeNull();
   rerender(<ProfileEffect effect="time-cicada" color="#3d9b84" placement="banner" />);
   expect(container.querySelector('.gu-cicada')).not.toBeNull();
 });
