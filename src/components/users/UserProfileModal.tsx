@@ -4,6 +4,7 @@ import { IonIcon } from '@ionic/react';
 import { chatbubbleOutline } from 'ionicons/icons';
 import Avatar from '../common/Avatar';
 import CustomRoleBadge from '../common/CustomRoleBadge';
+import { customRoleReady } from '../../lib/customRole';
 import ProfileEffect from '../common/ProfileEffect';
 import { useProfileMotion } from '../../hooks/useProfileMotion';
 import { connectionLabel } from '../../lib/presence';
@@ -36,6 +37,7 @@ export default function UserProfileModal({ user, isSelf, room, onClose, onMessag
   const animate = useProfileMotion();
   if (!user) return null;
   const chips = chipsFor(user, isSelf, room);
+  const showChips = customRoleReady(user) || chips.length > 0;
   return createPortal(
     <div className="app-scrim sheet" onClick={onClose}>
       <div className="app-sheet profile-pop member-sheet" role="dialog" aria-labelledby="member-sheet-name" onClick={(event) => event.stopPropagation()}>
@@ -52,10 +54,12 @@ export default function UserProfileModal({ user, isSelf, room, onClose, onMessag
           <i className={user.status === 'online' ? 'on' : ''} />
           {connectionLabel(user, { self: isSelf })}
         </p>
-        <p className="member-chips">
-          <CustomRoleBadge user={user} />
-          {chips.map((label) => <span key={label} className="kind-pill">{label}</span>)}
-        </p>
+        {showChips && (
+          <p className="member-chips">
+            <CustomRoleBadge user={user} />
+            {chips.map((label) => <span key={label} className="kind-pill">{label}</span>)}
+          </p>
+        )}
         {room && <p className="member-room">عضو في {room.name}</p>}
         <section className="profile-bio member-bio">
           <span>النبذة</span>

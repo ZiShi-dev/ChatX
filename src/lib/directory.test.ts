@@ -41,6 +41,12 @@ describe('directory payloads', () => {
       messageFont: 'system',
     });
     expect(readDirectoryUsers({ users: [{ ...user, messageFont: 'classic' }] })?.[0]?.messageFont).toBe('classic');
+    expect(readDirectoryUsers({ users: [{ ...user, customRoleLabel: 'حارس', customRoleColors: ['#112233', '#aabbcc'] }] })?.[0]).toMatchObject({
+      customRoleLabel: 'حارس',
+      customRoleColors: ['#112233', '#aabbcc'],
+    });
+    expect(readDirectoryUsers({ users: [{ ...user, customRoleLabel: 'حارس', customRoleColors: ['bad'] }] })).toBeNull();
+    expect(readDirectoryUsers({ users: [{ ...user, customRoleLabel: '', customRoleColors: ['#112233'] }] })?.[0]).not.toHaveProperty('customRoleLabel');
   });
 
   it('accepts a long invite and rejects a short one', () => {

@@ -22,6 +22,15 @@ const member = (id: string): AuthUser => ({
 });
 
 describe('media store', () => {
+  it('creates images and files directories on ensure', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'chatx-media-'));
+    const store = createMediaStore(root);
+    await store.ensure();
+    const { stat } = await import('node:fs/promises');
+    assert.equal((await stat(join(root, 'images'))).isDirectory(), true);
+    assert.equal((await stat(join(root, 'files'))).isDirectory(), true);
+  });
+
   it('writes and reads message blobs on disk', async () => {
     const root = await mkdtemp(join(tmpdir(), 'chatx-media-'));
     const store = createMediaStore(root);

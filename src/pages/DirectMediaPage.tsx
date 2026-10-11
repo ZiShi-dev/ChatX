@@ -11,6 +11,7 @@ import ProfileEffect from '../components/common/ProfileEffect';
 import { useProfileMotion } from '../hooks/useProfileMotion';
 import { otherParticipant } from '../lib/conversation';
 import { connectionLabel, getUserPresence } from '../lib/presence';
+import { customRoleReady } from '../lib/customRole';
 import { displayNameStyleForUser, fontLabel } from '../lib/userStyle';
 import { useAuthStore } from '../stores/authStore';
 import { useChatStore } from '../stores/chatStore';
@@ -66,10 +67,12 @@ export default function DirectMediaPage() {
                       <i className={getUserPresence(subject.id, users) === 'online' ? 'on' : ''} />
                       {connectionLabel(subject, { self: isSelf })}
                     </p>
-                    <p className="member-chips">
-                      <CustomRoleBadge user={subject} />
-                      {isSelf && <span className="kind-pill">أنت</span>}
-                    </p>
+                    {(customRoleReady(subject) || isSelf) && (
+                      <p className="member-chips">
+                        <CustomRoleBadge user={subject} />
+                        {isSelf && <span className="kind-pill">أنت</span>}
+                      </p>
+                    )}
                   </>
                 );
               })()}

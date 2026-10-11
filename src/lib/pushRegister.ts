@@ -79,6 +79,12 @@ export function syncPushPrefs() {
   void syncPrefs().catch(() => undefined);
 }
 
+export function resetPushRegistrationForTests() {
+  token = '';
+  started = false;
+  tokenListeners.clear();
+}
+
 export async function stopPushRegistration() {
   const current = token;
   token = '';

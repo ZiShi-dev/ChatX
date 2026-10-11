@@ -8,10 +8,15 @@ import { useMuteStore } from '../stores/muteStore';
 import { useSettingsStore } from '../stores/settingsStore';
 import { DEFAULT_NOTIFY_TYPES, type InboxItem } from '../lib/inbox';
 import * as inbox from '../lib/inbox';
+import { fcmPushAlertsActive } from '../lib/pushRegister';
 const poll = vi.hoisted(() => vi.fn<(task: () => Promise<unknown>) => () => void>(() => () => undefined));
 const notify = vi.hoisted(() => vi.fn(async () => undefined));
 vi.mock('../lib/notifications', () => ({ notifyChatMessage: notify }));
 vi.mock('../lib/poll', () => ({ startPolling: poll }));
+vi.mock('../lib/pushRegister', () => ({
+  fcmPushAlertsActive: vi.fn(() => false),
+  onPushTokenReady: vi.fn(() => () => undefined),
+}));
 const owner = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
 const room = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
 const initialAuth = useAuthStore.getState();
@@ -60,6 +65,14 @@ it('delivers background unread notifications to the system and honors disabled t
   useSettingsStore.setState({ notifyTypes: { ...DEFAULT_NOTIFY_TYPES, message: false } });
   act(() => useChatStore.setState({ serverInbox: [{ ...item('muted'), unread: true, unreadCount: 1 }] }));
   expect(notify).toHaveBeenCalledOnce();
+});
+it('skips local background notifications when FCM push is active', () => {
+  vi.mocked(fcmPushAlertsActive).mockReturnValue(true);
+  vi.spyOn(document, 'visibilityState', 'get').mockReturnValue('hidden');
+  mount();
+  act(() => useChatStore.setState({ serverInbox: [{ ...item('fcm'), unread: true, unreadCount: 1 }] }));
+  expect(notify).not.toHaveBeenCalled();
+  vi.mocked(fcmPushAlertsActive).mockReturnValue(false);
 });
 it.each([
   ['group', 'private', undefined],

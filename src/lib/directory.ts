@@ -40,6 +40,7 @@ export function readDirectoryUser(value: unknown): User | null {
   const messageFont = sanitizeMessageFont(data.messageFont);
   const customRoleLabel = sanitizeCustomRoleLabel(data.customRoleLabel ?? '');
   const customRoleColors = parseCustomRoleColors(data.customRoleColors);
+  if (customRoleLabel && customRoleColors.length === 0) return null;
   return {
     id: data.id,
     displayName: data.displayName.trim(),

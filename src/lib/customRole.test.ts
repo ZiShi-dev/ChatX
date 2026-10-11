@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { customRoleReady, parseCustomRoleColors, sanitizeCustomRoleLabel } from './customRole';
+import { customRoleGradient, customRoleReady, parseCustomRoleColors, sanitizeCustomRoleLabel } from './customRole';
 
 describe('customRole', () => {
   it('parses role colors from API arrays', () => {
@@ -14,5 +14,10 @@ describe('customRole', () => {
 
   it('trims label length', () => {
     expect(sanitizeCustomRoleLabel('a'.repeat(40)).length).toBe(32);
+  });
+
+  it('builds solid or gradient styles', () => {
+    expect(customRoleGradient(['#112233']).background).toBe('#112233');
+    expect(customRoleGradient(['#112233', '#aabbcc']).background).toBe('linear-gradient(90deg, #112233, #aabbcc)');
   });
 });

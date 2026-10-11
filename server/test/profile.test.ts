@@ -4,7 +4,7 @@ import { createLimiter, resumeMember, type Deps } from '../src/authService.ts';
 import { loadConfig } from '../src/config.ts';
 import { createApi } from '../src/http.ts';
 import { createMemoryRepository } from '../src/memory.ts';
-import { cleanAccentColor, cleanBanner, cleanBio, cleanMessageFont } from '../src/profile.ts';
+import { cleanAccentColor, cleanBanner, cleanBio, cleanCustomRoleColors, cleanCustomRoleLabel, cleanMessageFont } from '../src/profile.ts';
 import { hashSession } from '../src/session.ts';
 import type { AuthUser } from '../src/types.ts';
 
@@ -43,6 +43,20 @@ describe('known account', () => {
 });
 
 describe('profile', () => {
+  it('validates custom role label and gradient colors', () => {
+    const label = cleanCustomRoleLabel('  حارس  ');
+    assert.equal(label.ok, true);
+    assert.equal(label.value, 'حارس');
+    assert.equal(cleanCustomRoleLabel('').value, null);
+    assert.equal(cleanCustomRoleLabel('ا'.repeat(33)).ok, false);
+    const colors = cleanCustomRoleColors(['#112233', '#aabbcc']);
+    assert.equal(colors.ok, true);
+    assert.equal(colors.value, '#112233,#aabbcc');
+    assert.equal(cleanCustomRoleColors('#112233,#aabbcc').value, '#112233,#aabbcc');
+    assert.equal(cleanCustomRoleColors(['#112233', 'bad']).ok, false);
+    assert.equal(cleanCustomRoleColors(['#111111', '#222222', '#333333', '#444444', '#555555']).ok, false);
+  });
+
   it('keeps a short bio and a jpeg banner', () => {
     assert.equal(cleanAccentColor('#4d7ea8').ok, true);
     assert.equal(cleanAccentColor('#ffffff').ok, true);
@@ -184,6 +198,51 @@ describe('profile', () => {
     }));
     assert.equal(rejected.status, 401);
   });
+
+  it('stores and clears a multi-color custom role on the public profile', async () => {
+    const deps = testDeps();
+    await deps.repo.insertUser(member);
+    const token = 'role-session';
+    await deps.repo.createSession(hashSession(token), member.id, new Date('2026-11-08T12:00:00.000Z'));
+    const handle = createApi(deps);
+
+    const saved = await handle(new Request('http://127.0.0.1/api/profile', {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json', 'x-chatx-request': '1', cookie: `chatx_session=${token}` },
+      body: JSON.stringify({ customRoleLabel: 'حارس', customRoleColors: ['#112233', '#aabbcc'] }),
+    }));
+    assert.equal(saved.status, 200);
+    const body = await saved.json() as { user: { customRoleLabel?: string; customRoleColors?: string[] } };
+    assert.equal(body.user.customRoleLabel, 'حارس');
+    assert.deepEqual(body.user.customRoleColors, ['#112233', '#aabbcc']);
+
+    const home = await handle(new Request('http://127.0.0.1/api/home', {
+      headers: { cookie: `chatx_session=${token}` },
+    }));
+    assert.equal(home.status, 200);
+    const listed = await home.json() as { users: Array<{ id: string; customRoleLabel?: string; customRoleColors?: string[] }> };
+    const peer = listed.users.find((user) => user.id === member.id);
+    assert.equal(peer?.customRoleLabel, 'حارس');
+    assert.deepEqual(peer?.customRoleColors, ['#112233', '#aabbcc']);
+
+    const cleared = await handle(new Request('http://127.0.0.1/api/profile', {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json', 'x-chatx-request': '1', cookie: `chatx_session=${token}` },
+      body: JSON.stringify({ customRoleLabel: null }),
+    }));
+    assert.equal(cleared.status, 200);
+    const after = await cleared.json() as { user: { customRoleLabel?: string; customRoleColors?: string[] } };
+    assert.equal(after.user.customRoleLabel, undefined);
+    assert.equal(after.user.customRoleColors, undefined);
+
+    const bad = await handle(new Request('http://127.0.0.1/api/profile', {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json', 'x-chatx-request': '1', cookie: `chatx_session=${token}` },
+      body: JSON.stringify({ customRoleLabel: 'حارس', customRoleColors: ['not-a-color'] }),
+    }));
+    assert.equal(bad.status, 401);
+  });
+
   it('persists optional profile cosmetics, removes them, and rejects unknown assets', async () => {
     const deps = testDeps(); await deps.repo.insertUser(member);
     const token = 'cosmetics-session';
