@@ -9,6 +9,7 @@ import {
   eraseOwnerGroup,
   eraseOwnerMember,
   listOwnerMembers,
+  listOwnerSystem,
   previewGoogle,
   readOwnProfile,
   readPresence,
@@ -453,6 +454,11 @@ async function route(deps: Deps, request: Request) {
     const result = await listOwnerMembers(deps, readCookie(request.headers.get('cookie'), 'chatx_session'));
     if (!result.ok) return failure(deps, result.error);
     return json({ users: result.users, groups: result.groups });
+  }
+  if (request.method === 'GET' && path === '/api/owner/system') {
+    const result = await listOwnerSystem(deps, readCookie(request.headers.get('cookie'), 'chatx_session'));
+    if (!result.ok) return failure(deps, result.error);
+    return json(result.system);
   }
   if (request.method === 'POST' && path === '/api/owner/groups/erase') {
     const result = await eraseOwnerGroup(deps, {

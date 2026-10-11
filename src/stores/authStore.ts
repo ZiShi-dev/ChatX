@@ -1,4 +1,4 @@
-import { avatarDecoration, profileEffect, type ProfileCosmetics } from '../lib/profileCosmetics';
+import { avatarDecoration, profileEffect, type AvatarDecoration, type ProfileCosmetics, type ProfileEffectId } from '../lib/profileCosmetics';
 import { create } from 'zustand';
 import { CURRENT_USER } from '../data/users';
 import { AdminApiError, adminFetch } from '../lib/adminApi';
@@ -114,7 +114,7 @@ type AuthState = {
   finishGoogleProfile: (
     credential: string,
     displayName: string,
-    extra?: { avatarUrl?: string; bio?: string; bannerUrl?: string },
+    extra?: { avatarUrl?: string; bio?: string; bannerUrl?: string; color?: string; messageFont?: MessageFontId; avatarDecoration?: AvatarDecoration; profileEffect?: ProfileEffectId },
   ) => Promise<'ok' | 'invalid' | 'username_taken' | 'offline' | 'rate_limited' | 'profile'>;
 };
 
@@ -269,19 +269,32 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         body: { credential, displayName },
       }));
       if (!user) return 'invalid';
-      const bio = extra?.bio?.trim() ?? user.bio;
+      const bio = extra?.bio?.trim() ?? '';
+      const avatarUrl = extra?.avatarUrl?.startsWith('data:image/jpeg') ? extra.avatarUrl : undefined;
+      const bannerUrl = extra?.bannerUrl?.startsWith('data:image/jpeg') ? extra.bannerUrl : undefined;
       const next = applyAccountPatch(
-        { ...user, ...(extra?.avatarUrl ? { avatarUrl: extra.avatarUrl } : {}) },
-        { bio, ...(extra?.bannerUrl ? { bannerUrl: extra.bannerUrl } : {}) },
+        { ...user, ...(avatarUrl ? { avatarUrl } : {}) },
+        {
+          bio,
+          ...(bannerUrl ? { bannerUrl } : {}),
+          ...(extra?.color ? { color: extra.color } : {}),
+          ...(extra?.messageFont ? { messageFont: extra.messageFont } : {}),
+          ...(extra?.avatarDecoration ? { avatarDecoration: extra.avatarDecoration } : {}),
+          ...(extra?.profileEffect ? { profileEffect: extra.profileEffect } : {}),
+        },
       );
-      if (bio || extra?.bannerUrl || extra?.avatarUrl) {
+      if (bio || avatarUrl || bannerUrl || extra?.color || extra?.messageFont || extra?.avatarDecoration || extra?.profileEffect) {
         try {
           await adminFetch('/api/profile', {
             method: 'PATCH',
             body: {
               ...(bio ? { bio } : {}),
-              ...(extra?.bannerUrl ? { banner: extra.bannerUrl } : {}),
-              ...(extra?.avatarUrl ? { avatar: extra.avatarUrl } : {}),
+              ...(bannerUrl ? { banner: bannerUrl } : {}),
+              ...(avatarUrl ? { avatar: avatarUrl } : {}),
+              ...(extra?.color ? { color: extra.color } : {}),
+              ...(extra?.messageFont ? { messageFont: extra.messageFont } : {}),
+              ...(extra?.avatarDecoration ? { avatarDecoration: extra.avatarDecoration } : {}),
+              ...(extra?.profileEffect ? { profileEffect: extra.profileEffect } : {}),
             },
           });
         } catch (error) {

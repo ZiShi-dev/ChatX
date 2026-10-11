@@ -111,7 +111,7 @@ export default function MediaViewer({ messageId, conversationId, onClose }: { me
   const action = async (share=false) => {
     if(!file || busy)return;
     setBusy(true);setNotice('');
-    try{ const result=await exportMedia(file,share);if(result==='saved')setNotice(Capacitor.getPlatform()==='android'?'تم حفظ الملف على الجهاز.':'بدأ تنزيل الملف.'); }
+    try{ const result=await exportMedia(file,share);if(result==='saved')setNotice(Capacitor.getPlatform()==='android'?'تم الحفظ على الهاتف. اختر المجلد في النافذة التالية إن ظهرت.':'بدأ تنزيل الملف على هذا المتصفح.'); }
     catch(error){if(!(error instanceof Error && error.name==='AbortError'))setNotice(share?'تعذر مشاركة الملف. يمكنك تنزيله بدلًا من ذلك.':'تعذر حفظ الملف. تحقق من المساحة المتاحة ثم أعد المحاولة.');}
     finally{setBusy(false);}
   };
@@ -150,7 +150,7 @@ export default function MediaViewer({ messageId, conversationId, onClose }: { me
         <button type="button" onClick={close} aria-label="إغلاق العارض"><IonIcon icon={closeOutline}/></button>
         <div className="mv-author"><strong>{sender}</strong><time>{formatNotificationTime(current.createdAt)}</time></div>
         <div className="mv-actions">
-          <button type="button" disabled={!file||busy} onClick={()=>void action()} aria-label="تنزيل على الجهاز"><IonIcon icon={downloadOutline}/></button>
+          <button type="button" disabled={!file||busy} onClick={()=>void action()} aria-label="حفظ على الهاتف"><IonIcon icon={downloadOutline}/></button>
           {canShare&&<button type="button" disabled={busy} onClick={()=>void action(true)} aria-label="مشاركة الملف"><IonIcon icon={shareSocialOutline}/></button>}
           <button type="button" onClick={keep} aria-label={isSaved?'إزالة من المحفوظات':'حفظ لي فقط'} aria-pressed={isSaved}><IonIcon icon={isSaved?bookmark:bookmarkOutline}/></button>
           <button type="button" onClick={()=>{useChatStore.getState().beginReply(currentId);close();}} aria-label="الرد على الرسالة"><IonIcon icon={arrowUndoOutline}/></button>
@@ -162,13 +162,13 @@ export default function MediaViewer({ messageId, conversationId, onClose }: { me
         onClick={(event)=>{if(event.target instanceof HTMLImageElement&&!gesture.current.moved&&!gesture.current.pinched)setChrome((value)=>!value);}}
         onWheel={(event)=>{if(image&&ready){zoom(scale+(event.deltaY<0?.25:-.25));}}}>
         {ready&&!failed ? image ? <img draggable={false} src={source} alt={current.text||'الصورة في المحادثة'} onError={()=>setFailed(true)} style={{width:rotation%180?size.height:undefined,height:rotation%180?size.width:undefined,maxWidth:rotation%180?'none':undefined,maxHeight:rotation%180?'none':undefined,flexShrink:0,transform:`translate(${position.x}px,${position.y}px) rotate(${rotation}deg) scale(${scale})`}}/> : playable ? <video ref={video} key={currentId} src={source} controls playsInline preload="metadata" onError={()=>setFailed(true)}/> : <p className="mv-placeholder">لا يوجد ملف فيديو قابل للتشغيل لهذا المقطع.</p> : <div className="mv-placeholder">
-          <p>{failed?'تعذر عرض الملف.':current.downloadFailed?'تعذر تنزيل الملف.':'هذا الملف لم يُحمّل على الجهاز.'}</p>
+          <p>{failed?'تعذر عرض الملف.':current.mediaExpired?'انتهت صلاحية الملف على الخادم.':current.downloadFailed?'تعذر تنزيل الملف.':'هذا الملف لم يُحمّل على الجهاز.'}</p>
           {current.media?.state==='downloading'?<p role="status">جارٍ التنزيل… {current.downloadProgress??0}%</p>:<button type="button" onClick={()=>{setFailed(false);useChatStore.getState().downloadMedia(currentId);}}>تنزيل {formatBytes(current.media?.fileSize??0)}</button>}
         </div>}
       </div>
       {index>0&&<button type="button" className="mv-prev mv-nav" onClick={()=>move(-1)} aria-label="الوسيط السابق"><IonIcon icon={chevronBackOutline}/></button>}
       {index<items.length-1&&<button type="button" className="mv-next mv-nav" onClick={()=>move(1)} aria-label="الوسيط التالي"><IonIcon icon={chevronForwardOutline}/></button>}
-      {info&&<aside className="mv-info"><strong>معلومات الملف</strong><span>{current.media?.fileName|| (image?'صورة':'فيديو')}</span><span dir="ltr">{formatBytes(current.media?.fileSize??0)}{current.media?.width&&current.media?.height?` · ${current.media.width} × ${current.media.height}`:''}</span><span>من {sender}</span><time>{formatNotificationTime(current.createdAt)}</time><small>الحفظ في المحفوظات خاص بك. التنزيل يحفظ نسخة على الجهاز.</small></aside>}
+      {info&&<aside className="mv-info"><strong>معلومات الملف</strong><span>{current.media?.fileName|| (image?'صورة':'فيديو')}</span><span dir="ltr">{formatBytes(current.media?.fileSize??0)}{current.media?.width&&current.media?.height?` · ${current.media.width} × ${current.media.height}`:''}</span><span>من {sender}</span><time>{formatNotificationTime(current.createdAt)}</time><small>«حفظ لي فقط» يضيف الرسالة إلى محفوظاتك داخل ChatX. «حفظ على الهاتف» ينسخ الصورة أو الفيديو أو أي ملف (PDF، Word، ZIP…) إلى ملفاتك ويبقى بعد حذف التطبيق إن اخترت مجلدًا دائمًا.</small></aside>}
       <footer className="mv-footer">
         {notice&&<p className="mv-notice" role="status">{notice}</p>}
         {current.text&&<p className="mv-caption">{current.text}</p>}

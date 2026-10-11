@@ -1,4 +1,5 @@
 import { createLowBandwidthRepository } from './lowBandwidth.ts';
+import type { MediaStore } from './mediaStore.ts';
 import { createKeyRepository } from './keyStore.ts';
 import { FILE_BYTES_MAX, IMAGE_BYTES_MAX, isVideoFileName, SEALED_OVERHEAD, VIDEO_BYTES_MAX } from './sealed.ts';
 import { randomInt } from 'node:crypto';
@@ -63,6 +64,16 @@ function fileSizeOf(value: unknown) {
   return byteSizeOf(value, VIDEO_BYTES_MAX + SEALED_OVERHEAD);
 }
 
+const IMAGE_BYTES_SQL = 'COALESCE(i.byte_size, octet_length(i.bytes)::int)';
+const FILE_BYTES_SQL = 'COALESCE(f.byte_size, octet_length(f.bytes)::int)';
+const IMAGE_BYTES_SELF = 'COALESCE(byte_size, octet_length(bytes)::int)';
+
+async function dropMessageMedia(client: pg.PoolClient, store: MediaStore, messageId: string) {
+  await store.removeMessage(messageId);
+  await client.query('DELETE FROM message_images WHERE message_id = $1', [messageId]);
+  await client.query('DELETE FROM message_files WHERE message_id = $1', [messageId]);
+}
+
 function jpegBytes(value: unknown, sealed: boolean): Uint8Array | null {
   const bytes = Buffer.isBuffer(value) ? value : null;
   if (!bytes || bytes.length < 3 || bytes.length > IMAGE_BYTES_MAX + (sealed ? SEALED_OVERHEAD : 0)) return null;
@@ -102,7 +113,7 @@ export function createPool(databaseUrl: string) {
   return new pg.Pool({ connectionString: databaseUrl, max: 10, connectionTimeoutMillis:5000, idleTimeoutMillis:30000, statement_timeout:10000, idle_in_transaction_session_timeout:10000 });
 }
 
-export function createPostgresRepository(pool: pg.Pool): AuthRepository {
+export function createPostgresRepository(pool: pg.Pool, store: MediaStore): AuthRepository {
   return {
     ...createLowBandwidthRepository(pool),
     ...createKeyRepository(pool),
@@ -334,9 +345,9 @@ export function createPostgresRepository(pool: pg.Pool): AuthRepository {
                 last.created_at AS last_created_at,
                 last.deleted AS last_deleted,
                 last.event AS last_event,
-                (SELECT octet_length(i.bytes)::int FROM message_images i WHERE i.message_id = last.id) AS last_image_size,
+                (SELECT ${IMAGE_BYTES_SQL} FROM message_images i WHERE i.message_id = last.id) AS last_image_size,
                 (SELECT f.name FROM message_files f WHERE f.message_id = last.id) AS last_file_name,
-                (SELECT octet_length(f.bytes)::int FROM message_files f WHERE f.message_id = last.id) AS last_file_size
+                (SELECT ${FILE_BYTES_SQL} FROM message_files f WHERE f.message_id = last.id) AS last_file_size
          FROM rooms r
          JOIN room_members rm ON rm.room_id = r.id AND rm.user_id = $1
          LEFT JOIN LATERAL (
@@ -416,18 +427,18 @@ export function createPostgresRepository(pool: pg.Pool): AuthRepository {
              LIMIT GREATEST($2 - (SELECT count(*) FROM before_page), 1)
            )
            SELECT recent.id, recent.sender_id, recent.body, recent.created_at, recent.deleted, recent.event, recent.edited_at, recent.reply_to,
-                  (SELECT octet_length(i.bytes)::int FROM message_images i WHERE i.message_id = recent.id) AS image_size,
+                  (SELECT ${IMAGE_BYTES_SQL} FROM message_images i WHERE i.message_id = recent.id) AS image_size,
                   (SELECT f.name FROM message_files f WHERE f.message_id = recent.id) AS file_name,
-                  (SELECT octet_length(f.bytes)::int FROM message_files f WHERE f.message_id = recent.id) AS file_size
+                  (SELECT ${FILE_BYTES_SQL} FROM message_files f WHERE f.message_id = recent.id) AS file_size
            FROM (SELECT * FROM before_page UNION ALL SELECT * FROM after_page) recent
            ORDER BY recent.created_at ASC, recent.id ASC`,
           [roomId, limit, page.aroundId],
         )
         : await pool.query<{ id: string; sender_id: string; body: string; created_at: Date; deleted: boolean; event: boolean; edited_at: Date | null; reply_to: string | null; image_size: number | null; file_name: string | null; file_size: number | null }>(
           `SELECT recent.id, recent.sender_id, recent.body, recent.created_at, recent.deleted, recent.event, recent.edited_at, recent.reply_to,
-                  (SELECT octet_length(i.bytes)::int FROM message_images i WHERE i.message_id = recent.id) AS image_size,
+                  (SELECT ${IMAGE_BYTES_SQL} FROM message_images i WHERE i.message_id = recent.id) AS image_size,
                   (SELECT f.name FROM message_files f WHERE f.message_id = recent.id) AS file_name,
-                  (SELECT octet_length(f.bytes)::int FROM message_files f WHERE f.message_id = recent.id) AS file_size
+                  (SELECT ${FILE_BYTES_SQL} FROM message_files f WHERE f.message_id = recent.id) AS file_size
            FROM (
              SELECT id, sender_id, body, created_at, deleted, event, edited_at, reply_to
              FROM room_messages WHERE room_id = $1
@@ -469,10 +480,28 @@ export function createPostgresRepository(pool: pg.Pool): AuthRepository {
       );
       if ((inserted.rowCount ?? 0) > 0) {
         if (image?.byteLength) {
-          await client.query('INSERT INTO message_images (message_id, bytes) VALUES ($1, $2)', [message.id, Buffer.from(image)]);
+          await store.put('image', message.id, image);
+          try {
+            await client.query(
+              'INSERT INTO message_images (message_id, bytes, byte_size, stored_at) VALUES ($1, NULL, $2, $3)',
+              [message.id, image.byteLength, message.createdAt],
+            );
+          } catch (error) {
+            await store.remove('image', message.id);
+            throw error;
+          }
         }
         if (file?.bytes.byteLength) {
-          await client.query('INSERT INTO message_files (message_id, name, bytes) VALUES ($1, $2, $3)', [message.id, file.name, Buffer.from(file.bytes)]);
+          await store.put('file', message.id, file.bytes);
+          try {
+            await client.query(
+              'INSERT INTO message_files (message_id, name, bytes, byte_size, stored_at) VALUES ($1, $2, NULL, $3, $4)',
+              [message.id, file.name, file.bytes.byteLength, message.createdAt],
+            );
+          } catch (error) {
+            await store.remove('file', message.id);
+            throw error;
+          }
         }
         return {
           ...message,
@@ -484,9 +513,9 @@ export function createPostgresRepository(pool: pg.Pool): AuthRepository {
       }
       const existing = await client.query<{ room_id: string; sender_id: string; body: string; created_at: Date; deleted: boolean; reply_to: string | null; image_size: number | null; file_name: string | null; file_size: number | null }>(
         `SELECT room_id, sender_id, body, created_at, deleted, reply_to,
-                (SELECT octet_length(bytes)::int FROM message_images WHERE message_id = room_messages.id) AS image_size,
+                (SELECT ${IMAGE_BYTES_SELF} FROM message_images WHERE message_id = room_messages.id) AS image_size,
                 (SELECT name FROM message_files WHERE message_id = room_messages.id) AS file_name,
-                (SELECT octet_length(bytes)::int FROM message_files WHERE message_id = room_messages.id) AS file_size
+                (SELECT COALESCE(byte_size, octet_length(bytes)::int) FROM message_files WHERE message_id = room_messages.id) AS file_size
          FROM room_messages WHERE id = $1`,
         [message.id],
       );
@@ -510,7 +539,7 @@ export function createPostgresRepository(pool: pg.Pool): AuthRepository {
       finally { client.release(); }
     },
     async readMessageImage(roomId, userId, messageId) {
-      const result = await pool.query<{ bytes: Buffer; sealed: boolean }>(
+      const result = await pool.query<{ bytes: Buffer | null; sealed: boolean }>(
         `SELECT i.bytes, m.body LIKE 'e2e1.%' AS sealed
          FROM message_images i
          JOIN room_messages m ON m.id = i.message_id
@@ -518,10 +547,13 @@ export function createPostgresRepository(pool: pg.Pool): AuthRepository {
          WHERE i.message_id = $2 AND m.room_id = $1 AND NOT m.deleted`,
         [roomId, messageId, userId],
       );
-      return jpegBytes(result.rows[0]?.bytes, result.rows[0]?.sealed === true);
+      const row = result.rows[0];
+      if (!row) return null;
+      const bytes = Buffer.isBuffer(row.bytes) && row.bytes.length ? row.bytes : await store.get('image', messageId);
+      return jpegBytes(bytes, row.sealed === true);
     },
     async readMessageFile(roomId, userId, messageId) {
-      const result = await pool.query<{ name: string; bytes: Buffer }>(
+      const result = await pool.query<{ name: string; bytes: Buffer | null }>(
         `SELECT f.name, f.bytes
          FROM message_files f
          JOIN room_messages m ON m.id = f.message_id
@@ -531,9 +563,10 @@ export function createPostgresRepository(pool: pg.Pool): AuthRepository {
       );
       const row = result.rows[0];
       const cap = row && isVideoFileName(row.name) ? VIDEO_BYTES_MAX : FILE_BYTES_MAX;
-      if (!row || !Buffer.isBuffer(row.bytes) || row.bytes.length < 1 || row.bytes.length > cap + SEALED_OVERHEAD) return null;
-      if (!row.name || row.name.length > 120) return null;
-      return { name: row.name, bytes: row.bytes };
+      if (!row?.name || row.name.length > 120) return null;
+      const bytes = Buffer.isBuffer(row.bytes) && row.bytes.length ? row.bytes : await store.get('file', messageId);
+      if (!bytes || bytes.length < 1 || bytes.length > cap + SEALED_OVERHEAD) return null;
+      return { name: row.name, bytes };
     },
     async claimTurnNotice(roomId, holderId) {
       const result = await pool.query(
@@ -692,8 +725,7 @@ export function createPostgresRepository(pool: pg.Pool): AuthRepository {
              AND ($4::text IS NULL OR (NOT deleted AND NOT EXISTS (SELECT 1 FROM message_images WHERE message_id = $3)
                AND NOT EXISTS (SELECT 1 FROM message_files WHERE message_id = $3)))`, [roomId, userId, messageId, text, at]);
         if (text === null && (result.rowCount ?? 0) > 0) {
-          await client.query('DELETE FROM message_images WHERE message_id = $1', [messageId]);
-          await client.query('DELETE FROM message_files WHERE message_id = $1', [messageId]);
+          await dropMessageMedia(client, store, messageId);
           await client.query('DELETE FROM message_reactions WHERE message_id = $1', [messageId]);
         }
         await client.query('COMMIT');
@@ -945,7 +977,7 @@ export function createPostgresRepository(pool: pg.Pool): AuthRepository {
     },
     async findRoomMessage(roomId, messageId) {
       const result = await pool.query<{ id: string; room_id: string; sender_id: string; body: string; created_at: Date; deleted: boolean; reply_to_id: string | null; image_size: number | null; file_name: string | null }>(
-        'SELECT id, room_id, sender_id, body, created_at, deleted, reply_to_id, (SELECT octet_length(bytes) FROM message_images i WHERE i.message_id = m.id) AS image_size, (SELECT name FROM message_files f WHERE f.message_id = m.id) AS file_name FROM room_messages m WHERE id = $2 AND room_id = $1',
+        `SELECT id, room_id, sender_id, body, created_at, deleted, reply_to, (SELECT ${IMAGE_BYTES_SELF} FROM message_images i WHERE i.message_id = m.id) AS image_size, (SELECT name FROM message_files f WHERE f.message_id = m.id) AS file_name FROM room_messages m WHERE id = $2 AND room_id = $1`,
         [roomId, messageId],
       );
       const row = result.rows[0];

@@ -6,7 +6,7 @@ type InboxOpen = {
 };
 
 type InboxWatchPlugin = {
-  remember(options: { origin: string; quiet: string; hiddenKinds: string; seen: string[] }): Promise<void>;
+  remember(options: { origin: string; quiet: string; hiddenKinds: string; seen: string[]; fcmAlerts?: boolean }): Promise<void>;
   rememberKeys(options: { keys: Array<{ roomId: string; keyId: string; raw: string }> }): Promise<void>;
   rememberAvatars(options: { avatars: Array<{ conversationId: string; jpeg: string }> }): Promise<void>;
   stop(): Promise<void>;

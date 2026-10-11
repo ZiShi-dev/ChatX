@@ -204,7 +204,7 @@ describe('profile', () => {
     assert.equal((await patch({ avatarDecoration: 'dragon', profileEffect: 'meteors' })).status, 200);
     assert.equal((await deps.repo.findUserById(member.id))?.avatarDecoration, 'dragon');
     assert.equal((await deps.repo.findUserById(member.id))?.profileEffect, 'meteors');
-    for (const profileEffect of ['celestial-dragon', 'sword-domain', 'time-cicada', 'jade-lotus', 'heavenly-tribulation']) {
+    for (const profileEffect of ['celestial-dragon', 'sword-domain', 'time-cicada', 'jade-lotus', 'heavenly-tribulation', 'jade-petals', 'spirit-embers']) {
       assert.equal((await patch({ profileEffect })).status, 200);
       assert.equal((await deps.repo.findUserById(member.id))?.profileEffect, profileEffect);
     }

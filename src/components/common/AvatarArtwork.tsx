@@ -33,6 +33,7 @@ export default function AvatarArtwork({ kind }: { kind: AvatarDecoration }) {
       <path d="M109 42Q116 45 115 51M99 46L102 52" stroke="#edd290" strokeWidth="1.5" fill="none" />
     </g>
     <path className="dragon-spark" d="M111 54L115 49L118 56L114 62Z" fill="#f5cc70" />
+    <path className="dragon-spark spark-far" d="M8 72L11 68L14 74L10 78Z" fill="#f5cc70" opacity=".7" />
   </svg>;
   return null;
 }

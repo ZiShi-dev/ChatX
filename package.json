@@ -13,7 +13,9 @@
     "release:web": "npm run build && node scripts/publish-release.mjs web",
     "release:apk": "node scripts/publish-release.mjs apk",
     "test.unit": "vitest",
-    "lint": "eslint"
+    "lint": "eslint",
+    "verify:env": "node --env-file=.env scripts/verify-env.mjs",
+    "firebase:env": "node scripts/set-firebase-from-json.mjs"
   },
   "dependencies": {
     "@capacitor/android": "^8.5.3",

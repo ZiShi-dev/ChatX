@@ -5,6 +5,10 @@ import { it } from 'node:test';
 import pg from 'pg';
 import { readFile } from 'node:fs/promises';
 import { createMemoryRepository } from '../src/memory.ts';
+import { mkdtemp } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { createMediaStore } from '../src/mediaStore.ts';
 import { createPostgresRepository } from '../src/postgres.ts';
 import { migrate } from '../src/migrate.ts';
 import { GLOBAL_ROOM_ID, readRoomMessages, changeMessage, markRoomSeen } from '../src/home.ts';
@@ -150,7 +154,8 @@ it('verifies PostgreSQL migrations, cursor SQL and transaction rollback', { skip
   const pool = new pg.Pool({ connectionString: database, options: `-c search_path=${schema}` });
   try {
     await migrate(pool);
-    const repo = createPostgresRepository(pool);
+    const mediaDir = await mkdtemp(join(tmpdir(), 'chatx-media-'));
+    const repo = createPostgresRepository(pool, createMediaStore(mediaDir));
     const turnNotices = await verifyTurnNotifications(repo);
     // Reproduce the old holder-only inbox, then apply the upgrade backfill twice.
     await pool.query('DELETE FROM notifications WHERE message_id=$1 AND user_id<>$2', [turnNotices.message.id, turnNotices.people[0].id]);
@@ -175,7 +180,7 @@ it('verifies PostgreSQL migrations, cursor SQL and transaction rollback', { skip
       assert.equal(await repo.updateMemberProfile(person.id, { avatarDecoration: 'dragon', profileEffect: 'meteors' }), 'ok');
       assert.equal((await repo.findUserById(person.id))?.avatarDecoration, 'dragon');
       assert.equal((await repo.listUsers()).find(user => user.id === person.id)?.profileEffect, 'meteors');
-      for (const profileEffect of ['celestial-dragon', 'sword-domain', 'time-cicada', 'jade-lotus', 'heavenly-tribulation']) {
+      for (const profileEffect of ['celestial-dragon', 'sword-domain', 'time-cicada', 'jade-lotus', 'heavenly-tribulation', 'jade-petals', 'spirit-embers']) {
         assert.equal(await repo.updateMemberProfile(person.id, { profileEffect }), 'ok');
         assert.equal((await repo.findUserById(person.id))?.profileEffect, profileEffect);
       }

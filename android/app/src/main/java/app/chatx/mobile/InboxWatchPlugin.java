@@ -25,7 +25,13 @@ public class InboxWatchPlugin extends Plugin {
 
     @PluginMethod
     public void remember(PluginCall call) {
-        InboxWatch.remember(getContext(), call.getString("origin", ""), call.getString("quiet", ""), call.getString("hiddenKinds", ""));
+        InboxWatch.remember(
+            getContext(),
+            call.getString("origin", ""),
+            call.getString("quiet", ""),
+            call.getString("hiddenKinds", ""),
+            call.getBoolean("fcmAlerts", false)
+        );
         JSONArray rows = call.getArray("seen");
         if (rows != null) {
             Set<String> incoming = new HashSet<>();

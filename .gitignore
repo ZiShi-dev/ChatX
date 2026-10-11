@@ -4,6 +4,8 @@
 /node_modules
 server/node_modules
 server/certs/
+server/data/media/*
+!server/data/media/.gitkeep
 .env
 /.pnp
 .pnp.js

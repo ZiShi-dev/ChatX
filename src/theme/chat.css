@@ -2959,8 +2959,30 @@ ion-header:has(.message-search) {
   background: var(--chatx-frame);
 }
 
-.gate-dots i.on {
+.gate-dots i.on,
+.gate-dots i.done {
   background: var(--chatx-accent);
+}
+
+.gate-dots i.done {
+  opacity: 0.45;
+}
+
+.gate.is-setup {
+  justify-content: flex-start;
+}
+
+.gate.is-setup .gate-brand {
+  margin-bottom: 12px;
+}
+
+.gate.is-setup .gate-brand img {
+  width: 56px;
+  height: 56px;
+}
+
+.gate.is-setup .gate-brand strong {
+  font-size: 18px;
 }
 
 .gate-field {
@@ -3093,6 +3115,19 @@ ion-header:has(.message-search) {
   gap: 14px;
 }
 
+.account-setup-pane.is-motion {
+  animation: setup-pane 180ms ease-out;
+}
+
+@keyframes setup-pane {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .account-setup-pane.is-motion { animation: none; }
+}
+
 .account-hero {
   position: relative;
   display: flex;
@@ -3101,19 +3136,36 @@ ion-header:has(.message-search) {
 }
 
 .account-cover {
+  position: relative;
   display: flex;
   align-items: center;
   justify-content: center;
   width: 100%;
   height: 112px;
   padding: 0;
+  overflow: hidden;
   border: 1px dashed var(--chatx-accent);
   border-radius: 18px;
-  background: var(--chatx-bg);
+  background:
+    radial-gradient(90% 80% at 100% 0%, var(--banner, var(--chatx-accent)) 0%, transparent 58%),
+    var(--chatx-bg);
   color: var(--chatx-accent-soft);
   font: inherit;
   font-size: 15px;
   font-weight: 800;
+}
+
+.account-cover > span {
+  position: relative;
+  z-index: 1;
+}
+
+.account-setup > strong {
+  display: block;
+  margin-top: 8px;
+  font-size: 22px;
+  text-align: center;
+  overflow-wrap: anywhere;
 }
 
 .account-cover.is-photo {
@@ -3130,7 +3182,7 @@ ion-header:has(.message-search) {
 
 .account-cover-clear {
   position: absolute;
-  z-index: 2;
+  z-index: 4;
   top: 8px;
   inset-inline-end: 8px;
   min-width: 44px;
@@ -5568,6 +5620,72 @@ ion-toolbar.network-toolbar.setup {
   font-weight: 700;
 }
 
+.owner-system {
+  margin: 0 16px 20px;
+  padding: 14px 16px;
+  border: 1px solid var(--chatx-frame);
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--chatx-bg) 92%, var(--chatx-accent) 8%);
+}
+
+.owner-system h2 {
+  margin: 0 0 10px;
+  font-size: 16px;
+}
+
+.owner-system-list {
+  margin: 0 0 12px;
+  padding: 0;
+  list-style: none;
+  font-size: 14px;
+  line-height: 1.55;
+}
+
+.owner-system-list li + li {
+  margin-top: 4px;
+}
+
+.owner-system-alert {
+  margin: 0 0 10px;
+  color: var(--chatx-danger, #c45);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.owner-system-hint {
+  margin: 0 0 10px;
+  color: var(--chatx-muted);
+  font-size: 13px;
+}
+
+.owner-system-refresh {
+  min-height: 44px;
+  padding: 0 14px;
+  border: 1px solid var(--chatx-frame);
+  border-radius: 10px;
+  background: transparent;
+  color: var(--chatx-text);
+  font: inherit;
+}
+
+.media-local-mark {
+  display: block;
+  margin-top: 4px;
+  color: var(--chatx-accent-soft);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.media-card .media-local-mark {
+  position: absolute;
+  inset-inline-end: 8px;
+  inset-block-end: 8px;
+  margin: 0;
+  padding: 2px 6px;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--chatx-bg) 80%, transparent);
+}
+
 .owner-row {
   display: flex;
   align-items: center;
@@ -5728,6 +5846,8 @@ ion-toolbar {
 .profile-editor-section .profile-style-block { margin:16px 0 0; }
 .profile-editor-section .group-name { margin:14px 0; }
 .profile-photo-action { display:flex; align-items:center; gap:8px; padding:12px; border:1px solid var(--chatx-frame); border-radius:12px; background:var(--chatx-soft); color:inherit; }
+.profile-media-actions { display:flex; flex-direction:column; gap:8px; margin-bottom:12px; }
+.profile-media-actions .profile-photo-action { width:100%; min-height:44px; font:inherit; font-weight:700; }
 .profile-editor .profile-color-grid { grid-template-columns:repeat(6,minmax(0,1fr)); gap:10px; }
 .profile-editor .profile-color-grid button { min-width:0; min-height:44px; }
 .profile-editor-footer { position:sticky; bottom:-20px; padding:16px 0; background:var(--chatx-surface); border-top:1px solid var(--chatx-frame); z-index:2; }

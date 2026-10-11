@@ -39,13 +39,14 @@ final class InboxWatch {
         return context.getSharedPreferences(PREFS, Context.MODE_PRIVATE);
     }
 
-    static void remember(Context context, String origin, String quiet, String hiddenKinds) {
+    static void remember(Context context, String origin, String quiet, String hiddenKinds, boolean fcmAlerts) {
         if (origin == null || !origin.startsWith("https://")) return;
         prefs(context).edit()
             .putString("origin", origin.replaceAll("/$", ""))
             .putString("quiet", quiet == null ? "" : quiet)
             .putString("hiddenKinds", hiddenKinds == null ? "" : hiddenKinds)
             .putBoolean("armed", true)
+            .putBoolean("fcmAlerts", fcmAlerts)
             .apply();
         try {
             String cookie = CookieManager.getInstance().getCookie(origin);
@@ -55,6 +56,10 @@ final class InboxWatch {
             CookieManager.getInstance().flush();
         } catch (RuntimeException error) {
             // The next open retries. A missing flush must not block the alarm.
+        }
+        if (fcmAlerts) {
+            pauseAlarm(context);
+            return;
         }
         if (!pending(context)) schedule(context);
     }
@@ -194,6 +199,7 @@ final class InboxWatch {
     static void schedule(Context context) {
         if (MainActivity.foreground) return;
         if (!prefs(context).getBoolean("armed", false)) return;
+        if (prefs(context).getBoolean("fcmAlerts", false)) return;
         AlarmManager alarms = (AlarmManager) context.getSystemService(Context.ALARM_SERVICE);
         if (alarms == null) return;
         long at = System.currentTimeMillis() + Math.max(INTERVAL_MS, prefs(context).getLong("retryAt", 0) - System.currentTimeMillis());

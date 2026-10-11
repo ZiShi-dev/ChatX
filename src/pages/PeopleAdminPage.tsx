@@ -11,6 +11,7 @@ import PageSkeleton from '../components/common/PageSkeleton';
 import { useDataSaver } from '../hooks/useDataSaver';
 import { AdminApiError, adminFetch } from '../lib/adminApi';
 import { readDirectoryUsers } from '../lib/directory';
+import { formatBytes } from '../lib/media';
 import { roleLabel } from '../lib/roles';
 import { useChatStore } from '../stores/chatStore';
 import { useUserStore } from '../stores/userStore';
@@ -18,6 +19,22 @@ import type { Message } from '../types/message';
 import type { User } from '../types/user';
 
 type OwnerGroup = { id: string; name: string };
+
+type OwnerSystemMedia = {
+  mediaRetentionMs: number;
+  diskImageFiles: number;
+  diskFileFiles: number;
+  diskBytes: number;
+  metadataImages: number;
+  metadataFiles: number;
+  legacyImageRows: number;
+  legacyFileRows: number;
+  lastPurgeAt: string | null;
+  lastPurgeError: string | null;
+  lastExpiredImages: number;
+  lastExpiredFiles: number;
+  lastOrphans: number;
+};
 
 type ChoiceKey = 'messages' | 'images' | 'files' | 'reactions' | 'privateChats' | 'profile' | 'membership' | 'account';
 type GroupChoiceKey = 'messages' | 'images' | 'files' | 'reactions' | 'group';
@@ -296,6 +313,8 @@ export default function PeopleAdminPage() {
   const [target, setTarget] = useState<User>();
   const [group, setGroup] = useState<OwnerGroup>();
   const [done, setDone] = useState('');
+  const [system, setSystem] = useState<OwnerSystemMedia | null>(null);
+  const [systemError, setSystemError] = useState('');
 
   useEffect(() => {
     alive.current = true;
@@ -323,6 +342,31 @@ export default function PeopleAdminPage() {
       current = false;
     };
   }, []);
+
+  const refreshSystem = useCallback(() => {
+    void adminFetch('/api/owner/system').then((payload) => {
+      if (!alive.current) return;
+      const media = payload && typeof payload === 'object' && 'media' in payload ? (payload as { media: OwnerSystemMedia }).media : null;
+      if (!media) {
+        setSystem(null);
+        setSystemError('تعذر قراءة حالة الخادم.');
+        return;
+      }
+      setSystem(media);
+      setSystemError('');
+    }).catch((error) => {
+      if (!alive.current) return;
+      setSystem(null);
+      setSystemError(error instanceof AdminApiError ? 'تعذر قراءة حالة الخادم.' : 'تعذر الاتصال بالخادم.');
+    });
+  }, []);
+
+  useEffect(() => {
+    if (access !== 'ready') return;
+    refreshSystem();
+    const timer = window.setInterval(refreshSystem, 60_000);
+    return () => window.clearInterval(timer);
+  }, [access, refreshSystem]);
 
   const usersRef = useRef(users);
   const groupsRef = useRef(groups);
@@ -389,6 +433,26 @@ export default function PeopleAdminPage() {
           <>
             <p className="settings-lead">اختر ما تريد حذفه لكل حساب أو مجموعة. محادثة ChatX الرئيسية تبقى.</p>
             {done ? <p className="owner-done" role="status">{done}</p> : null}
+            <section className="owner-system" aria-labelledby="owner-system-title">
+              <h2 id="owner-system-title">حالة الخادم</h2>
+              {systemError ? <p className="owner-system-alert" role="alert">{systemError}</p> : null}
+              {system?.lastPurgeError ? <p className="owner-system-alert" role="alert">آخر تنظيف للوسائط فشل: {system.lastPurgeError}</p> : null}
+              {system && (system.legacyImageRows > 0 || system.legacyFileRows > 0) ? (
+                <p className="owner-system-alert" role="alert">ما زالت هناك وسائط قديمة داخل قاعدة البيانات. أعد تشغيل الخادم لإكمال النقل إلى القرص.</p>
+              ) : null}
+              {system ? (
+                <ul className="owner-system-list">
+                  <li>الاحتفاظ على القرص: <span dir="ltr">{Math.round(system.mediaRetentionMs / 3_600_000)}</span> ساعة</li>
+                  <li>على القرص: <span dir="ltr">{system.diskImageFiles + system.diskFileFiles}</span> ملف · {formatBytes(system.diskBytes)}</li>
+                  <li>في قاعدة البيانات: <span dir="ltr">{system.metadataImages}</span> صورة · <span dir="ltr">{system.metadataFiles}</span> ملف</li>
+                  <li>آخر تنظيف: {system.lastPurgeAt ? new Date(system.lastPurgeAt).toLocaleString('ar') : 'لم يُنفَّذ بعد'}</li>
+                  {system.lastPurgeAt ? (
+                    <li>آخر حذف: <span dir="ltr">{system.lastExpiredImages}</span> صورة · <span dir="ltr">{system.lastExpiredFiles}</span> ملف · <span dir="ltr">{system.lastOrphans}</span> ملف يتيم</li>
+                  ) : null}
+                </ul>
+              ) : !systemError ? <p className="owner-system-hint">جارٍ قراءة حالة الوسائط…</p> : null}
+              <button type="button" className="owner-system-refresh" onClick={refreshSystem}>تحديث الحالة</button>
+            </section>
             <h2>الأعضاء <span>{users.length}</span></h2>
             {users.length === 0 ? <EmptyState title="لا يوجد أعضاء آخرون" /> : users.map((user) => {
               const role = roleLabel(user.role);

@@ -1,5 +1,5 @@
 import { afterEach, expect, it, vi } from 'vitest';
-import { mediaFile, exportMedia } from './mediaExport';
+import { canSaveMessageMedia, mediaFile, exportMedia } from './mediaExport';
 import type { Message } from '../types/message';
 import { Capacitor } from '@capacitor/core';
 
@@ -13,6 +13,42 @@ it('exports the cached bytes and actual image format without downloading again',
   const file=await mediaFile(message);
   expect(file.name).toMatch(/\.png$/);expect(file.type).toBe('image/png');expect(file.size).toBe(3);
   expect(fetchMock).not.toHaveBeenCalled();
+});
+it('exports cached file attachments with the original name', async () => {
+  const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(new Blob(['pdf'], { type: 'application/pdf' })));
+  const fileMessage: Message = {
+    ...message,
+    id: 'file-id',
+    type: 'file',
+    media: { state: 'cached', fileSize: 3, fileName: 'notes.pdf', localPreviewUrl: 'blob:file' },
+  };
+  expect(canSaveMessageMedia(fileMessage)).toBe(true);
+  const file = await mediaFile(fileMessage);
+  expect(file.name).toBe('notes.pdf');
+  expect(file.type).toBe('application/pdf');
+  fetchMock.mockRestore();
+});
+it('keeps uncommon extensions and uses a generic mime type', async () => {
+  vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(new Blob(['data'], { type: 'application/octet-stream' })));
+  const file = await mediaFile({
+    ...message,
+    id: 'custom-id',
+    type: 'file',
+    media: { state: 'cached', fileSize: 4, fileName: 'archive.customext', localPreviewUrl: 'blob:custom' },
+  });
+  expect(file.name).toBe('archive.customext');
+  expect(file.type).toBe('application/octet-stream');
+});
+it('detects office documents from the file name', async () => {
+  vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(new Blob(['doc'], { type: 'application/octet-stream' })));
+  const file = await mediaFile({
+    ...message,
+    id: 'doc-id',
+    type: 'file',
+    media: { state: 'cached', fileSize: 3, fileName: 'rapport.docx', localPreviewUrl: 'blob:doc' },
+  });
+  expect(file.name).toBe('rapport.docx');
+  expect(file.type).toBe('application/vnd.openxmlformats-officedocument.wordprocessingml.document');
 });
 it('does not export a remote thumbnail or a simulated video as an actual video',async()=>{
   await expect(mediaFile({...message,media:{...message.media!,state:'remote'}})).rejects.toThrow('media_unavailable');

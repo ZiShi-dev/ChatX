@@ -16,7 +16,14 @@ export const PROFILE_EFFECTS = [
   { id: 'time-cicada', label: 'زيز الزمن' },
   { id: 'jade-lotus', label: 'لوتس اليشم' },
   { id: 'heavenly-tribulation', label: 'المحنة السماوية' },
+  { id: 'jade-petals', label: 'تساقط البتلات' },
+  { id: 'spirit-embers', label: 'جمرات الروح' },
 ] as const;
+const BANNER_SCENES = ['celestial-dragon', 'sword-domain', 'time-cicada', 'jade-lotus', 'heavenly-tribulation', 'jade-petals', 'spirit-embers'] as const;
+export type BannerScene = (typeof BANNER_SCENES)[number];
+export function isBannerScene(effect: ProfileEffectId): effect is BannerScene {
+  return (BANNER_SCENES as readonly string[]).includes(effect);
+}
 export type AvatarDecoration = typeof AVATAR_DECORATIONS[number]['id'];
 export type ProfileEffectId = typeof PROFILE_EFFECTS[number]['id'];
 export type ProfileCosmetics = { avatarDecoration?: AvatarDecoration; profileEffect?: ProfileEffectId };

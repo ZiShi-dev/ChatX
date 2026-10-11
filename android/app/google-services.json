@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "466245452048",
+    "project_id": "chatx-4792d",
+    "storage_bucket": "chatx-4792d.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:466245452048:android:7a91136d51e62404bbe595",
+        "android_client_info": {
+          "package_name": "app.chatx.mobile"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCONP4r7jeyB0LgTsuhPBLgSnTPpD7gnMI"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

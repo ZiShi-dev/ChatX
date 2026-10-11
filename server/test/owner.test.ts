@@ -53,6 +53,39 @@ function call(handle: ReturnType<typeof createApi>, path: string, token: string,
 }
 
 describe('owner tools', () => {
+  it('shows media status only to the Google operator', async () => {
+    const deps = testDeps();
+    deps.ownerSystem = async () => ({
+      media: {
+        mediaRetentionMs: 86_400_000,
+        diskImageFiles: 2,
+        diskFileFiles: 1,
+        diskBytes: 4096,
+        metadataImages: 2,
+        metadataFiles: 1,
+        legacyImageRows: 0,
+        legacyFileRows: 0,
+        lastPurgeAt: '2026-10-08T12:00:00.000Z',
+        lastPurgeError: null,
+        lastExpiredImages: 1,
+        lastExpiredFiles: 0,
+        lastOrphans: 0,
+      },
+    });
+    const operator = person(operatorId, 'إبراهيم', ERASE_OPERATOR_EMAIL, 'google-operator');
+    const member = person(memberId, 'أمينة', 'amina@example.com');
+    await deps.repo.insertUser(operator);
+    await deps.repo.insertUser(member);
+    await deps.repo.createSession(hashSession('operator-token'), operator.id, new Date(now + 60_000));
+    await deps.repo.createSession(hashSession('member-token'), member.id, new Date(now + 60_000));
+    const handle = createApi(deps);
+    assert.equal((await call(handle, '/api/owner/system', 'member-token')).status, 403);
+    const listed = await call(handle, '/api/owner/system', 'operator-token');
+    assert.equal(listed.status, 200);
+    const body = await listed.json() as { media: { diskBytes: number } };
+    assert.equal(body.media.diskBytes, 4096);
+  });
+
   it('shows the member list only to the Google operator', async () => {
     const { handle } = await signedIn();
     assert.equal((await call(handle, '/api/owner/members', '')).status, 401);

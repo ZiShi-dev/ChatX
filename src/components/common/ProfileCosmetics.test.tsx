@@ -69,9 +69,14 @@ it('confines cultivation artwork to the banner and keeps it static with data sav
   expect(container.querySelector('rect')).toBeNull();
   rerender(<ProfileEffect effect="time-cicada" color="#3d9b84" placement="banner" />);
   expect(container.querySelector('.gu-cicada')).not.toBeNull();
+  rerender(<ProfileEffect effect="jade-petals" color="#3d9b84" placement="banner" />);
+  expect(container.querySelectorAll('.drift-petal')).toHaveLength(8);
+  rerender(<ProfileEffect effect="spirit-embers" color="#3d9b84" placement="banner" />);
+  expect(container.querySelectorAll('.ember')).toHaveLength(8);
+  expect(container.querySelector('image, img, animate, filter')).toBeNull();
 });
 
-it.each(['jade-lotus', 'heavenly-tribulation'] as const)('keeps %s optional, local and static in economy mode', effect => {
+it.each(['jade-lotus', 'heavenly-tribulation', 'jade-petals', 'spirit-embers'] as const)('keeps %s optional, local and static in economy mode', effect => {
   useSettingsStore.setState({ dataSaver: true });
   const { container, rerender } = render(<ProfileEffect effect={effect} color="#3d9b84" placement="banner" />);
   expect(container.querySelector('.scene-' + effect)).not.toBeNull();

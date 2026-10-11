@@ -1,10 +1,13 @@
 import { useId } from 'react';
+import type { BannerScene } from '../../lib/profileCosmetics';
 
-type SceneKind = 'celestial-dragon' | 'sword-domain' | 'time-cicada' | 'jade-lotus' | 'heavenly-tribulation';
 const SWORDS = [[170, 130, -32], [230, 96, -18], [285, 79, -6], [355, 79, 6], [410, 96, 18], [470, 130, 32]] as const;
+const MOTES = [[139, 60, 2], [209, 168, 1.5], [436, 49, 2], [490, 168, 1.5], [351, 198, 2], [80, 100, 1], [560, 90, 1], [300, 40, 1.2]] as const;
+const PETALS = [[70, 36, -18], [150, 88, 14], [220, 24, -8], [290, 110, 22], [370, 42, -16], [450, 96, 8], [520, 28, -24], [580, 128, 6]] as const;
+const EMBERS = [[90, 190, 2.2], [160, 210, 1.4], [230, 176, 1.8], [300, 204, 2.6], [370, 168, 1.3], [440, 198, 2], [510, 160, 1.6], [580, 188, 2.4]] as const;
 
 /** Original cultivation artwork, drawn locally and animated with transform/opacity only. */
-export default function CultivationScene({ kind }: { kind: SceneKind }) {
+export default function CultivationScene({ kind }: { kind: BannerScene }) {
   const id = useId().replace(/:/g, '');
   const jade = `cultivation-jade-${id}`, gold = `cultivation-gold-${id}`, halo = `cultivation-halo-${id}`, smoke = `cultivation-smoke-${id}`;
   return <svg className={`cultivation-scene scene-${kind}`} viewBox="0 0 640 240" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
@@ -94,8 +97,19 @@ export default function CultivationScene({ kind }: { kind: SceneKind }) {
       </g>)}
       <g className="storm-orbit" fill="none" stroke="#cbb9ef" opacity=".45"><ellipse cx="320" cy="172" rx="118" ry="20" /><ellipse cx="320" cy="172" rx="90" ry="12" /></g>
     </g>}
+    {kind === 'jade-petals' && <g className="jade-petals">
+      {PETALS.map(([x, y, rotation], index) => <g key={index} transform={`translate(${x} ${y}) rotate(${rotation})`}>
+        <g className={`drift-petal petal-${index}`}>
+          <path d="M0 0C6-14 16-8 11 4C7 12 1 9-2 3C-8-5-5-12 0 0Z" fill={`url(#${jade})`} stroke="#e6dfac" strokeWidth="1" />
+          <path d="M1-1C4-8 8-4 6 2" fill="none" stroke="#f4ebc4" strokeWidth="1" />
+        </g>
+      </g>)}
+    </g>}
+    {kind === 'spirit-embers' && <g className="spirit-embers" fill="#f6e0a4">
+      {EMBERS.map(([cx, cy, r], index) => <circle key={index} className={`ember ember-${index}`} cx={cx} cy={cy} r={r} />)}
+    </g>}
     <g className="spirit-particles" fill="#e9dba8">
-      <circle cx="139" cy="60" r="2" /><circle cx="209" cy="168" r="1.5" /><circle cx="436" cy="49" r="2" /><circle cx="490" cy="168" r="1.5" /><circle cx="351" cy="198" r="2" />
+      {MOTES.map(([cx, cy, r], index) => <circle key={index} className={`spirit-mote mote-${index}`} cx={cx} cy={cy} r={r} />)}
     </g>
   </svg>;
 }

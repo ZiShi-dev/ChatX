@@ -24,6 +24,7 @@ const SavedPage = lazy(() => import('./pages/SavedPage'));
 const ProfilePage = lazy(() => import('./pages/ProfilePage'));
 const SettingsPage = lazy(() => import('./pages/SettingsPage'));
 const PeopleAdminPage = lazy(() => import('./pages/PeopleAdminPage'));
+import { useFcmPush } from './hooks/useFcmPush';
 import { useInboxAlerts } from './hooks/useInboxAlerts';
 import { closeTopOverlay } from './lib/overlayBack';
 import LiveInboxBanner from './components/common/LiveInboxBanner';
@@ -105,6 +106,7 @@ function AppRoutes() {
   useEffect(observeNetwork, []);
   useEffect(installOfflineShell, []);
   usePresenceSync();
+  useFcmPush();
   useInboxAlerts();
   const guard = (element: ReactElement) => (activated ? element : <Navigate to="/activation" replace />);
   const page = (element: ReactElement, kind: SkeletonKind) => <Suspense fallback={<PageSkeleton kind={kind} />}>{guard(element)}</Suspense>;

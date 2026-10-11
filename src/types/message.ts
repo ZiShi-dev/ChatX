@@ -41,6 +41,8 @@ export interface Message {
   uploadProgress?: number;
   downloadProgress?: number;
   downloadFailed?: boolean;
+  /** Le fichier n’est plus sur le serveur (ex. après 24 h) et n’est pas en cache local. */
+  mediaExpired?: boolean;
   createdAt: string;
   editedAt?: string;
   deletedForEveryone?: boolean;

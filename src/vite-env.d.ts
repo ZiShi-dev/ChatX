@@ -3,4 +3,5 @@
 interface ImportMetaEnv {
   readonly VITE_API_ORIGIN?: string;
   readonly VITE_GOOGLE_CLIENT_ID?: string;
+  readonly VITE_ENABLE_FCM?: string;
 }

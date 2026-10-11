@@ -10,6 +10,7 @@ import { localRoomKeyRecords } from '../lib/e2e';
 import { InboxWatch } from '../lib/inboxWatch';
 import { notifyChatMessage } from '../lib/notifications';
 import { getApiOrigin } from '../lib/apiOrigin';
+import { fcmPushAlertsActive, onPushTokenReady } from '../lib/pushRegister';
 import { useAuthStore } from '../stores/authStore';
 import { useChatStore } from '../stores/chatStore';
 import { quietLevel, useMuteStore } from '../stores/muteStore';
@@ -37,7 +38,7 @@ function rememberPhoneWatch() {
     const seen = useChatStore.getState().serverInbox.slice(0, 100).flatMap((item) => (
     !item.unread || notified.has(item.id) || (phoneActive && document.visibilityState !== 'hidden' && watching(item.conversationId)) ? [item.id] : []
   ));
-  void InboxWatch.remember({ origin, quiet, hiddenKinds, seen }).catch(() => undefined);
+  void InboxWatch.remember({ origin, quiet, hiddenKinds, seen, fcmAlerts: fcmPushAlertsActive() }).catch(() => undefined);
   void localRoomKeyRecords().then((records) => {
     if (!records) return;
     const signature = records.map((item) => `${item.roomId}:${item.keyId}`).sort().join(',');
@@ -98,6 +99,7 @@ export function useInboxAlerts() {
           useLiveInbox.getState().push({ key: inboxAlertKey(item), conversationId: item.conversationId, messageId: item.id, kind: item.kind, title: alert.title, body: alert.body });
           return;
         }
+        if (fcmPushAlertsActive()) return;
         void notifyChatMessage({
           conversationId: item.conversationId,
           kind: useChatStore.getState().conversations.find(room => room.id === item.conversationId)?.type === 'group' ? 'group' : 'private',
@@ -123,6 +125,7 @@ export function useInboxAlerts() {
 
     const unsubscribeMutes = useMuteStore.subscribe((state, previous) => { if (state.mutes !== previous.mutes) rememberPhoneWatch(); });
     const unsubscribeSettings = useSettingsStore.subscribe((state, previous) => { if (state.notifyTypes !== previous.notifyTypes) rememberPhoneWatch(); });
+    const unsubscribePush = onPushTokenReady(() => rememberPhoneWatch());
     let stopState = () => {};
     if (Capacitor.isNativePlatform()) {
       void CapApp.addListener('appStateChange', ({ isActive }) => {
@@ -149,6 +152,7 @@ export function useInboxAlerts() {
       unsubscribe();
       unsubscribeMutes();
       unsubscribeSettings();
+      unsubscribePush();
       stopState();
       phoneActive = true;
       useLiveInbox.getState().clear();

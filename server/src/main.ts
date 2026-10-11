@@ -8,6 +8,7 @@ import { createApi, securityHeaders } from './http.ts';
 import { configureHttpServer, proxyClientAddress } from './transportSecurity.ts';
 import { clientRequestHeaders } from './requestHeaders.ts';
 import { migrate } from './migrate.ts';
+import { collectOwnerMediaStatus, createMediaStore, migrateLegacyMedia, startMediaPurgeScheduler } from './mediaStore.ts';
 import { createPool, createPostgresRepository } from './postgres.ts';
 import { tryServeRelease } from './releases.ts';
 import { loadThrottle, saveThrottle } from './throttle.ts';
@@ -68,12 +69,17 @@ const pool = createPool(config.databaseUrl);
 
 try {
   await migrate(pool);
-  const repo = createPostgresRepository(pool);
+  const media = createMediaStore(config.mediaDir);
+  await media.ensure();
+  await migrateLegacyMedia(pool, media);
+  const repo = createPostgresRepository(pool, media);
+  startMediaPurgeScheduler(pool, media, config.mediaRetentionMs);
   const throttle = await loadThrottle(pool);
   const handle = createApi({
     repo,
     config,
     now: () => Date.now(),
+    ownerSystem: async () => ({ media: await collectOwnerMediaStatus(pool, media, config.mediaRetentionMs) }),
     rateLimit: createLimiter(config, () => Date.now(), {
       initial: throttle,
       onChange: (state) => saveThrottle(pool, state),

@@ -236,7 +236,7 @@ export default function SettingsPage({ embedded = false }: SettingsPageProps) {
           <article className="setting-card">
             <div>
               <strong>توفير البيانات</strong>
-              <p>لا تُنزَّل الوسائط تلقائيًا. تضغط عندما تريد. تتباعد تحديثات القائمة والتنبيهات إلى 40 ثانية، وتبقى المحادثة المفتوحة كل 20 ثانية.</p>
+              <p>{dataSaver ? 'الوضع الموفّر مفعّل، وهو الاختيار الأول. تتوقف حركة زينة الملف وتنزيل الوسائط. تتباعد تحديثات القائمة والتنبيهات إلى 40 ثانية، وتبقى المحادثة المفتوحة كل 20 ثانية.' : 'الوضع العادي. تعود حركة زينة الملف. الصور والفيديو تتبعان الإعدادين أسفل.'}</p>
             </div>
             <IonToggle checked={dataSaver} aria-label="توفير البيانات" onIonChange={(event) => setDataSaver(event.detail.checked)} />
           </article>

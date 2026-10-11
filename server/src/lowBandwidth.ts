@@ -2,9 +2,9 @@ import type pg from 'pg';
 import type { AuthRepository, RoomMessage, Upload } from './types.ts';
 
 const messageColumns = `m.id, m.room_id, m.sender_id, m.body, m.created_at, m.deleted, m.event, m.edited_at, m.reply_to,
-  (SELECT octet_length(bytes)::int FROM message_images WHERE message_id=m.id) AS image_size,
+  (SELECT COALESCE(byte_size, octet_length(bytes)::int) FROM message_images WHERE message_id=m.id) AS image_size,
   (SELECT name FROM message_files WHERE message_id=m.id) AS file_name,
-  (SELECT octet_length(bytes)::int FROM message_files WHERE message_id=m.id) AS file_size`;
+  (SELECT COALESCE(byte_size, octet_length(bytes)::int) FROM message_files WHERE message_id=m.id) AS file_size`;
 function mapMessage(row: Record<string, unknown>): RoomMessage {
   return { id: row.id as string, roomId: row.room_id as string, senderId: row.sender_id as string, text: row.body as string,
     createdAt: row.created_at as Date, deleted: row.deleted as boolean, event: row.event as boolean, editedAt: row.edited_at as Date | null,

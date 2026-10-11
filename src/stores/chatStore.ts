@@ -314,10 +314,21 @@ async function openedBlob(owner: string, message: Message, blob: Blob) {
   return new Blob([new Uint8Array(await openMessageMedia(owner, message, new Uint8Array(await blob.arrayBuffer())))], { type: blob.type });
 }
 
+function patchMediaDownloadFailure(messageId: string, media: Message['media'], error: unknown) {
+  const expired = error instanceof AdminApiError && error.status === 404;
+  patchMessage(messageId, {
+    downloadFailed: !expired,
+    mediaExpired: expired,
+    downloadProgress: undefined,
+    media: media ? { ...media, state: 'remote' } : undefined,
+  });
+}
+
 async function pullServerImage(message: Message) {
   if (!message.media) return;
   patchMessage(message.id, {
     downloadFailed: false,
+    mediaExpired: false,
     downloadProgress: 0,
     media: { ...message.media, state: 'downloading' },
   });
@@ -339,17 +350,14 @@ async function pullServerImage(message: Message) {
     }
     patchMessage(message.id, {
       downloadFailed: false,
+      mediaExpired: false,
       downloadProgress: undefined,
       media: { ...current.media, localPreviewUrl: url, fileSize: blob.size, state: 'cached' },
     });
     if (!cached) useSettingsStore.getState().addUsage('images', blob.size);
-  } catch {
+  } catch (error) {
     const current = useChatStore.getState().messages.find((item) => item.id === message.id);
-    patchMessage(message.id, {
-      downloadFailed: true,
-      downloadProgress: undefined,
-      media: current?.media ? { ...current.media, state: 'remote' } : undefined,
-    });
+    patchMediaDownloadFailure(message.id, current?.media ?? message.media, error);
   }
 }
 
@@ -442,6 +450,7 @@ async function pullServerVideo(message: Message) {
   if (!message.media) return;
   patchMessage(message.id, {
     downloadFailed: false,
+    mediaExpired: false,
     downloadProgress: 0,
     media: { ...message.media, state: 'downloading' },
   });
@@ -458,17 +467,14 @@ async function pullServerVideo(message: Message) {
     if (!current?.media) return;
     patchMessage(message.id, {
       downloadFailed: false,
+      mediaExpired: false,
       downloadProgress: undefined,
       media: { ...current.media, localPreviewUrl: URL.createObjectURL(blob), fileSize: blob.size, state: 'cached' },
     });
     if (!cached) useSettingsStore.getState().addUsage('videos', blob.size);
-  } catch {
+  } catch (error) {
     const current = useChatStore.getState().messages.find((item) => item.id === message.id);
-    patchMessage(message.id, {
-      downloadFailed: true,
-      downloadProgress: undefined,
-      media: current?.media ? { ...current.media, state: 'remote' } : undefined,
-    });
+    patchMediaDownloadFailure(message.id, current?.media ?? message.media, error);
   }
 }
 
@@ -476,6 +482,7 @@ async function pullServerFile(message: Message) {
   if (!message.media) return;
   patchMessage(message.id, {
     downloadFailed: false,
+    mediaExpired: false,
     downloadProgress: 0,
     media: { ...message.media, state: 'downloading' },
   });
@@ -490,17 +497,14 @@ async function pullServerFile(message: Message) {
     if (!current?.media) return;
     patchMessage(message.id, {
       downloadFailed: false,
+      mediaExpired: false,
       downloadProgress: undefined,
       media: { ...current.media, localPreviewUrl: URL.createObjectURL(blob), fileSize: blob.size, state: 'cached' },
     });
     if (!cached) useSettingsStore.getState().addUsage('other', blob.size);
-  } catch {
+  } catch (error) {
     const current = useChatStore.getState().messages.find((item) => item.id === message.id);
-    patchMessage(message.id, {
-      downloadFailed: true,
-      downloadProgress: undefined,
-      media: current?.media ? { ...current.media, state: 'remote' } : undefined,
-    });
+    patchMediaDownloadFailure(message.id, current?.media ?? message.media, error);
   }
 }
 

@@ -1,12 +1,34 @@
 import { Capacitor } from '@capacitor/core';
 import { PushNotifications } from '@capacitor/push-notifications';
 import { adminFetch } from './adminApi';
+import { fcmEnabled } from './fcmEnabled';
 import { isServerId } from './home';
 import { quietLevel, useMuteStore } from '../stores/muteStore';
 import { useSettingsStore } from '../stores/settingsStore';
 
 let token = '';
 let started = false;
+const tokenListeners = new Set<() => void>();
+
+function emitTokenChange() {
+  tokenListeners.forEach((listener) => listener());
+}
+
+export function hasFcmToken() {
+  return token.length > 0;
+}
+
+export function fcmPushAlertsActive() {
+  return fcmEnabled() && hasFcmToken();
+}
+
+export function onPushTokenReady(listener: () => void) {
+  tokenListeners.add(listener);
+  if (token) listener();
+  return () => {
+    tokenListeners.delete(listener);
+  };
+}
 
 function pushPrefs() {
   const quiet = useMuteStore.getState().mutes.map((item) => `${item.conversationId}=${quietLevel(item)}`).join(',');
@@ -26,10 +48,11 @@ async function syncToken(value: string) {
   token = value;
   await adminFetch('/api/push/register', { method: 'POST', body: JSON.stringify({ token: value, platform: Capacitor.getPlatform() }) });
   await syncPrefs();
+  emitTokenChange();
 }
 
 export async function startPushRegistration(userId: string) {
-  if (!Capacitor.isNativePlatform() || !isServerId(userId) || started) return;
+  if (!fcmEnabled() || !Capacitor.isNativePlatform() || !isServerId(userId) || started) return;
   started = true;
   const permission = await PushNotifications.requestPermissions();
   if (permission.receive !== 'granted') {
@@ -44,9 +67,10 @@ export async function startPushRegistration(userId: string) {
   });
   await PushNotifications.addListener('pushNotificationActionPerformed', (event) => {
     const conversationId = event.notification.data?.conversationId;
-    if (typeof conversationId === 'string' && conversationId) {
-      window.location.assign(`/chat/${conversationId}`);
-    }
+    const messageId = event.notification.data?.messageId;
+    if (typeof conversationId !== 'string' || !conversationId) return;
+    const path = typeof messageId === 'string' && messageId ? `/chat/${conversationId}?at=${messageId}` : `/chat/${conversationId}`;
+    window.location.assign(path);
   });
   await PushNotifications.register();
 }
@@ -56,10 +80,12 @@ export function syncPushPrefs() {
 }
 
 export async function stopPushRegistration() {
-  if (!token) return;
   const current = token;
   token = '';
   started = false;
-  await adminFetch('/api/push/unregister', { method: 'POST', body: JSON.stringify({ token: current }) }).catch(() => undefined);
-  await PushNotifications.removeAllListeners();
+  if (current) {
+    await adminFetch('/api/push/unregister', { method: 'POST', body: JSON.stringify({ token: current }) }).catch(() => undefined);
+    emitTokenChange();
+  }
+  await PushNotifications.removeAllListeners().catch(() => undefined);
 }

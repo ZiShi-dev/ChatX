@@ -10,11 +10,30 @@ import type { AuthRepository, AuthUser, ProfilePatch } from './types.ts';
 
 const SESSION_MS = 30 * 24 * 60 * 60 * 1000;
 
+export type OwnerSystemStatus = {
+  media: {
+    mediaRetentionMs: number;
+    diskImageFiles: number;
+    diskFileFiles: number;
+    diskBytes: number;
+    metadataImages: number;
+    metadataFiles: number;
+    legacyImageRows: number;
+    legacyFileRows: number;
+    lastPurgeAt: string | null;
+    lastPurgeError: string | null;
+    lastExpiredImages: number;
+    lastExpiredFiles: number;
+    lastOrphans: number;
+  };
+};
+
 export type Deps = {
   repo: AuthRepository;
   config: AppConfig;
   now: () => number;
   rateLimit: RateLimiter;
+  ownerSystem?: () => Promise<OwnerSystemStatus | null>;
 };
 
 type Failure = { ok: false; error: 'invalid_credentials' | 'rate_limited' | 'unavailable' | 'forbidden' | 'username_taken' };
@@ -256,6 +275,16 @@ function ownerEmail(email: string) {
 
 function ownerAccount(user: { email: string; googleSub?: string | null }) {
   return ownerEmail(user.email) && typeof user.googleSub === 'string' && user.googleSub.length > 0 && user.googleSub.length <= 255;
+}
+
+export async function listOwnerSystem(deps: Deps, token: string) {
+  const user = await sessionUser(deps, token);
+  if (!user) return { ok: false as const, error: 'invalid_credentials' as const };
+  if (!ownerAccount(user)) return { ok: false as const, error: 'forbidden' as const };
+  if (!deps.ownerSystem) return { ok: false as const, error: 'unavailable' as const };
+  const system = await deps.ownerSystem();
+  if (!system) return { ok: false as const, error: 'unavailable' as const };
+  return { ok: true as const, system };
 }
 
 export async function listOwnerMembers(deps: Deps, token: string) {

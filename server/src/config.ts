@@ -1,11 +1,14 @@
 import { dirname, isAbsolute, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { mediaRetentionMs } from './mediaStore.ts';
 
 export type AppConfig = {
   allowDevOrigins: boolean;
   trustProxy: boolean;
   corsOrigin: string | null;
   port: number;
+  mediaDir: string;
+  mediaRetentionMs: number;
   releaseDir: string;
   tlsCertPath: string | null;
   tlsKeyPath: string | null;
@@ -20,6 +23,12 @@ export type AppConfig = {
 const AUTH_RATE_LIMIT = 5;
 const AUTH_RATE_WINDOW_MS = 10 * 60 * 1000;
 const AUTH_COOLDOWN_MS = 30 * 1000;
+
+function mediaDirectory(env: NodeJS.ProcessEnv) {
+  const configured = env.CHATX_MEDIA_DIR?.trim() ?? '';
+  if (!configured) return join(dirname(fileURLToPath(import.meta.url)), '..', 'data', 'media');
+  return isAbsolute(configured) ? configured : resolve(configured);
+}
 
 function releaseDirectory(env: NodeJS.ProcessEnv) {
   const configured = env.CHATX_RELEASE_DIR?.trim() ?? '';
@@ -46,6 +55,8 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     trustProxy: env.CHATX_TRUST_PROXY === 'true',
     corsOrigin,
     port: Number.isInteger(port) && port > 0 ? port : 8787,
+    mediaDir: mediaDirectory(env),
+    mediaRetentionMs: mediaRetentionMs(env),
     releaseDir: releaseDirectory(env),
     tlsCertPath,
     tlsKeyPath,

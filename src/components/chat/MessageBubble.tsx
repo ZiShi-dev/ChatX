@@ -14,6 +14,8 @@ import { displayNameStyleForUser } from '../../lib/userStyle';
 import { isSafeExternalUrl } from '../../lib/url';
 import { useDataSaver } from '../../hooks/useDataSaver';
 import { formatBytes, formatDuration, messagePreview } from '../../lib/media';
+import { canSaveMessageMedia, saveMessageToPhone } from '../../lib/mediaExport';
+import { Capacitor } from '@capacitor/core';
 import { mentionPieces, mentionTone } from '../../lib/mention';
 import EmojiPanel from './EmojiPanel';
 import { groupReactions, QUICK_REACTIONS } from '../../lib/reactions';
@@ -154,8 +156,12 @@ function MediaBlock({ message }: { message: Message }) {
             <span className="media-play"><IonIcon icon={play} /></span>
           )}
           {message.type === 'video' && <span className="media-duration">{formatDuration(media.duration ?? 0)}</span>}
+          {ready && <span className="media-local-mark">نسخة على الجهاز</span>}
         </button>
-        {message.downloadFailed && media.state !== 'cached' && !busy && (
+        {message.mediaExpired && media.state !== 'cached' && !busy && (
+          <p className="media-error">انتهت صلاحية الملف على الخادم. إن حفظته على هاتفك يبقى متاحًا هناك.</p>
+        )}
+        {message.downloadFailed && media.state !== 'cached' && !busy && !message.mediaExpired && (
           <p className="media-error">
             تعذر تنزيل الملف
             <button type="button" onClick={() => downloadMedia(message.id)}>إعادة المحاولة</button>
@@ -450,6 +456,33 @@ function MessageBubble({ message, mine, showAuthor, group = false, direct = fals
     setMenuOpen(false);
   };
 
+  const saveToPhone = () => {
+    setMenuOpen(false);
+    void saveMessageToPhone(message).catch(() => {
+      useChatStore.setState({ lastError: 'تعذر الحفظ على الهاتف. تأكد أن الملف مُحمَّل ثم أعد المحاولة.' });
+    });
+  };
+
+  const openFileCard = () => {
+    const media = message.media;
+    if (!media) return;
+    if (media.state !== 'cached' || !media.localPreviewUrl) {
+      downloadMedia(message.id);
+      return;
+    }
+    if (Capacitor.getPlatform() === 'android') {
+      void saveMessageToPhone(message).catch(() => {
+        useChatStore.setState({ lastError: 'تعذر الحفظ على الهاتف. تحقق من المساحة ثم أعد المحاولة.' });
+      });
+      return;
+    }
+    const link = document.createElement('a');
+    link.href = media.localPreviewUrl;
+    link.download = media.fileName || 'fichier';
+    link.rel = 'noopener';
+    link.click();
+  };
+
   const menu = menuOpen
     ? createPortal(
         <div className="app-scrim sheet" onClick={() => setMenuOpen(false)}>
@@ -478,9 +511,15 @@ function MessageBubble({ message, mine, showAuthor, group = false, direct = fals
               <IonIcon icon={arrowUndoOutline} />
             </button>
             <button type="button" role="menuitem" onClick={keepMessage}>
-              <span>{saved ? 'إلغاء الحفظ' : 'حفظ'}</span>
+              <span>{saved ? 'إلغاء الحفظ' : 'حفظ لي فقط'}</span>
               <IonIcon icon={saved ? bookmark : bookmarkOutline} />
             </button>
+            {canSaveMessageMedia(message) && (
+              <button type="button" role="menuitem" onClick={saveToPhone}>
+                <span>حفظ على الهاتف</span>
+                <IonIcon icon={downloadOutline} />
+              </button>
+            )}
             {canEdit && (
               <button type="button" role="menuitem" onClick={() => { setMenuOpen(false); beginEdit(message.id); }}>
                 <span>تعديل</span>
@@ -724,28 +763,20 @@ function MessageBubble({ message, mine, showAuthor, group = false, direct = fals
           <button
             type="button"
             className="file-card"
-            onClick={() => {
-              const media = message.media;
-              if (!media) return;
-              if (media.state === 'cached' && media.localPreviewUrl) {
-                const link = document.createElement('a');
-                link.href = media.localPreviewUrl;
-                link.download = media.fileName || 'fichier';
-                link.rel = 'noopener';
-                link.click();
-                return;
-              }
-              downloadMedia(message.id);
-            }}
+            onClick={openFileCard}
           >
             <IonIcon icon={documentOutline} />
             <div>
               <strong dir="auto">{message.media.fileName}</strong>
               <span>{formatBytes(message.media.fileSize)}</span>
+              {message.media.state === 'cached' ? <span className="media-local-mark">نسخة على الجهاز</span> : null}
             </div>
           </button>
         )}
-        {message.type === 'file' && message.downloadFailed && (
+        {message.type === 'file' && message.mediaExpired && message.media?.state !== 'cached' && (
+          <p className="media-error">انتهت صلاحية الملف على الخادم. إن حفظته على هاتفك يبقى متاحًا هناك.</p>
+        )}
+        {message.type === 'file' && message.downloadFailed && !message.mediaExpired && (
           <p className="media-error">تعذر تنزيل الملف</p>
         )}
         <span className="bubble-time">

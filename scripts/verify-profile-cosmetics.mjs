@@ -147,7 +147,7 @@ try {
   const bannerSaved = await api(new Request(origin + '/api/profile', { method: 'PATCH', headers: { 'content-type': 'application/json', 'x-chatx-request': '1', cookie: 'chatx_session=' + alice.id }, body: JSON.stringify({ banner: customBanner }) }));
   assert.equal(bannerSaved.status, 200);
   await page.reload(); await page.locator('.startup-screen').waitFor({ state: 'detached' });
-  for (const [effect, label] of [['celestial-dragon', 'التنين السماوي'], ['sword-domain', 'تشكيل السيوف'], ['time-cicada', 'زيز الزمن'], ['jade-lotus', 'لوتس اليشم'], ['heavenly-tribulation', 'المحنة السماوية']]) {
+  for (const [effect, label] of [['celestial-dragon', 'التنين السماوي'], ['sword-domain', 'تشكيل السيوف'], ['time-cicada', 'زيز الزمن'], ['jade-lotus', 'لوتس اليشم'], ['heavenly-tribulation', 'المحنة السماوية'], ['jade-petals', 'تساقط البتلات'], ['spirit-embers', 'جمرات الروح']]) {
     await page.getByRole('button', { name: 'تعديل الملف', exact: true }).click();
     await page.getByRole('dialog').getByRole('tab', { name: 'الزينة والتأثيرات', exact: true }).click();
     await page.getByRole('dialog').getByRole('button', { name: label, exact: true }).click();

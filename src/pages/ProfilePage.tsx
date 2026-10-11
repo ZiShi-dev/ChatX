@@ -124,6 +124,7 @@ export default function ProfilePage({ embedded = false, onShowSettings, scrollHo
     if (!file) return;
     const bannerUrl = await readBanner(file).catch(() => '');
     if (bannerUrl) setBannerPreview(bannerUrl);
+    else setSaveError('تعذر حفظ الملف.');
     scrollHold?.restore();
   };
 
@@ -158,47 +159,12 @@ export default function ProfilePage({ embedded = false, onShowSettings, scrollHo
           >
             {currentUser.bannerUrl ? <img src={currentUser.bannerUrl} alt="" /> : null}
             <ProfileEffect effect={currentUser.profileEffect} color={currentUser.color} placement="banner" />
-            <div className="banner-actions">
-              <button type="button" className="banner-pick" aria-label="تغيير الغلاف" onClick={pickBanner}>
-                <IonIcon icon={cameraOutline} />
-                <span>الغلاف</span>
-              </button>
-              {currentUser.bannerUrl && (
-                <button type="button" className="banner-pick" aria-label="إزالة الغلاف" onClick={() => void saveAccountProfile({ bannerUrl: null }).then(reportSave)}>
-                  إزالة
-                </button>
-              )}
-            </div>
-            <input
-              ref={bannerRef}
-              className="photo-file"
-              type="file"
-              accept="image/*"
-              onChange={(event) => {
-                void changeBanner(event.target.files?.[0]);
-                event.target.value = '';
-              }}
-            />
           </div>
-          <button type="button" className="photo-pick profile-photo" aria-label="تغيير الصورة" onClick={pickPhoto}>
+          <div className="profile-photo">
             <Avatar name={currentUser.displayName} color={currentUser.color} size={96} src={currentUser.avatarUrl} decoration={currentUser.avatarDecoration} animate={animate} />
-            <span className="photo-badge">
-              <IonIcon icon={cameraOutline} />
-            </span>
-          </button>
-          <input
-            ref={photoRef}
-            className="photo-file"
-            type="file"
-            accept="image/*"
-            onChange={(event) => {
-              void changePhoto(event.target.files?.[0]);
-              event.target.value = '';
-            }}
-          />
+          </div>
           <h1 {...displayNameStyleForUser(currentUser.color, currentUser.messageFont)} dir="auto">{currentUser.displayName}</h1>
           <p className="profile-handle" dir="auto">@{currentUser.username}</p>
-          {saveError ? <p className="form-error">{saveError}</p> : null}
         </section>
         <dl className="account-facts">
           <div>
@@ -300,7 +266,13 @@ export default function ProfilePage({ embedded = false, onShowSettings, scrollHo
               </div>
               <div className="profile-editor-fields" ref={editorFields}>
               <section id="profile-panel-details" role="tabpanel" aria-labelledby="profile-tab-details" hidden={editorTab !== 'details'} className="profile-editor-section"><h3>المعلومات الشخصية</h3>
-              <button type="button" className="profile-photo-action" onClick={pickPhoto}><IonIcon icon={cameraOutline} /> تغيير الصورة</button>
+              <div className="profile-media-actions">
+                <button type="button" className="profile-photo-action" onClick={pickPhoto}><IonIcon icon={cameraOutline} /> تغيير الصورة</button>
+                <button type="button" className="profile-photo-action" onClick={pickBanner}><IonIcon icon={cameraOutline} /> تغيير الغلاف</button>
+                {currentUser.bannerUrl ? <button type="button" className="profile-photo-action" onClick={() => void saveAccountProfile({ bannerUrl: null }).then(reportSave)}>إزالة الغلاف</button> : null}
+              </div>
+              <input ref={photoRef} className="photo-file" type="file" accept="image/*" onChange={(event) => { void changePhoto(event.target.files?.[0]); event.target.value = ''; }} />
+              <input ref={bannerRef} className="photo-file" type="file" accept="image/*" onChange={(event) => { void changeBanner(event.target.files?.[0]); event.target.value = ''; }} />
               <label className="group-name">
                 <span>الاسم</span>
                 <input dir="auto" maxLength={40} value={displayName} onChange={(event) => setDisplayName(event.target.value)} />
@@ -407,6 +379,7 @@ export default function ProfilePage({ embedded = false, onShowSettings, scrollHo
               <span className="app-handle" />
               <h2 id="banner-preview-title">معاينة الغلاف</h2>
               <img className="banner-preview" src={bannerPreview} alt="" />
+              {saveError ? <p className="form-error">{saveError}</p> : null}
               <div className="account-actions">
                 <button type="button" onClick={() => setBannerPreview('')}>إلغاء</button>
                 <button

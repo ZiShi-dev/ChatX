@@ -139,6 +139,7 @@ export async function adminFetchBlob(path: string) {
       credentials: 'include',
       signal: controller.signal,
     });
+    if (response.status === 404) throw new AdminApiError('not_found', 404);
     if (!response.ok) throw new AdminApiError('unavailable', response.status);
     const blob = await response.blob();
     if (version !== sessionVersion) throw new AdminApiError('account_changed', 0);

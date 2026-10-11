@@ -103,14 +103,26 @@ public class StorageAccessPlugin extends Plugin {
         catch (Exception error) { call.reject("Unable to clear temporary file.", error); }
     }
 
+    private String mimeForExport(String mimeType, String name) {
+        if (mimeType != null && !mimeType.isEmpty() && !"application/octet-stream".equals(mimeType)) return mimeType;
+        int dot = name.lastIndexOf('.');
+        if (dot > 0 && dot < name.length() - 1) {
+            String ext = name.substring(dot + 1).toLowerCase(Locale.ROOT);
+            String guessed = MimeTypeMap.getSingleton().getMimeTypeFromExtension(ext);
+            if (guessed != null && !guessed.isEmpty()) return guessed;
+        }
+        return "application/octet-stream";
+    }
+
     @PluginMethod
     public void saveFile(PluginCall call) {
         try {
             if (!exportFile(call).isFile()) throw new IllegalStateException("Missing file");
+            File file = exportFile(call);
             Intent intent = new Intent(Intent.ACTION_CREATE_DOCUMENT);
             intent.addCategory(Intent.CATEGORY_OPENABLE);
-            intent.setType(call.getString("mimeType", "application/octet-stream"));
-            intent.putExtra(Intent.EXTRA_TITLE, exportFile(call).getName());
+            intent.setType(mimeForExport(call.getString("mimeType"), file.getName()));
+            intent.putExtra(Intent.EXTRA_TITLE, file.getName());
             startActivityForResult(call, intent, "fileSaved");
         } catch (Exception error) { call.reject("Unable to open save dialog.", error); }
     }
@@ -145,7 +157,7 @@ public class StorageAccessPlugin extends Plugin {
             if (!file.isFile()) throw new IllegalStateException("Missing file");
             Uri uri = FileProvider.getUriForFile(getContext(), getContext().getPackageName() + ".fileprovider", file);
             Intent intent = new Intent(Intent.ACTION_SEND);
-            intent.setType(call.getString("mimeType", "application/octet-stream"));
+            intent.setType(mimeForExport(call.getString("mimeType"), file.getName()));
             intent.putExtra(Intent.EXTRA_STREAM, uri);
             intent.setClipData(android.content.ClipData.newRawUri("", uri));
             intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);

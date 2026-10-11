@@ -54,6 +54,7 @@ final class InboxPoll {
             }
         }
         if (cookie == null || !cookie.contains("chatx_session=")) return;
+        if (prefs.getBoolean("fcmAlerts", false)) return;
         if (!NotificationManagerCompat.from(context).areNotificationsEnabled()) return;
         if (!prefs.getBoolean("primed", false)) return;
         String body = request(origin + "/api/notifications", cookie, prefs, lease);
