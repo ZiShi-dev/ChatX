@@ -1,3 +1,4 @@
+import { openNotificationChat } from '../lib/notificationNavigation';
 import { useEffect, useMemo, useState } from 'react';
 import { IonContent, IonHeader, IonIcon, IonPage } from '@ionic/react';
 import { bookmark } from 'ionicons/icons';
@@ -63,20 +64,14 @@ export default function SavedPage() {
 
   const openInChat = (item: SavedEntry) => {
     const path = `/chat/${item.conversationId}?at=${encodeURIComponent(item.messageId)}`;
-    navigate(path, room === item.conversationId ? { replace: true } : undefined);
-  };
-
-  const backFromSaved = () => {
-    if (!room) return false;
-    navigate(`/chat/${encodeURIComponent(room)}`, { replace: true });
-    return true;
+    openNotificationChat(navigate, path);
   };
 
   return (
     <IonPage>
       <IonHeader>
         <NetworkStatusBanner />
-        <PageNav title="المحفوظات" fallback={room ? `/chat/${room}` : '/home'} onBack={backFromSaved} />
+        <PageNav title="المحفوظات" fallback={room ? `/chat/${room}` : '/home'} />
       </IonHeader>
       <IonContent className="inbox-page saved-page">
         <p className="inbox-lead saved-lead">الرسائل التي تحفظها تبقى لك، من المجموعات والمحادثات الخاصة.</p>

@@ -43,3 +43,14 @@ it('does not override back in chat media or profile subpages', () => {
   expect(returnFromNotificationChat(navigate)).toBe(false);
   expect(navigate).not.toHaveBeenCalled();
 });
+
+it('returns a saved message to the saved list rather than accumulating focused chats', () => {
+  const navigate = vi.fn() as unknown as NavigateFunction;
+  window.history.replaceState({ idx: 5 }, '', '/saved?room=group');
+  openNotificationChat(navigate, '/chat/group?at=saved');
+  const origin = { path: '/saved?room=group', index: 5 };
+  expect(navigate).toHaveBeenCalledWith('/chat/group?at=saved', { replace: false, state: { notificationReturn: origin } });
+  window.history.replaceState({ idx: 6, usr: { notificationReturn: origin } }, '', '/chat/group?at=saved');
+  returnFromNotificationChat(navigate);
+  expect(navigate).toHaveBeenLastCalledWith(-1);
+});

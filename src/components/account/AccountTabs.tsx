@@ -16,7 +16,7 @@ export default function AccountTabs({ active, owner }: AccountTabsProps) {
         role="tab"
         aria-selected={active === 'profile'}
         className={active === 'profile' ? 'is-on' : undefined}
-        onClick={() => navigate('/account')}
+        onClick={() => active !== 'profile' && navigate('/account', { replace: true })}
       >
         الملف الشخصي
       </button>
@@ -25,7 +25,7 @@ export default function AccountTabs({ active, owner }: AccountTabsProps) {
         role="tab"
         aria-selected={active === 'settings'}
         className={active === 'settings' ? 'is-on' : undefined}
-        onClick={() => navigate('/account?tab=settings')}
+        onClick={() => active !== 'settings' && navigate('/account?tab=settings', { replace: true })}
       >
         الإعدادات
       </button>
@@ -35,7 +35,7 @@ export default function AccountTabs({ active, owner }: AccountTabsProps) {
           role="tab"
           aria-selected={active === 'admin'}
           className={active === 'admin' ? 'is-on' : undefined}
-          onClick={() => navigate('/admin')}
+          onClick={() => active !== 'admin' && navigate('/admin', { replace: true })}
         >
           الإدارة
         </button>

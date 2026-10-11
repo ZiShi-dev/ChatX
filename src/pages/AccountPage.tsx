@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { IonContent, IonHeader, IonPage } from '@ionic/react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useSearchParams } from 'react-router-dom';
 import NetworkStatusBanner from '../components/common/NetworkBanner';
 import PageNav from '../components/common/PageNav';
 import { adminFetch } from '../lib/adminApi';
@@ -17,7 +17,6 @@ function tabFromQuery(value: string | null): AccountTab {
 }
 
 export default function AccountPage() {
-  const navigate = useNavigate();
   const [params, setParams] = useSearchParams();
   const tab = tabFromQuery(params.get('tab'));
   const loadAccount = useAuthStore((state) => state.loadAccount);
@@ -57,16 +56,11 @@ export default function AccountPage() {
     setParams(next === 'profile' ? {} : { tab: next }, { replace: true });
   };
 
-  const goHome = () => {
-    navigate('/home');
-    return true;
-  };
-
   return (
     <IonPage>
       <IonHeader>
         <NetworkStatusBanner />
-        <PageNav title="الحساب" fallback="/home" onBack={goHome} />
+        <PageNav title="الحساب" fallback="/home" />
       </IonHeader>
       <IonContent ref={contentRef} className={tab === 'settings' ? 'settings-page account-scroll' : 'profile-page account-scroll'}>
         {tab === 'profile' && notice ? <p className="form-error account-notice">{notice}</p> : null}

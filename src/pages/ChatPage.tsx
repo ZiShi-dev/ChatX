@@ -747,7 +747,7 @@ export default function ChatPage() {
 
   useEffect(() => {
     const openSaved = (event: Event) => {
-      if (savedRef.current && event.composedPath().includes(savedRef.current)) navigate(`/saved?room=${encodeURIComponent(id)}`, { replace: true });
+      if (savedRef.current && event.composedPath().includes(savedRef.current)) navigate(`/saved?room=${encodeURIComponent(id)}`);
     };
     window.addEventListener('click', openSaved, true);
     return () => window.removeEventListener('click', openSaved, true);
@@ -971,7 +971,7 @@ export default function ChatPage() {
               type="button"
               onClick={() => {
                 void useChatStore.getState().dismissDeletedChat(conversation.id).then((ok) => {
-                  if (ok) navigate('/home');
+                  if (ok) navigate('/home', { replace: true });
                 });
               }}
             >

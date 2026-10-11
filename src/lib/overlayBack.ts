@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react';
 
 const closers: Array<() => void> = [];
+let overlaySequence = 0;
 
 /** Register a custom overlay (search panel, etc.) that should close before route back. */
 export function registerOverlayClose(close: () => void) {
@@ -54,9 +55,9 @@ export function useOverlayHistory(open: boolean, onClose: () => void) {
 
   useEffect(() => {
     if (!open) return;
-    const key = `chatx-${Date.now()}`;
+    const key = `chatx-${++overlaySequence}`;
     keyRef.current = key;
-    window.history.pushState({ chatxOverlay: key }, '');
+    window.history.pushState({ ...window.history.state, chatxOverlay: key }, '');
     const onPop = () => {
       keyRef.current = '';
       onCloseRef.current();

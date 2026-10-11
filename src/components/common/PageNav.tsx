@@ -24,7 +24,7 @@ export default function PageNav({ title, fallback, action, sub = false, quiet = 
       if (!button || !event.composedPath().includes(button)) return;
       if (onBackRef.current?.()) return;
       const index = window.history.state?.idx;
-      if (index === 0) navigate(fallback);
+      if (typeof index !== 'number' || index <= 0) navigate(fallback, { replace: true });
       else navigate(-1);
     };
     window.addEventListener('click', goBack, true);

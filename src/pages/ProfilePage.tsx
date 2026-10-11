@@ -162,7 +162,7 @@ export default function ProfilePage({ embedded = false, onShowSettings, scrollHo
 
   const openSettings = () => {
     if (onShowSettings) onShowSettings();
-    else navigate('/account?tab=settings');
+    else navigate('/account?tab=settings', { replace: true });
   };
 
   const body = (
