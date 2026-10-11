@@ -2,6 +2,7 @@ import { Capacitor } from '@capacitor/core';
 import { LocalNotifications } from '@capacitor/local-notifications';
 import { useMuteStore } from '../stores/muteStore';
 import { useSettingsStore } from '../stores/settingsStore';
+import { allowsNotificationAlert } from './inbox';
 
 export type ChatKind = 'group' | 'private';
 export type ChatNotificationPermission = 'granted' | 'denied' | 'prompt';
@@ -98,7 +99,7 @@ export async function notifyChatMessage(input: {
 }) {
   const blocked = () => {
     const kind = typeof input.mention === 'string' ? input.mention : input.mention ? 'mention' : 'message';
-    return Boolean(input.conversationId && (useMuteStore.getState().blocks(input.conversationId, input.mention) || useSettingsStore.getState().notifyTypes[kind] === false));
+    return Boolean(input.conversationId && (!allowsNotificationAlert(kind, input.kind) || useMuteStore.getState().blocks(input.conversationId, input.mention) || useSettingsStore.getState().notifyTypes[kind] === false));
   };
   if (blocked()) return;
   const permission = known ?? (await readChatNotificationPermission());

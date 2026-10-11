@@ -8,6 +8,11 @@ import type { Message } from '../types/message';
 
 export type InboxKind = 'mention' | 'everyone' | 'reply' | 'signal' | 'message' | 'reaction';
 
+/** Other events remain in the inbox; only these may interrupt the user. */
+export function allowsNotificationAlert(kind: InboxKind, conversationType?: Conversation['type']) {
+  return kind === 'mention' || kind === 'everyone' || kind === 'reply' || (kind === 'message' && conversationType === 'private');
+}
+
 export type NotificationTone = 'high' | 'mid' | 'note' | 'plain';
 
 export type NotifyTypePrefs = Record<InboxKind, boolean>;

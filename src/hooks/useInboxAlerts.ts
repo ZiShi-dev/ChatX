@@ -5,7 +5,7 @@ import { App as CapApp } from '@capacitor/app';
 import { Capacitor } from '@capacitor/core';
 import { startPolling } from '../lib/poll';
 import { isServerId } from '../lib/home';
-import { notificationAvatars, presentInbox } from '../lib/inbox';
+import { allowsNotificationAlert, notificationAvatars, presentInbox } from '../lib/inbox';
 import { localRoomKeyRecords } from '../lib/e2e';
 import { InboxWatch } from '../lib/inboxWatch';
 import { notifyChatMessage } from '../lib/notifications';
@@ -88,7 +88,7 @@ export function useInboxAlerts() {
       const hidden = !phoneActive || document.visibilityState === 'hidden';
       fresh.reverse().forEach((item) => {
         const roomType = item.conversationType ?? useChatStore.getState().conversations.find(room => room.id === item.conversationId)?.type;
-        if (item.kind === 'message' && roomType !== 'private') return;
+        if (!allowsNotificationAlert(item.kind, roomType)) return;
         if (hidden && !item.unread) return;
         if (!hidden && watching(item.conversationId)) {
           notified.add(item.id);

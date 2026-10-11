@@ -115,7 +115,7 @@ export async function sendMessagePush(deps: Deps, message: RoomMessage & { hints
     : isSealed(message.text) ? SEALED_PREVIEW : flat.length <= 80 ? flat : `${flat.slice(0, 80)}…`;
   for (const member of members) {
     const kind = noticeKind(message, member, parent?.senderId === member.id);
-    if (kind === 'message' && room?.kind !== 'private') continue;
+    if (kind !== 'mention' && kind !== 'everyone' && kind !== 'reply' && !(kind === 'message' && room?.kind === 'private')) continue;
     const prefs = await deps.repo.readPushPrefs(member.id);
     if (pushSuppressed(prefs.quiet, prefs.hiddenKinds, message.roomId, kind)) continue;
     const tokens = await deps.repo.listPushTokens(member.id);
