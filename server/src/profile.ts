@@ -45,6 +45,35 @@ export function cleanMessageFont(value: unknown) {
   return { ok: true as const, value };
 }
 
+const CUSTOM_ROLE_MAX = 32;
+const CUSTOM_ROLE_COLORS_MAX = 4;
+
+export function cleanCustomRoleLabel(value: unknown) {
+  if (value === null || value === '') return { ok: true as const, value: null };
+  if (typeof value !== 'string') return { ok: false as const };
+  const text = value.replace(/[\u0000-\u001f\u007f]/g, '').trim();
+  if (!text || text.length > CUSTOM_ROLE_MAX) return { ok: false as const };
+  return { ok: true as const, value: text };
+}
+
+export function cleanCustomRoleColors(value: unknown) {
+  if (value === null || value === '') return { ok: true as const, value: null };
+  const list = Array.isArray(value)
+    ? value
+    : typeof value === 'string'
+      ? value.split(',')
+      : null;
+  if (!list || list.length < 1 || list.length > CUSTOM_ROLE_COLORS_MAX) return { ok: false as const };
+  const colors: string[] = [];
+  for (const item of list) {
+    if (typeof item !== 'string') return { ok: false as const };
+    const hex = item.trim().toLowerCase();
+    if (!/^#[0-9a-f]{6}$/.test(hex)) return { ok: false as const };
+    colors.push(hex);
+  }
+  return { ok: true as const, value: colors.join(',') };
+}
+
 export function cleanCosmetic(value: unknown, kind: 'avatar' | 'profile') {
   const choices = kind === 'avatar' ? ['none', 'orbit', 'laurel', 'prism', 'hat', 'dragon'] : ['none', 'aurora', 'stars', 'meteors', 'celestial-dragon', 'sword-domain', 'time-cicada', 'jade-lotus', 'heavenly-tribulation', 'jade-petals', 'spirit-embers'];
   if (value === null) return { ok: true as const, value: 'none' };

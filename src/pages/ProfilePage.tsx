@@ -6,13 +6,16 @@ import { useNavigate } from 'react-router-dom';
 import NetworkStatusBanner from '../components/common/NetworkBanner';
 import PageNav from '../components/common/PageNav';
 import Avatar from '../components/common/Avatar';
+import CustomRoleBadge from '../components/common/CustomRoleBadge';
+import NameColorField from '../components/common/NameColorField';
 import ProfileEffect from '../components/common/ProfileEffect';
 import { useProfileMotion } from '../hooks/useProfileMotion';
 import { AVATAR_DECORATIONS, PROFILE_EFFECTS, type AvatarDecoration, type ProfileEffectId } from '../lib/profileCosmetics';
 import { connectionLabel, getUserPresence } from '../lib/presence';
 import { roleLabel } from '../lib/roles';
 import { readBanner, readPhoto } from '../lib/photo';
-import { displayNameFontClass, displayNameStyleForUser, fontLabel, MESSAGE_FONT_OPTIONS, normalizeUserColorInput, USER_COLOR_OPTIONS } from '../lib/userStyle';
+import { CUSTOM_ROLE_COLORS_MAX, sanitizeCustomRoleLabel } from '../lib/customRole';
+import { displayNameFontClass, displayNameStyleForUser, fontLabel, MESSAGE_FONT_OPTIONS, sanitizeUserColor } from '../lib/userStyle';
 import type { MessageFontId } from '../types/user';
 import { useAuthStore } from '../stores/authStore';
 
@@ -51,6 +54,10 @@ export default function ProfilePage({ embedded = false, onShowSettings, scrollHo
   const [draftFont, setDraftFont] = useState<MessageFontId>(currentUser.messageFont ?? 'system');
   const [draftDecoration, setDraftDecoration] = useState<AvatarDecoration>(currentUser.avatarDecoration ?? 'none');
   const [draftEffect, setDraftEffect] = useState<ProfileEffectId>(currentUser.profileEffect ?? 'none');
+  const [draftRoleLabel, setDraftRoleLabel] = useState(currentUser.customRoleLabel ?? '');
+  const [draftRoleColors, setDraftRoleColors] = useState<string[]>(() => (
+    currentUser.customRoleColors?.length ? [...currentUser.customRoleColors] : [currentUser.color || '#3d9b84']
+  ));
   const [saveError, setSaveError] = useState('');
 
   useEffect(() => {
@@ -83,6 +90,8 @@ export default function ProfilePage({ embedded = false, onShowSettings, scrollHo
     setDraftFont(currentUser.messageFont ?? 'system');
     setDraftDecoration(currentUser.avatarDecoration ?? 'none');
     setDraftEffect(currentUser.profileEffect ?? 'none');
+    setDraftRoleLabel(currentUser.customRoleLabel ?? '');
+    setDraftRoleColors(currentUser.customRoleColors?.length ? [...currentUser.customRoleColors] : [currentUser.color || '#3d9b84']);
     setSaveError('');
     setEditorTab('details');
     setEditing(true);
@@ -130,7 +139,13 @@ export default function ProfilePage({ embedded = false, onShowSettings, scrollHo
 
   const save = () => {
     const name = displayName.trim();
+    const roleLabel = sanitizeCustomRoleLabel(draftRoleLabel);
+    const roleColors = draftRoleColors.map((item) => sanitizeUserColor(item, '#3d9b84')).filter((item, index, list) => list.indexOf(item) === index);
     if (name.length < 2 || !colorValid) return;
+    if (roleLabel && roleColors.length === 0) {
+      setSaveError('أضف لونًا واحدًا على الأقل للدور.');
+      return;
+    }
     void saveAccountProfile({
       displayName: name,
       bio: draftBio.trim(),
@@ -138,6 +153,8 @@ export default function ProfilePage({ embedded = false, onShowSettings, scrollHo
       messageFont: draftFont,
       avatarDecoration: draftDecoration,
       profileEffect: draftEffect,
+      customRoleLabel: roleLabel || null,
+      customRoleColors: roleLabel ? roleColors : null,
     }).then((saved) => {
       if (reportSave(saved)) setEditing(false);
     });
@@ -165,12 +182,12 @@ export default function ProfilePage({ embedded = false, onShowSettings, scrollHo
           </div>
           <h1 {...displayNameStyleForUser(currentUser.color, currentUser.messageFont)} dir="auto">{currentUser.displayName}</h1>
           <p className="profile-handle" dir="auto">@{currentUser.username}</p>
+          <p className="member-chips profile-role-row">
+            <CustomRoleBadge user={currentUser} />
+            {roleLabel(currentUser.role) ? <span className="kind-pill">{roleLabel(currentUser.role)}</span> : null}
+          </p>
         </section>
         <dl className="account-facts">
-          <div>
-            <dt>الدور</dt>
-            <dd>{roleLabel(currentUser.role) || 'عضو'}</dd>
-          </div>
           <div>
             <dt>الحالة</dt>
             <dd className="profile-status">
@@ -283,52 +300,64 @@ export default function ProfilePage({ embedded = false, onShowSettings, scrollHo
                 <textarea dir="auto" maxLength={160} value={draftBio} placeholder="نبذة قصيرة" onChange={(event) => setDraftBio(event.target.value)} />
               </label>
               </section>
-              <section id="profile-panel-name" role="tabpanel" aria-labelledby="profile-tab-name" hidden={editorTab !== 'name'} className="profile-editor-section"><h3>مظهر الاسم</h3>
+              <section id="profile-panel-name" role="tabpanel" aria-labelledby="profile-tab-name" hidden={editorTab !== 'name'} className="profile-editor-section"><h3>مظهر الاسم والدور</h3>
+              <NameColorField
+                color={draftColor}
+                colorInput={colorInput}
+                onColor={chooseColor}
+                onInput={setColorInput}
+                hint="يظهر اسمك في المجموعات للجميع."
+              />
               <div className="profile-style-block">
-                <span className="profile-style-title">لون الاسم</span>
-                <p className="profile-style-hint">اختر أي لون، مثل مظهر التطبيق. يظهر اسمك في المجموعات للجميع.</p>
-                <div className="look-colors profile-name-colors">
-                  <label className="look-color">
-                    لونك
-                    <span className="look-chip" style={{ background: draftColor }}>
-                      <input
-                        type="color"
-                        aria-label="لون الاسم"
-                        value={draftColor}
-                        onChange={(event) => chooseColor(event.target.value.toLowerCase())}
-                      />
-                    </span>
-                  </label>
-                  <label className="group-name profile-hex">
-                    <span>رمز اللون</span>
-                    <input
-                      dir="ltr"
-                      maxLength={7}
-                      value={colorInput}
-                      aria-invalid={!colorValid}
-                      aria-label="رمز اللون"
-                      onChange={(event) => { setColorInput(event.target.value); setDraftColor(normalizeUserColorInput(event.target.value, draftColor)); }}
-                    />
-                  </label>
-                </div>
-                {!colorValid && <p className="form-error">اكتب ستة أحرف للون، مثل #3d9b84.</p>}
-                <p className="profile-style-hint">ألوان سريعة</p>
-                <div className="profile-color-grid" role="listbox" aria-label="لون الاسم">
-                  {USER_COLOR_OPTIONS.map((color) => (
-                    <button
-                      key={color}
-                      type="button"
-                      role="option"
-                      aria-selected={draftColor === color}
-                      aria-label={color}
-                      className={draftColor === color ? 'is-on' : undefined}
-                      style={{ '--swatch': color } as CSSProperties}
-                      onClick={() => chooseColor(color)}
-                    >
-                      <span aria-hidden="true" />
-                    </button>
+                <span className="profile-style-title">دورك (مخصص)</span>
+                <p className="profile-style-hint">مثل Discord: اسم الدور يظهر في ملفك للجميع. يمكنك إضافة حتى {CUSTOM_ROLE_COLORS_MAX} ألوان.</p>
+                <label className="group-name">
+                  <span>اسم الدور</span>
+                  <input
+                    dir="auto"
+                    maxLength={32}
+                    value={draftRoleLabel}
+                    placeholder="مثال: حارس المجموعة"
+                    onChange={(event) => setDraftRoleLabel(event.target.value)}
+                  />
+                </label>
+                <div className="custom-role-colors">
+                  {draftRoleColors.map((hex, index) => (
+                    <label key={index} className="look-color">
+                      لون {index + 1}
+                      <span className="look-chip" style={{ background: hex } as CSSProperties}>
+                        <input
+                          type="color"
+                          aria-label={`لون الدور ${index + 1}`}
+                          value={hex}
+                          onChange={(event) => {
+                            const next = [...draftRoleColors];
+                            next[index] = event.target.value.toLowerCase();
+                            setDraftRoleColors(next);
+                          }}
+                        />
+                      </span>
+                    </label>
                   ))}
                 </div>
+                <div className="profile-editor-actions">
+                  {draftRoleColors.length < CUSTOM_ROLE_COLORS_MAX && (
+                    <button type="button" onClick={() => setDraftRoleColors([...draftRoleColors, draftRoleColors.at(-1) ?? '#3d9b84'])}>
+                      إضافة لون
+                    </button>
+                  )}
+                  {draftRoleColors.length > 1 && (
+                    <button type="button" onClick={() => setDraftRoleColors(draftRoleColors.slice(0, -1))}>
+                      إزالة آخر لون
+                    </button>
+                  )}
+                </div>
+                {sanitizeCustomRoleLabel(draftRoleLabel) && (
+                  <p className="profile-style-hint">معاينة:</p>
+                )}
+                {sanitizeCustomRoleLabel(draftRoleLabel) && (
+                  <CustomRoleBadge user={{ customRoleLabel: sanitizeCustomRoleLabel(draftRoleLabel), customRoleColors: draftRoleColors }} />
+                )}
               </div>
               <div className="profile-style-block">
                 <span className="profile-style-title">خط الاسم</span>

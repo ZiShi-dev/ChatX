@@ -310,6 +310,8 @@ export function createMemoryRepository(): AuthRepository {
         ...(patch.messageFont !== undefined ? { messageFont: patch.messageFont } : {}),
         ...(patch.avatarDecoration !== undefined ? { avatarDecoration: patch.avatarDecoration } : {}),
         ...(patch.profileEffect !== undefined ? { profileEffect: patch.profileEffect } : {}),
+        ...(patch.customRoleLabel !== undefined ? { customRoleLabel: patch.customRoleLabel } : {}),
+        ...(patch.customRoleColors !== undefined ? { customRoleColors: patch.customRoleColors } : {}),
       });
       return 'ok';
     },

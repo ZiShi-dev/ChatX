@@ -72,6 +72,9 @@ function memberView(user: AuthUser) {
     ...(user.messageFont && user.messageFont !== 'system' ? { messageFont: user.messageFont } : {}),
     avatarDecoration: user.avatarDecoration ?? 'none',
     profileEffect: user.profileEffect ?? 'none',
+    ...(user.customRoleLabel && user.customRoleColors
+      ? { customRoleLabel: user.customRoleLabel, customRoleColors: user.customRoleColors.split(',') }
+      : {}),
   };
 }
 

@@ -3,6 +3,7 @@ import type { CSSProperties } from 'react';
 import { IonIcon } from '@ionic/react';
 import { chatbubbleOutline } from 'ionicons/icons';
 import Avatar from '../common/Avatar';
+import CustomRoleBadge from '../common/CustomRoleBadge';
 import ProfileEffect from '../common/ProfileEffect';
 import { useProfileMotion } from '../../hooks/useProfileMotion';
 import { connectionLabel } from '../../lib/presence';
@@ -51,11 +52,10 @@ export default function UserProfileModal({ user, isSelf, room, onClose, onMessag
           <i className={user.status === 'online' ? 'on' : ''} />
           {connectionLabel(user, { self: isSelf })}
         </p>
-        {chips.length > 0 && (
-          <p className="member-chips">
-            {chips.map((label) => <span key={label} className="kind-pill">{label}</span>)}
-          </p>
-        )}
+        <p className="member-chips">
+          <CustomRoleBadge user={user} />
+          {chips.map((label) => <span key={label} className="kind-pill">{label}</span>)}
+        </p>
         {room && <p className="member-room">عضو في {room.name}</p>}
         <section className="profile-bio member-bio">
           <span>النبذة</span>

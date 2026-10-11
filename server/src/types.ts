@@ -16,6 +16,8 @@ export type AuthUser = {
   messageFont?: string | null;
   avatarDecoration?: string;
   profileEffect?: string;
+  customRoleLabel?: string | null;
+  customRoleColors?: string | null;
 };
 
 export type ProfilePatch = {
@@ -27,6 +29,8 @@ export type ProfilePatch = {
   messageFont?: string | null;
   avatarDecoration?: string;
   profileEffect?: string;
+  customRoleLabel?: string | null;
+  customRoleColors?: string | null;
 };
 
 export type EraseChoices = {

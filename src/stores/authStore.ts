@@ -69,7 +69,16 @@ function writeAuth(state: Pick<AuthState, 'activated' | 'currentUser' | 'account
 
 const SERVER_ID = /^[0-9a-f-]{36}$/i;
 
-function applyAccountPatch(user: User, patch: ProfileCosmetics & { displayName?: string; bio?: string; bannerUrl?: string | null; avatarUrl?: string | null; color?: string; messageFont?: MessageFontId }): User {
+function applyAccountPatch(user: User, patch: ProfileCosmetics & {
+  displayName?: string;
+  bio?: string;
+  bannerUrl?: string | null;
+  avatarUrl?: string | null;
+  color?: string;
+  messageFont?: MessageFontId;
+  customRoleLabel?: string | null;
+  customRoleColors?: string[] | null;
+}): User {
   const next: User = {
     ...user,
     ...(patch.displayName !== undefined ? { displayName: patch.displayName, username: patch.displayName } : {}),
@@ -79,6 +88,14 @@ function applyAccountPatch(user: User, patch: ProfileCosmetics & { displayName?:
     ...(patch.profileEffect !== undefined ? { profileEffect: profileEffect(patch.profileEffect) } : {}),
     ...(patch.messageFont !== undefined ? { messageFont: sanitizeMessageFont(patch.messageFont) } : {}),
   };
+  if (patch.customRoleLabel !== undefined) {
+    if (patch.customRoleLabel) next.customRoleLabel = patch.customRoleLabel;
+    else delete next.customRoleLabel;
+  }
+  if (patch.customRoleColors !== undefined) {
+    if (patch.customRoleColors && patch.customRoleColors.length > 0) next.customRoleColors = patch.customRoleColors;
+    else delete next.customRoleColors;
+  }
   if (patch.bannerUrl) next.bannerUrl = patch.bannerUrl;
   else if (patch.bannerUrl === null) delete next.bannerUrl;
   if (patch.avatarUrl) next.avatarUrl = patch.avatarUrl;
@@ -106,7 +123,16 @@ type AuthState = {
   accounts: User[];
   logout: () => void;
   updateProfile: (patch: Partial<Pick<User, 'displayName' | 'username' | 'bio' | 'avatarUrl' | 'bannerUrl'>>) => void;
-  saveAccountProfile: (patch: ProfileCosmetics & { displayName?: string; bio?: string; bannerUrl?: string | null; avatarUrl?: string | null; color?: string; messageFont?: MessageFontId }) => Promise<'ok' | 'local' | 'offline' | 'invalid' | 'username_taken'>;
+  saveAccountProfile: (patch: ProfileCosmetics & {
+    displayName?: string;
+    bio?: string;
+    bannerUrl?: string | null;
+    avatarUrl?: string | null;
+    color?: string;
+    messageFont?: MessageFontId;
+    customRoleLabel?: string | null;
+    customRoleColors?: string[] | null;
+  }) => Promise<'ok' | 'local' | 'offline' | 'invalid' | 'username_taken'>;
   loadAccount: () => Promise<'ok' | 'local' | 'offline' | 'invalid' | 'no_server'>;
   applyPresence: (rows: Array<{ id: string; status: User['status']; lastSeenAt?: string }>) => void;
   markSelfOffline: () => void;
@@ -166,6 +192,8 @@ export const useAuthStore = create<AuthState>((set, get) => ({
           ...(patch.avatarDecoration !== undefined ? { avatarDecoration: patch.avatarDecoration } : {}),
           ...(patch.profileEffect !== undefined ? { profileEffect: patch.profileEffect } : {}),
           ...(patch.messageFont !== undefined ? { messageFont: patch.messageFont } : {}),
+          ...(patch.customRoleLabel !== undefined ? { customRoleLabel: patch.customRoleLabel } : {}),
+          ...(patch.customRoleColors !== undefined ? { customRoleColors: patch.customRoleColors } : {}),
         },
       }) as { user?: unknown }).user);
       if (saved) {

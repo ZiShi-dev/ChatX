@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 import type { AppConfig } from './config.ts';
 import { verifyGoogleIdToken } from './google.ts';
 import { visiblePresence } from './presence.ts';
-import { cleanCosmetic, cleanAccentColor, cleanAvatar, cleanBanner, cleanBio, cleanMessageFont } from './profile.ts';
+import { cleanAccentColor, cleanAvatar, cleanBanner, cleanBio, cleanCosmetic, cleanCustomRoleColors, cleanCustomRoleLabel, cleanMessageFont } from './profile.ts';
 import { createRateLimiter, type RateLimiter, type ThrottleState } from './rateLimit.ts';
 import { hashSession, newSessionToken } from './session.ts';
 import { ERASE_OPERATOR_EMAIL, resolveEraseChoices, resolveGroupChoices } from './eraseMember.ts';
@@ -66,6 +66,9 @@ function publicUser(user: AuthUser) {
     ...(user.messageFont && user.messageFont !== 'system' ? { messageFont: user.messageFont } : {}),
     avatarDecoration: user.avatarDecoration ?? 'none',
     profileEffect: user.profileEffect ?? 'none',
+    ...(user.customRoleLabel && user.customRoleColors
+      ? { customRoleLabel: user.customRoleLabel, customRoleColors: user.customRoleColors.split(',') }
+      : {}),
   };
 }
 
@@ -209,11 +212,15 @@ export async function updateOwnProfile(deps: Deps, input: {
   profileEffect?: unknown;
   hasAvatarDecoration?: boolean;
   hasProfileEffect?: boolean;
+  customRoleLabel?: unknown;
+  customRoleColors?: unknown;
+  hasCustomRoleLabel?: boolean;
+  hasCustomRoleColors?: boolean;
   ip: string;
 }) {
   const limit = blocked(deps, input.ip);
   if (limit) return limit;
-  if (!input.token || (!input.hasDisplayName && !input.hasBio && !input.hasBanner && !input.hasAvatar && !input.hasColor && !input.hasMessageFont && !input.hasAvatarDecoration && !input.hasProfileEffect)) {
+  if (!input.token || (!input.hasDisplayName && !input.hasBio && !input.hasBanner && !input.hasAvatar && !input.hasColor && !input.hasMessageFont && !input.hasAvatarDecoration && !input.hasProfileEffect && !input.hasCustomRoleLabel && !input.hasCustomRoleColors)) {
     return { ok: false as const, error: 'invalid_credentials' as const };
   }
   const user = await sessionUser(deps, input.token);
@@ -259,6 +266,17 @@ export async function updateOwnProfile(deps: Deps, input: {
     const value = cleanCosmetic(input.profileEffect, 'profile');
     if (!value.ok) return { ok: false as const, error: 'invalid_credentials' as const };
     patch.profileEffect = value.value;
+  }
+  if (input.hasCustomRoleLabel) {
+    const label = cleanCustomRoleLabel(input.customRoleLabel);
+    if (!label.ok) return { ok: false as const, error: 'invalid_credentials' as const };
+    patch.customRoleLabel = label.value;
+    if (!label.value) patch.customRoleColors = null;
+  }
+  if (input.hasCustomRoleColors) {
+    const colors = cleanCustomRoleColors(input.customRoleColors);
+    if (!colors.ok) return { ok: false as const, error: 'invalid_credentials' as const };
+    patch.customRoleColors = colors.value;
   }
   const updated = await deps.repo.updateMemberProfile(user.id, patch);
   if (updated === 'taken') return { ok: false as const, error: 'username_taken' as const };

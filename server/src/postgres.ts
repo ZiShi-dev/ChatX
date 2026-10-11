@@ -46,9 +46,11 @@ type UserRow = {
   message_font: string | null;
   avatar_decoration: string;
   profile_effect: string;
+  custom_role_label: string | null;
+  custom_role_colors: string | null;
 };
 
-const USER_COLUMNS = 'id, email, display_name, username, role, bio, banner, avatar, google_sub, accent_color, message_font, avatar_decoration, profile_effect';
+const USER_COLUMNS = 'id, email, display_name, username, role, bio, banner, avatar, google_sub, accent_color, message_font, avatar_decoration, profile_effect, custom_role_label, custom_role_colors';
 
 function byteSizeOf(value: unknown, max: number) {
   const size = typeof value === 'number' ? value : typeof value === 'string' ? Number(value) : NaN;
@@ -102,6 +104,8 @@ function mapUser(row: UserRow): AuthUser {
     messageFont: row.message_font,
     avatarDecoration: row.avatar_decoration,
     profileEffect: row.profile_effect,
+    customRoleLabel: row.custom_role_label,
+    customRoleColors: row.custom_role_colors,
   };
 }
 
@@ -211,7 +215,9 @@ export function createPostgresRepository(pool: pg.Pool, store: MediaStore): Auth
                accent_color = CASE WHEN $10::bool THEN $11 ELSE accent_color END,
                message_font = CASE WHEN $12::bool THEN $13 ELSE message_font END,
                avatar_decoration = CASE WHEN $14::bool THEN $15 ELSE avatar_decoration END,
-               profile_effect = CASE WHEN $16::bool THEN $17 ELSE profile_effect END
+               profile_effect = CASE WHEN $16::bool THEN $17 ELSE profile_effect END,
+               custom_role_label = CASE WHEN $18::bool THEN $19 ELSE custom_role_label END,
+               custom_role_colors = CASE WHEN $20::bool THEN $21 ELSE custom_role_colors END
            WHERE id = $1 AND role = 'member'`,
           [
             id,
@@ -231,6 +237,10 @@ export function createPostgresRepository(pool: pg.Pool, store: MediaStore): Auth
             patch.avatarDecoration ?? 'none',
             patch.profileEffect !== undefined,
             patch.profileEffect ?? 'none',
+            patch.customRoleLabel !== undefined,
+            patch.customRoleLabel ?? null,
+            patch.customRoleColors !== undefined,
+            patch.customRoleColors ?? null,
           ],
         );
         return (result.rowCount ?? 0) > 0 ? 'ok' : 'missing';

@@ -59,7 +59,7 @@ test('walks through name, appearance and effect before creating the account', as
   fireEvent.change(screen.getByRole('textbox', { name: 'الاسم' }), { target: { value: 'ليلى' } });
   fireEvent.click(screen.getByRole('button', { name: 'التالي' }));
   expect(screen.getByRole('heading', { name: 'مظهر الاسم' })).toBeInTheDocument();
-  fireEvent.click(screen.getByRole('option', { name: '#4d7ea8' }));
+  fireEvent.change(screen.getByLabelText('لون الاسم'), { target: { value: '#4d7ea8' } });
   fireEvent.click(screen.getByRole('option', { name: 'واضح' }));
   fireEvent.click(screen.getByRole('button', { name: 'التالي' }));
   expect(screen.getByRole('heading', { name: 'الزينة' })).toBeInTheDocument();

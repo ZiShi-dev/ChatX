@@ -1,3 +1,4 @@
+import { parseCustomRoleColors, sanitizeCustomRoleLabel } from './customRole';
 import { avatarDecoration, profileEffect } from './profileCosmetics';
 import type { InviteCode } from '../types/invite';
 import { sanitizeMessageFont, sanitizeUserColor } from './userStyle';
@@ -37,6 +38,8 @@ export function readDirectoryUser(value: unknown): User | null {
   if (avatarUrl && (!avatarUrl.startsWith('data:image/jpeg;base64,/9j/') || avatarUrl.length > 80_000)) return null;
   const color = typeof data.color === 'string' ? sanitizeUserColor(data.color, colorForId(data.id)) : colorForId(data.id);
   const messageFont = sanitizeMessageFont(data.messageFont);
+  const customRoleLabel = sanitizeCustomRoleLabel(data.customRoleLabel ?? '');
+  const customRoleColors = parseCustomRoleColors(data.customRoleColors);
   return {
     id: data.id,
     displayName: data.displayName.trim(),
@@ -50,6 +53,7 @@ export function readDirectoryUser(value: unknown): User | null {
     profileEffect: profileEffect(data.profileEffect),
     ...(avatarUrl ? { avatarUrl } : {}),
     ...(bannerUrl ? { bannerUrl } : {}),
+    ...(customRoleLabel && customRoleColors.length > 0 ? { customRoleLabel, customRoleColors } : {}),
   };
 }
 

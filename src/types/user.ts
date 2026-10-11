@@ -14,6 +14,9 @@ export interface User extends ProfileCosmetics {
   bio: string;
   color: string;
   messageFont?: MessageFontId;
+  /** User-defined badge (Discord-style), visible to everyone. */
+  customRoleLabel?: string;
+  customRoleColors?: string[];
   avatarUrl?: string;
   bannerUrl?: string;
   lastSeenAt?: string;

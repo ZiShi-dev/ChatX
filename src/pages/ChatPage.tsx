@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { IonContent, IonFooter, IonHeader, IonIcon, IonPage } from '@ionic/react';
-import { arrowDown, bookmarkOutline, imagesOutline, peopleOutline, searchOutline } from 'ionicons/icons';
+import { arrowDown, bookmarkOutline, peopleOutline, searchOutline } from 'ionicons/icons';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import Avatar from '../components/common/Avatar';
 import EmptyState from '../components/common/EmptyState';
@@ -180,8 +180,8 @@ export default function ChatPage() {
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const profileRef = useRef<HTMLButtonElement>(null);
+  const privateProfileRef = useRef<HTMLButtonElement>(null);
   const membersRef = useRef<HTMLButtonElement>(null);
-  const directRef = useRef<HTMLButtonElement>(null);
   const savedRef = useRef<HTMLButtonElement>(null);
   const savedHere = useSavedStore((state) => {
     let count = 0;
@@ -734,12 +734,13 @@ export default function ChatPage() {
 
   useEffect(() => {
     if (!privateId) return;
-    const openDirect = (event: Event) => {
+    const openProfile = (event: Event) => {
       const path = event.composedPath();
-      if (directRef.current && path.includes(directRef.current)) navigate(`/chat/${privateId}/media`);
+      const title = privateProfileRef.current;
+      if (title && path.includes(title)) navigate(`/chat/${privateId}/media`);
     };
-    window.addEventListener('click', openDirect, true);
-    return () => window.removeEventListener('click', openDirect, true);
+    window.addEventListener('click', openProfile, true);
+    return () => window.removeEventListener('click', openProfile, true);
   }, [navigate, privateId]);
 
   useEffect(() => {
@@ -838,32 +839,20 @@ export default function ChatPage() {
                 <Avatar name="حساب محذوف" color="#8ea099" size={32} />
                 <GroupHeader title="حساب محذوف" subtitle="تم حذف هذا الحساب" online={false} />
               </div>
-            ) : (
-              <div className="chat-nav-main">
-                {other && (
-                  <button type="button" className="chat-avatar" aria-label={other.displayName} onClick={() => setProfile(other)}>
-                    <Avatar name={other.displayName} color={other.color} size={32} src={other.avatarUrl} decoration={other.avatarDecoration} />
-                    {getUserPresence(other.id, users) === 'online' && <span className="presence" />}
-                  </button>
-                )}
-                {other && (
-                  <button type="button" className="chat-nav-name" aria-label={`ملف ${other.displayName}`} onClick={() => setProfile(other)}>
-                    <GroupHeader
-                      title={other.displayName}
-                      subtitle={privateSubtitle}
-                      online={!typingLine && getUserPresence(other.id, users) === 'online'}
-                      typing={Boolean(typingLine)}
-                    />
-                  </button>
-                )}
-              </div>
-            )
+            ) : other ? (
+              <button ref={privateProfileRef} type="button" className="chat-nav-main" aria-label={`ملف ${other.displayName}`}>
+                <Avatar name={other.displayName} color={other.color} size={32} src={other.avatarUrl} decoration={other.avatarDecoration} />
+                <GroupHeader
+                  title={other.displayName}
+                  subtitle={privateSubtitle}
+                  online={!typingLine && getUserPresence(other.id, users) === 'online'}
+                  typing={Boolean(typingLine)}
+                />
+              </button>
+            ) : null
           }
           action={
             <div className="home-nav-actions">
-              {conversation.type === 'private' && !conversation.self && !peerGone && (
-                <button ref={directRef} type="button" className="home-nav-menu" aria-label="وسائط المحادثة"><IonIcon icon={imagesOutline} /></button>
-              )}
               <button
                 type="button"
                 className={searchOpen ? 'home-nav-menu is-on' : 'home-nav-menu'}
@@ -921,7 +910,10 @@ export default function ChatPage() {
               unreadCount={arrivalUnread}
               resumeBack={resumeBack}
               spotlightId={spotlight}
-              onOpenProfile={setProfile}
+              onOpenProfile={(user) => {
+                if (conversation.type === 'private') navigate(`/chat/${conversation.id}/media`);
+                else setProfile(user);
+              }}
               onLoadOlder={revealOlder}
             />
           )}
@@ -989,7 +981,7 @@ export default function ChatPage() {
         )}
       </IonFooter>
       <UserProfileModal
-        user={profile}
+        user={conversation.type === 'private' ? undefined : profile}
         isSelf={profile?.id === currentUser.id}
         room={conversation.type !== 'private' ? { name: conversation.name ?? 'مجموعة', adminId: conversation.adminId } : undefined}
         onClose={() => setProfile(undefined)}

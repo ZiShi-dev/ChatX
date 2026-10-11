@@ -437,6 +437,8 @@ async function route(deps: Deps, request: Request) {
       messageFont: body.messageFont,
       avatarDecoration: body.avatarDecoration,
       profileEffect: body.profileEffect,
+      customRoleLabel: body.customRoleLabel,
+      customRoleColors: body.customRoleColors,
       hasDisplayName: Object.prototype.hasOwnProperty.call(body, 'displayName'),
       hasBio: Object.prototype.hasOwnProperty.call(body, 'bio'),
       hasBanner: Object.prototype.hasOwnProperty.call(body, 'banner'),
@@ -445,6 +447,8 @@ async function route(deps: Deps, request: Request) {
       hasMessageFont: Object.prototype.hasOwnProperty.call(body, 'messageFont'),
       hasAvatarDecoration: Object.prototype.hasOwnProperty.call(body, 'avatarDecoration'),
       hasProfileEffect: Object.prototype.hasOwnProperty.call(body, 'profileEffect'),
+      hasCustomRoleLabel: Object.prototype.hasOwnProperty.call(body, 'customRoleLabel'),
+      hasCustomRoleColors: Object.prototype.hasOwnProperty.call(body, 'customRoleColors'),
       ip,
     });
     if (!result.ok) return failure(deps, result.error);

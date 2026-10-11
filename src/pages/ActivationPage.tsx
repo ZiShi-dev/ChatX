@@ -9,7 +9,7 @@ import { useProfileMotion } from '../hooks/useProfileMotion';
 import { brandName, DEFAULT_LOGO } from '../lib/appearance';
 import { readBanner, readPhoto } from '../lib/photo';
 import { AVATAR_DECORATIONS, PROFILE_EFFECTS, type AvatarDecoration, type ProfileEffectId } from '../lib/profileCosmetics';
-import { displayNameFontClass, displayNameStyleForUser, MESSAGE_FONT_OPTIONS, normalizeUserColorInput, sanitizeUserColor, USER_COLOR_OPTIONS } from '../lib/userStyle';
+import { displayNameFontClass, displayNameStyleForUser, MESSAGE_FONT_OPTIONS, normalizeUserColorInput, sanitizeUserColor } from '../lib/userStyle';
 import type { MessageFontId } from '../types/user';
 import { useAuthStore } from '../stores/authStore';
 import { useSettingsStore } from '../stores/settingsStore';
@@ -357,13 +357,6 @@ export default function ActivationPage() {
                         <span>رمز اللون</span>
                         <input dir="ltr" maxLength={7} value={colorInput} aria-invalid={!colorValid} aria-label="رمز اللون" onChange={(event) => { setColorInput(event.target.value); setColor(normalizeUserColorInput(event.target.value, color)); setError(''); }} />
                       </label>
-                    </div>
-                    <div className="profile-color-grid" role="listbox" aria-label="لون الاسم">
-                      {USER_COLOR_OPTIONS.map((swatch) => (
-                        <button key={swatch} type="button" role="option" aria-selected={color === swatch} aria-label={swatch} className={color === swatch ? 'is-on' : undefined} style={{ '--swatch': swatch } as CSSProperties} onClick={() => chooseColor(swatch)}>
-                          <span aria-hidden="true" />
-                        </button>
-                      ))}
                     </div>
                     <span className="profile-style-title">خط الاسم</span>
                     <div className="profile-font-grid" role="listbox" aria-label="خط الاسم">
