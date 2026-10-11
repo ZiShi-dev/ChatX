@@ -60,6 +60,22 @@
 .profile-hero, .member-sheet, .cosmetic-preview { position:relative; isolation:isolate; }
 .profile-effect { position:absolute; inset:0; border-radius:inherit; overflow:hidden; pointer-events:none; z-index:-1; }
 .profile-effect i { position:absolute; display:block; }
+.atmosphere-artwork { width:100%; height:100%; display:block; }
+.is-animated .atmosphere-veil { animation:atmosphere-curtain 14s ease-in-out infinite alternate; transform-origin:center; }
+.is-animated .veil-1 { animation-duration:18s; animation-delay:-8s; }
+.is-animated .veil-2 { animation-duration:21s; animation-delay:-12s; opacity:.65; }
+.is-animated .atmosphere-star { animation:atmosphere-twinkle 6s ease-in-out infinite; }
+.is-animated .star-1 { animation-duration:8s; animation-delay:-3s; }
+.is-animated .star-2 { animation-duration:11s; animation-delay:-7s; }
+.is-animated .atmosphere-meteor { animation:atmosphere-shoot 9s ease-out infinite; }
+.is-animated .meteor-1 { animation-delay:-3.2s; animation-duration:11s; }
+.is-animated .meteor-2 { animation-delay:-6.4s; animation-duration:13s; }
+.is-animated .sword-tassel { animation:sword-tassel-wave 3.7s ease-in-out infinite; transform-origin:0 63px; }
+@keyframes atmosphere-curtain { 0% { transform:translate(-16px,6px) skewX(-3deg) scaleY(.94); opacity:.6; } 100% { transform:translate(18px,-9px) skewX(4deg) scaleY(1.08); opacity:1; } }
+@keyframes atmosphere-twinkle { 0%,100% { opacity:.25; } 40% { opacity:.9; } 65% { opacity:.5; } }
+@keyframes atmosphere-shoot { 0%,8%,100% { opacity:0; transform:translateX(-30px); } 12% { opacity:1; } 30% { transform:translateX(180px); opacity:0; } }
+@keyframes sword-tassel-wave { 50% { transform:rotate(12deg) skewX(-4deg); } }
+@media (prefers-reduced-motion:reduce) { .profile-effect.is-animated .atmosphere-artwork *, .profile-effect.is-animated .sword-tassel { animation:none; } }
 .effect-aurora i { width:70%; height:65%; border-radius:50%; background:radial-gradient(ellipse,var(--cosmetic-color),transparent 70%); opacity:.16; left:-20%; top:30%; }
 .effect-aurora i:nth-child(2) { width:54%; height:48%; left:58%; top:-6%; opacity:.12; }
 .effect-aurora i:nth-child(3) { width:42%; height:36%; left:24%; top:52%; opacity:.1; }
