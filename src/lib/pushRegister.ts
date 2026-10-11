@@ -13,6 +13,7 @@ let generation = 0;
 let retryTimer: ReturnType<typeof setTimeout> | undefined;
 let retryCount = 0;
 let syncing: Promise<void> | undefined;
+const registrationHandles: Array<{ remove: () => Promise<void> }> = [];
 const tokenListeners = new Set<() => void>();
 
 function emitTokenChange() {
@@ -63,35 +64,45 @@ function retrySync() {
   if (!started || !candidate || syncing) return;
   clearTimeout(retryTimer);
   const lease = generation;
-  syncing = syncToken(candidate).catch(() => {
+  const value = candidate;
+  syncing = syncToken(value).catch(() => {
     if (lease !== generation || !started) return;
     token = '';
     emitTokenChange();
     retryTimer = setTimeout(retrySync, Math.min(60_000, 5000 * 2 ** Math.min(retryCount++, 4)));
-  }).finally(() => { if (lease === generation) syncing = undefined; });
+  }).finally(() => {
+    if (lease !== generation) return;
+    syncing = undefined;
+    if (candidate && candidate !== value) retrySync();
+  });
 }
 
 export async function startPushRegistration(userId: string) {
   if (!fcmEnabled() || !Capacitor.isNativePlatform() || !isServerId(userId) || started) return;
   started = true;
   const lease = ++generation;
+  const own = (handle: { remove: () => Promise<void> }) => {
+    if (lease !== generation) void handle.remove();
+    else registrationHandles.push(handle);
+  };
   const permission = await PushNotifications.requestPermissions().catch(() => ({ receive: 'denied' }));
   if (lease !== generation) return;
   if (permission.receive !== 'granted') {
     started = false;
     return;
   }
-  await PushNotifications.addListener('registration', (event) => {
+  own(await PushNotifications.addListener('registration', (event) => {
     if (lease !== generation) return;
     candidate = event.value;
     retrySync();
-  });
-  await PushNotifications.addListener('registrationError', () => {
+  }));
+  own(await PushNotifications.addListener('registrationError', () => {
     if (lease !== generation) return;
     token = '';
     emitTokenChange();
-  });
-  await PushNotifications.addListener('pushNotificationActionPerformed', (event) => {
+  }));
+  own(await PushNotifications.addListener('pushNotificationActionPerformed', (event) => {
+    if (lease !== generation) return;
     const conversationId = event.notification.data?.conversationId;
     const messageId = event.notification.data?.messageId;
     if (typeof conversationId !== 'string' || !conversationId) return;
@@ -100,11 +111,12 @@ export async function startPushRegistration(userId: string) {
       ? (kind === 'reaction' ? `/chat/${conversationId}?at=${messageId}&react=1` : `/chat/${conversationId}?at=${messageId}`)
       : `/chat/${conversationId}`;
     window.dispatchEvent(new CustomEvent('chatx-push-open', { detail: { path } }));
-  });
-  await PushNotifications.addListener('pushNotificationReceived', (event) => {
+  }));
+  own(await PushNotifications.addListener('pushNotificationReceived', (event) => {
     if (lease !== generation) return;
     window.dispatchEvent(new CustomEvent('chatx-push-received', { detail: event.data }));
-  });
+  }));
+  if (lease !== generation) return;
   if (Capacitor.getPlatform() === 'android') {
     await PushNotifications.createChannel({ id: 'chatx-messages', name: 'الرسائل', importance: 4, visibility: 1, vibration: true });
   }
@@ -113,7 +125,8 @@ export async function startPushRegistration(userId: string) {
 }
 
 export function syncPushPrefs() {
-  if (!token && candidate) retrySync();
+  if (started && !candidate) void PushNotifications.register().catch(() => undefined);
+  else if (!token && candidate) retrySync();
   else void syncPrefs().catch(() => { token = ''; emitTokenChange(); retrySync(); });
 }
 
@@ -126,11 +139,13 @@ export function resetPushRegistrationForTests() {
   syncing = undefined;
   retryCount = 0;
   window.removeEventListener('online', syncPushPrefs);
+  registrationHandles.splice(0);
   tokenListeners.clear();
 }
 
 export async function stopPushRegistration() {
-  const current = token;
+  const current = candidate;
+  const handles = registrationHandles.splice(0);
   token = '';
   started = false;
   candidate = '';
@@ -139,9 +154,9 @@ export async function stopPushRegistration() {
   syncing = undefined;
   window.removeEventListener('online', syncPushPrefs);
   emitTokenChange();
+  await Promise.allSettled(handles.map(handle => handle.remove()));
   if (current) {
     await adminFetch('/api/push/unregister', { method: 'POST', body: JSON.stringify({ token: current }) }).catch(() => undefined);
     emitTokenChange();
   }
-  await PushNotifications.removeAllListeners().catch(() => undefined);
 }

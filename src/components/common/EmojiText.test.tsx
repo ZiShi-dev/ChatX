@@ -7,7 +7,7 @@ it('preserves Unicode for copy and accessibility and falls back if an asset fail
   expect(container.textContent).toBe('مرحبا 😀👍🏽');
   const images = container.querySelectorAll('img');
   expect(images.length).toBe(2);
-  expect(images[0].getAttribute('src')).toBe('/assets/emoji/1f600.webp');
+  expect(images[0].getAttribute('src')).toBe('/assets/emoji/1f600.webp?v=apple-db080716');
   fireEvent.error(images[0]);
   expect(container.textContent).toBe('مرحبا 😀👍🏽');
   expect(container.querySelectorAll('img').length).toBe(1);

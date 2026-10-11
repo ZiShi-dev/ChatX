@@ -12,6 +12,8 @@ type PushEnv = { projectId: string; clientEmail: string; privateKey: string };
 
 let cachedToken = '';
 let tokenUntil = 0;
+let tokenScope = '';
+let tokenRequest: Promise<string | null> | undefined;
 
 function pushEnv(): PushEnv | null {
   const projectId = process.env.FIREBASE_PROJECT_ID?.trim() ?? '';
@@ -28,6 +30,16 @@ function base64Url(input: string | Buffer) {
 export function pushConfigured() { return pushEnv() !== null; }
 
 async function accessToken(env: PushEnv) {
+  const scope = env.projectId + ':' + env.clientEmail;
+  if (scope !== tokenScope) { cachedToken = ''; tokenUntil = 0; tokenRequest = undefined; tokenScope = scope; }
+  if (cachedToken && tokenUntil > Date.now() + 60_000) return cachedToken;
+  if (tokenRequest) return tokenRequest;
+  const pending = requestAccessToken(env);
+  tokenRequest = pending;
+  try { return await pending; } finally { if (tokenRequest === pending) tokenRequest = undefined; }
+}
+
+async function requestAccessToken(env: PushEnv) {
   const now = Date.now();
   if (cachedToken && tokenUntil > now + 60_000) return cachedToken;
   const header = base64Url(JSON.stringify({ alg: 'RS256', typ: 'JWT' }));
@@ -47,6 +59,7 @@ async function accessToken(env: PushEnv) {
   const assertion = `${unsigned}.${signature}`;
   const response = await fetch(TOKEN_URL, {
     method: 'POST',
+    signal: AbortSignal.timeout(10_000),
     headers: { 'content-type': 'application/x-www-form-urlencoded' },
     body: new URLSearchParams({ grant_type: 'urn:ietf:params:oauth:grant-type:jwt-bearer', assertion }),
   });
@@ -85,19 +98,24 @@ async function sendToken(env: PushEnv, token: string, title: string, body: strin
   if (!auth) return false;
   const response = await fetch(`https://fcm.googleapis.com/v1/projects/${env.projectId}/messages:send`, {
     method: 'POST',
+    signal: AbortSignal.timeout(10_000),
     headers: { authorization: `Bearer ${auth}`, 'content-type': 'application/json' },
     body: JSON.stringify({
       message: {
         token,
         android: {
           priority: 'HIGH',
-          notification: { title, body, channel_id: CHANNEL },
+          ttl: '86400s',
+          notification: { title, body, channel_id: CHANNEL, tag: data.messageId, default_sound: true, default_vibrate_timings: true },
         },
         data,
       },
     }),
   });
-  return response.ok;
+  if (response.status === 401) { cachedToken = ''; tokenUntil = 0; }
+  if (response.ok) return 'sent';
+  const error = await response.json().catch(() => null) as { error?: { details?: Array<{ errorCode?: string }> } } | null;
+  return error?.error?.details?.some(item => item.errorCode === 'UNREGISTERED') ? 'expired' : 'failed';
 }
 
 export async function sendMessagePush(deps: Deps, message: RoomMessage & { hints?: import('./sealed.ts').NoticeHints }) {
@@ -130,7 +148,9 @@ export async function sendMessagePush(deps: Deps, message: RoomMessage & { hints
       kind: String(kind),
     };
     for (const token of tokens) {
-      void sendToken(env, token, title, body, data);
+      void sendToken(env, token, title, body, data).then(result => {
+        if (result === 'expired') return deps.repo.deletePushToken(member.id, token);
+      }).catch(() => undefined);
     }
   }
 }

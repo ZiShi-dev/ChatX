@@ -6,7 +6,7 @@ const EMOJI_SEQUENCE = /(?:\p{Regional_Indicator}{2}|[#*0-9]\ufe0f?\u20e3|\p{Ext
 export function emojiAsset(emoji: string) {
   if (emoji.includes('\ufe0e')) return null; // Explicit text presentation.
   const key = [...emoji].filter((part) => part !== '\ufe0f').map((part) => part.codePointAt(0)!.toString(16)).join('-');
-  return EMOJI_ASSET_KEYS.has(key) ? `/assets/emoji/${key}.webp` : null;
+  return EMOJI_ASSET_KEYS.has(key) ? `/assets/emoji/${key}.webp?v=apple-db080716` : null;
 }
 
 export function emojiParts(text: string) {

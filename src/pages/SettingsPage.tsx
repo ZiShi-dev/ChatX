@@ -399,8 +399,9 @@ export default function SettingsPage({ embedded = false }: SettingsPageProps) {
         </section>
         <section className="settings-block settings-block-tail">
           <h2>حقوق الإيموجي</h2>
-          <p className="settings-lead" dir="ltr">Fluent Emoji © Microsoft Corporation · MIT</p>
-          <a href="https://github.com/microsoft/fluentui-emoji" target="_blank" rel="noreferrer">مصدر الرسومات وترخيصها</a>
+          <p className="settings-lead" dir="ltr">Apple emoji artwork © Apple Inc. · License supplied by RealityRipple</p>
+          <a href="/assets/emoji/LICENSE.txt" target="_blank" rel="noreferrer">ترخيص الرسومات المرفق</a>
+          <a href="https://github.com/RealityRipple/emoji/tree/trunk/apple" target="_blank" rel="noreferrer">مصدر صور الإيموجي</a>
         </section>
     </div>
   );
