@@ -23,6 +23,7 @@ type UserProfileModalProps = {
   room?: RoomContext;
   onClose: () => void;
   onMessage: (userId: string) => void;
+  onMedia?: () => void;
 };
 
 function chipsFor(user: User, isSelf: boolean, room?: RoomContext) {
@@ -33,7 +34,7 @@ function chipsFor(user: User, isSelf: boolean, room?: RoomContext) {
   ].filter((label): label is string => Boolean(label));
 }
 
-export default function UserProfileModal({ user, isSelf, room, onClose, onMessage }: UserProfileModalProps) {
+export default function UserProfileModal({ user, isSelf, room, onClose, onMessage, onMedia }: UserProfileModalProps) {
   const animate = useProfileMotion();
   if (!user) return null;
   const chips = chipsFor(user, isSelf, room);
@@ -73,6 +74,7 @@ export default function UserProfileModal({ user, isSelf, room, onClose, onMessag
             <IonIcon icon={chatbubbleOutline} />
           </button>
         )}
+        {onMedia && <button type="button" className="cancel" onClick={onMedia}>وسائط المحادثة</button>}
         <button type="button" className="cancel" onClick={onClose}>إغلاق</button>
       </div>
     </div>,

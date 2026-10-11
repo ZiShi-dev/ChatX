@@ -125,6 +125,16 @@ try {
   assert.ok(Math.abs(headerFrame.width - headerFrame.height) < 1, 'Header decoration must remain square');
   await viewer.locator('.startup-screen').waitFor({ state: 'detached' });
   await viewer.screenshot({ path: 'docs/profile-chat-avatar-mobile.png' });
+  await viewer.getByRole('button', { name: 'ملف Alice', exact: true }).click();
+  await viewer.locator('.member-sheet').waitFor();
+  assert.equal(await viewer.locator('#member-sheet-name').innerText(), 'Alice');
+  assert.equal(await viewer.locator('.member-sheet .hat-artwork').count(), 1);
+  assert.equal(await viewer.locator('.member-sheet .user-card-banner .effect-stars').count(), 1);
+  assert.equal(await viewer.locator('.member-sheet .member-room, .member-sheet .member-self').count(), 0, 'Private profile must show the peer without group or self context');
+  assert.ok(!viewer.url().includes('/media'), 'Opening the profile must not navigate to media');
+  await viewer.screenshot({ path: 'docs/profile-private-user-mobile.png' });
+  await viewer.getByRole('button', { name: 'وسائط المحادثة', exact: true }).click();
+  await viewer.waitForURL('**/chat/' + privateId + '/media');
   await page.getByRole('button', { name: 'تعديل الملف', exact: true }).click();
   await page.getByRole('dialog').getByRole('tab', { name: 'الاسم والألوان', exact: true }).click();
   await page.getByRole('dialog').getByRole('tab', { name: 'الاسم والألوان', exact: true }).press('ArrowLeft');

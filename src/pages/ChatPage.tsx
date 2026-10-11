@@ -193,6 +193,7 @@ export default function ChatPage() {
   const conversation = conversations.find((item) => item.id === id);
   const roomId = conversation && conversation.type !== 'private' ? conversation.id : '';
   const privateId = conversation?.type === 'private' ? conversation.id : '';
+  const other = conversation?.type === 'private' ? otherParticipant(conversation, currentUser.id, users) : undefined;
   const messages = useMemo(
     () =>
       allMessages
@@ -737,11 +738,11 @@ export default function ChatPage() {
     const openProfile = (event: Event) => {
       const path = event.composedPath();
       const title = privateProfileRef.current;
-      if (title && path.includes(title)) navigate(`/chat/${privateId}/media`);
+      if (title && path.includes(title) && other) setProfile(other);
     };
     window.addEventListener('click', openProfile, true);
     return () => window.removeEventListener('click', openProfile, true);
-  }, [navigate, privateId]);
+  }, [other, privateId]);
 
   useEffect(() => {
     const openSaved = (event: Event) => {
@@ -794,7 +795,6 @@ export default function ChatPage() {
     );
   }
 
-  const other = conversation.type === 'private' ? otherParticipant(conversation, currentUser.id, users) : undefined;
   const peerGone = deletedPrivatePeer(conversation, currentUser.id, users);
   const members = membersOf(conversation, users);
   const onlineCount = members.filter((user) => getUserPresence(user.id, users) === 'online').length;
@@ -910,10 +910,7 @@ export default function ChatPage() {
               unreadCount={arrivalUnread}
               resumeBack={resumeBack}
               spotlightId={spotlight}
-              onOpenProfile={(user) => {
-                if (conversation.type === 'private') navigate(`/chat/${conversation.id}/media`);
-                else setProfile(user);
-              }}
+              onOpenProfile={setProfile}
               onLoadOlder={revealOlder}
             />
           )}
@@ -981,10 +978,14 @@ export default function ChatPage() {
         )}
       </IonFooter>
       <UserProfileModal
-        user={conversation.type === 'private' ? undefined : profile}
+        user={profile}
         isSelf={profile?.id === currentUser.id}
         room={conversation.type !== 'private' ? { name: conversation.name ?? 'مجموعة', adminId: conversation.adminId } : undefined}
         onClose={() => setProfile(undefined)}
+        onMedia={privateId ? () => {
+          setProfile(undefined);
+          navigate(`/chat/${privateId}/media`);
+        } : undefined}
         onMessage={(userId) => {
           setProfile(undefined);
           void openPrivate(userId).then((conversationId) => {
