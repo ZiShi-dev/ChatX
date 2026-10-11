@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { IonContent, IonFooter, IonHeader, IonIcon, IonPage } from '@ionic/react';
-import { arrowDown, bookmarkOutline, peopleOutline, searchOutline } from 'ionicons/icons';
+import { arrowDown, bookmarkOutline, imagesOutline, peopleOutline, searchOutline } from 'ionicons/icons';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import Avatar from '../components/common/Avatar';
 import EmptyState from '../components/common/EmptyState';
@@ -847,7 +847,7 @@ export default function ChatPage() {
                   </button>
                 )}
                 {other && (
-                  <button ref={directRef} type="button" className="chat-nav-name" aria-label="وسائط المحادثة">
+                  <button type="button" className="chat-nav-name" aria-label={`ملف ${other.displayName}`} onClick={() => setProfile(other)}>
                     <GroupHeader
                       title={other.displayName}
                       subtitle={privateSubtitle}
@@ -861,6 +861,9 @@ export default function ChatPage() {
           }
           action={
             <div className="home-nav-actions">
+              {conversation.type === 'private' && !conversation.self && !peerGone && (
+                <button ref={directRef} type="button" className="home-nav-menu" aria-label="وسائط المحادثة"><IonIcon icon={imagesOutline} /></button>
+              )}
               <button
                 type="button"
                 className={searchOpen ? 'home-nav-menu is-on' : 'home-nav-menu'}

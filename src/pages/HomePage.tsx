@@ -174,7 +174,7 @@ export default function HomePage() {
           </div>
         </IonToolbar>
       </IonHeader>
-      <IonContent className="home-scroll">
+      <IonContent className="home-scroll" scrollY={true}>
         {!ready ? (
           <PageSkeleton kind="home" />
         ) : (

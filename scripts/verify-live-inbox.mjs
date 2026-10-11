@@ -1,4 +1,4 @@
-import { publishTyping } from '../server/src/typing.ts';
+import { publishTyping, roomTyping } from '../server/src/typing.ts';
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import { createRequire } from 'node:module';
@@ -71,6 +71,15 @@ try {
   await page.locator('.live-inbox-open').click();
   await page.waitForURL(`**/chat/${privateId}?at=${message.id}`);
   await page.waitForTimeout(500);
+  await page.getByRole('button', { name: 'ملف Bob', exact: true }).click();
+  await page.locator('.member-sheet').waitFor();
+  await page.getByRole('button', { name: 'إغلاق', exact: true }).click();
+  await page.getByPlaceholder('اكتب رسالة').fill('private typing check');
+  for (let i = 0; i < 40 && !roomTyping(privateId, Date.now(), bob.id).includes(alice.id); i++) await page.waitForTimeout(100);
+  assert.ok(roomTyping(privateId, Date.now(), bob.id).includes(alice.id), 'Private composer must publish typing');
+  await page.getByPlaceholder('اكتب رسالة').fill('');
+  for (let i = 0; i < 40 && roomTyping(privateId, Date.now(), bob.id).includes(alice.id); i++) await page.waitForTimeout(100);
+  assert.ok(!roomTyping(privateId, Date.now(), bob.id).includes(alice.id), 'Clearing the draft must stop typing');
   const second = { ...message, id: randomUUID(), text: 'Current chat live message', createdAt: new Date() };
   delayedMessageId = second.id;
   await page.evaluate(() => history.replaceState({}, '', location.pathname + '/' + location.search));
@@ -122,6 +131,21 @@ try {
   assert.equal((await repo.listNotifications(alice.id, 30, null)).find(item => item.messageId === groupMessage.id)?.read, false);
   await page.locator('.live-inbox-open').click();
   await page.waitForURL(`**/chat/${groupId}?at=${groupMessage.id}`);
+  for (let i = 0; i < 45; i++) {
+    const person = { ...bob, id: randomUUID(), email: 'scroll' + i + '@test.invalid', username: 'Contact' + i, displayName: 'Contact ' + i };
+    await repo.insertUser(person);
+    await repo.createRoom({ id: randomUUID(), kind: 'private', name: null, creatorId: alice.id, memberIds: [person.id], at: new Date() });
+  }
+  await page.goto('http://127.0.0.1:4186/home');
+  await page.locator('.home-list .conversation-row').first().waitFor();
+  const scroll = await page.locator('ion-content.home-scroll').evaluate(async node => {
+    const el = await node.getScrollElement(); el.scrollTop = el.scrollHeight;
+    return { top: el.scrollTop, height: el.scrollHeight, client: el.clientHeight };
+  });
+  assert.ok(scroll.top > 0 && scroll.height > scroll.client, 'Many contacts must scroll');
+  const last = await page.locator('.home-list > *').last().boundingBox();
+  const dock = await page.locator('.user-dock').boundingBox();
+  assert.ok(last && dock && last.y + last.height <= dock.y, 'Last conversation must remain above the dock');
   assert.deepEqual(errors, []);
-  console.log('PASS emoji stability, cross-chat banners without premature reads, trailing-slash chat sync, visible arrivals during a slow read acknowledgement, live reactions on older visible messages, and stable typing layout; CPU 6x');
+  console.log('PASS emoji stability, cross-chat banners without premature reads, trailing-slash chat sync, visible arrivals during a slow read acknowledgement, live reactions on older visible messages, stable typing layout, private profile clicks, outgoing typing and scrolling 45 contacts; CPU 6x');
 } finally { releaseRead?.(); await browser.close(); }
