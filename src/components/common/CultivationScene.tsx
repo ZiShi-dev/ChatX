@@ -10,7 +10,7 @@ const EMBERS = [[90, 190, 2.2], [160, 210, 1.4], [230, 176, 1.8], [300, 204, 2.6
 export default function CultivationScene({ kind }: { kind: BannerScene }) {
   const id = useId().replace(/:/g, '');
   const jade = `cultivation-jade-${id}`, gold = `cultivation-gold-${id}`, halo = `cultivation-halo-${id}`, smoke = `cultivation-smoke-${id}`;
-  return <svg className={`cultivation-scene scene-${kind}`} viewBox="0 0 640 240" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
+  return <svg className={`cultivation-scene scene-${kind}`} viewBox="0 0 640 240" preserveAspectRatio="xMidYMid meet" aria-hidden="true">
     <defs>
       <linearGradient id={`${id}-steel`}><stop stopColor="#306169" /><stop offset=".4" stopColor="#a8d8d4" /><stop offset=".49" stopColor="#f2fff7" /><stop offset=".56" stopColor="#82b5b4" /><stop offset="1" stopColor="#325661" /></linearGradient>
       <linearGradient id={`${id}-wing`} x1="0" y1="0" x2="1" y2="1"><stop stopColor="#d5e9d1" stopOpacity=".22" /><stop offset=".5" stopColor="#87bdb0" stopOpacity=".55" /><stop offset="1" stopColor="#243e44" stopOpacity=".8" /></linearGradient>

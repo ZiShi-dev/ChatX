@@ -168,14 +168,13 @@ export default function ProfilePage({ embedded = false, onShowSettings, scrollHo
   const body = (
     <>
       <div className="profile-frame">
+        <ProfileEffect effect={currentUser.profileEffect} color={currentUser.color} />
         <section className="profile-hero">
-          <ProfileEffect effect={currentUser.profileEffect} color={currentUser.color} />
           <div
             className={currentUser.bannerUrl ? 'profile-banner is-photo' : 'profile-banner'}
             style={{ '--banner': currentUser.color } as CSSProperties}
           >
             {currentUser.bannerUrl ? <img src={currentUser.bannerUrl} alt="" /> : null}
-            <ProfileEffect effect={currentUser.profileEffect} color={currentUser.color} placement="banner" />
           </div>
           <div className="profile-photo">
             <Avatar name={currentUser.displayName} color={currentUser.color} size={96} src={currentUser.avatarUrl} decoration={currentUser.avatarDecoration} animate={animate} />
@@ -261,12 +260,11 @@ export default function ProfilePage({ embedded = false, onShowSettings, scrollHo
               <div className="profile-editor-header"><span className="app-handle" />
               <h2>تعديل الملف</h2>
               <div className="profile-editor-preview">
+                <ProfileEffect effect={draftEffect} color={draftColor} />
                 <div className="profile-editor-banner" style={{ '--banner': draftColor } as CSSProperties}>
                   {currentUser.bannerUrl ? <img src={currentUser.bannerUrl} alt="" /> : null}
-                  <ProfileEffect effect={draftEffect} color={draftColor} placement="banner" />
                 </div>
               <div className="cosmetic-preview" aria-label="معاينة مظهر الملف">
-                <ProfileEffect effect={draftEffect} color={draftColor} />
                 <Avatar name={displayName || currentUser.displayName} color={draftColor} size={80} src={currentUser.avatarUrl} decoration={draftDecoration} animate={animate} />
                 <strong {...displayNameStyleForUser(draftColor, draftFont)} dir="auto">{displayName || currentUser.displayName}</strong>
               </div>

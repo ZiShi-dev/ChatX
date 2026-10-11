@@ -74,44 +74,44 @@ it('reserves a square decoration slot and keeps tiny avatars unobstructed', () =
   expect(frame.style.width).toBe('36px');
   expect(frame.style.height).toBe('36px');
   expect(frame.style.minWidth).toBe('36px');
-  expect(container.querySelector('.dragon-artwork')).not.toBeNull();
+  expect(container.querySelector('.jade-dragon-front')).not.toBeNull();
   expect(container.querySelector('.is-animated')).toBeNull();
   rerender(<Avatar name="User" color="#3d9b84" size={18} decoration="dragon" />);
   expect(container.querySelector('.avatar-frame')).toBeNull();
   expect(container.querySelector<HTMLElement>('.avatar')!.style.width).toBe('18px');
 });
 
-it('confines cultivation artwork to the banner and keeps it static with data saving', () => {
+it('displays cultivation artwork across the profile and keeps it static with data saving', () => {
   useSettingsStore.setState({ dataSaver: true });
-  const { container, rerender } = render(<ProfileEffect effect="celestial-dragon" color="#3d9b84" placement="banner" />);
-  expect(container.querySelector('.is-banner .scene-celestial-dragon')).not.toBeNull();
+  const { container, rerender } = render(<ProfileEffect effect="celestial-dragon" color="#3d9b84" />);
+  expect(container.querySelector('.profile-effect .scene-celestial-dragon')).not.toBeNull();
   expect(container.querySelector('.is-animated')).toBeNull();
   rerender(<ProfileEffect effect="celestial-dragon" color="#3d9b84" />);
-  expect(container.querySelector('.cultivation-scene')).toBeNull();
-  rerender(<ProfileEffect effect="sword-domain" color="#3d9b84" placement="banner" />);
+  expect(container.querySelector('.cultivation-scene')).not.toBeNull();
+  rerender(<ProfileEffect effect="sword-domain" color="#3d9b84" />);
   expect(container.querySelectorAll('.immortal-sword')).toHaveLength(6);
   expect(container.querySelector('.cultivation-scene img')).toBeNull();
   expect(container.querySelectorAll('.smoke-ribbon')).toHaveLength(3);
   expect(container.querySelector('.cultivation-aura')).not.toBeNull();
   expect(container.querySelector('rect')).toBeNull();
-  rerender(<ProfileEffect effect="time-cicada" color="#3d9b84" placement="banner" />);
+  rerender(<ProfileEffect effect="time-cicada" color="#3d9b84" />);
   expect(container.querySelector('.gu-cicada')).not.toBeNull();
-  rerender(<ProfileEffect effect="jade-petals" color="#3d9b84" placement="banner" />);
+  rerender(<ProfileEffect effect="jade-petals" color="#3d9b84" />);
   expect(container.querySelectorAll('.drift-petal')).toHaveLength(8);
-  rerender(<ProfileEffect effect="spirit-embers" color="#3d9b84" placement="banner" />);
+  rerender(<ProfileEffect effect="spirit-embers" color="#3d9b84" />);
   expect(container.querySelectorAll('.ember')).toHaveLength(8);
   expect(container.querySelector('image, img, animate, filter')).toBeNull();
 });
 
 it.each(['jade-lotus', 'heavenly-tribulation', 'jade-petals', 'spirit-embers'] as const)('keeps %s optional, local and static in economy mode', effect => {
   useSettingsStore.setState({ dataSaver: true });
-  const { container, rerender } = render(<ProfileEffect effect={effect} color="#3d9b84" placement="banner" />);
+  const { container, rerender } = render(<ProfileEffect effect={effect} color="#3d9b84" />);
   expect(container.querySelector('.scene-' + effect)).not.toBeNull();
   expect(container.querySelector('.is-animated')).toBeNull();
   expect(container.querySelector('image, img, animate, filter')).toBeNull();
   rerender(<ProfileEffect effect={effect} color="#3d9b84" />);
-  expect(container.querySelector('.cultivation-scene')).toBeNull();
-  rerender(<ProfileEffect effect="none" color="#3d9b84" placement="banner" />);
+  expect(container.querySelector('.cultivation-scene')).not.toBeNull();
+  rerender(<ProfileEffect effect="none" color="#3d9b84" />);
   expect(container.querySelector('.profile-effect')).toBeNull();
 });
 

@@ -57,7 +57,7 @@
 @keyframes profile-ember { 50% { opacity:.35; transform:translateY(-3px) scale(.8); } }
 @keyframes profile-orbit { to { transform:rotate(360deg); } }
 @keyframes profile-prism { 50% { transform:rotate(6deg); opacity:.7; } }
-.profile-hero, .member-sheet, .cosmetic-preview { position:relative; isolation:isolate; }
+.profile-frame, .member-sheet, .profile-editor-preview, .account-hero { position:relative; isolation:isolate; }
 .profile-effect { position:absolute; inset:0; border-radius:inherit; overflow:hidden; pointer-events:none; z-index:-1; }
 .profile-effect i { position:absolute; display:block; }
 .atmosphere-artwork { width:100%; height:100%; display:block; }
@@ -136,8 +136,7 @@
 
 .decoration-prism::after { display:none; }
 .decoration-prism.is-animated .prism-artwork { animation:profile-prism 6s ease-in-out infinite; }
-/* Banner scenes remain confined to their own surface, above custom photographs. */
-.profile-effect.is-banner { z-index:2; border-radius:inherit; }
+/* Banner photographs remain above the profile-wide atmosphere. */
 .user-card-banner, .profile-editor-banner { position:relative; isolation:isolate; }
 .profile-banner .banner-actions { z-index:4; }
 .cultivation-scene { display:block; width:100%; height:100%; }

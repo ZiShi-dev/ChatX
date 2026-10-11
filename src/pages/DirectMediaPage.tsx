@@ -39,18 +39,17 @@ export default function DirectMediaPage() {
           <EmptyState title="المحادثة غير موجودة" />
         ) : (
           <div className="profile-frame">
+            <ProfileEffect effect={(isSelf ? currentUser : other!)?.profileEffect} color={(isSelf ? currentUser : other!)?.color ?? currentUser.color} />
             <section className="profile-hero">
               {(() => {
                 const subject = isSelf ? currentUser : other!;
                 return (
                   <>
-                    <ProfileEffect effect={subject.profileEffect} color={subject.color} />
                     <div
                       className={subject.bannerUrl ? 'profile-banner is-photo' : 'profile-banner'}
                       style={{ '--banner': subject.color } as CSSProperties}
                     >
                       {subject.bannerUrl ? <img src={subject.bannerUrl} alt="" /> : null}
-                      <ProfileEffect effect={subject.profileEffect} color={subject.color} placement="banner" />
                     </div>
                     <span className="group-hero-photo">
                       <Avatar

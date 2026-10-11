@@ -286,15 +286,14 @@ export default function ActivationPage() {
                 <h1>{part === 'details' ? 'حسابك' : part === 'look' ? 'مظهر الاسم' : 'الزينة'}</h1>
                 <p className="muted">{part === 'details' ? 'أكّد اسمك، ثم أضف صورة وغلافًا ونبذة إن شئت.' : part === 'look' ? 'اللون والخط يظهران لاسمك في المجموعات.' : 'اختر إطار الصورة وتأثير الملف. يمكن تغييرهما لاحقًا.'}</p>
                 <div className="account-hero">
+                  <ProfileEffect effect={effect} color={color} />
                   {part === 'details' ? (
                     <button type="button" className={banner ? 'account-cover is-photo' : 'account-cover'} style={{ '--banner': color } as CSSProperties} aria-label="اختيار الغلاف" onClick={() => bannerRef.current?.click()}>
                       {banner ? <img src={banner} alt="" /> : <span>إضافة غلاف</span>}
-                      <ProfileEffect effect={effect} color={color} placement="banner" />
                     </button>
                   ) : (
                     <div className={banner ? 'account-cover is-photo' : 'account-cover'} style={{ '--banner': color } as CSSProperties}>
                       {banner ? <img src={banner} alt="" /> : null}
-                      <ProfileEffect effect={effect} color={color} placement="banner" />
                     </div>
                   )}
                   {part === 'details' && banner ? (

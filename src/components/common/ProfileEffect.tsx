@@ -6,12 +6,12 @@ import AtmosphereArtwork from './AtmosphereArtwork';
 import './ProfileCosmetics.css';
 
 /** Animation is reserved for an open profile, never a scrolling chat/list. */
-export default function ProfileEffect({ effect, color, placement = 'ambient' }: { effect?: ProfileEffectId; color: string; placement?: 'ambient' | 'banner' }) {
+export default function ProfileEffect({ effect, color }: { effect?: ProfileEffectId; color: string }) {
   const animate = useProfileMotion();
   const kind = profileEffect(effect);
   const cultivation = isBannerScene(kind);
-  if (kind === 'none' || cultivation && placement !== 'banner') return null;
-  return <span aria-hidden="true" className={`profile-effect effect-${kind}${placement === 'banner' ? ' is-banner' : ''}${animate ? ' is-animated' : ''}`} style={{ '--cosmetic-color': color } as CSSProperties}>
+  if (kind === 'none') return null;
+  return <span aria-hidden="true" className={`profile-effect effect-${kind}${animate ? ' is-animated' : ''}`} style={{ '--cosmetic-color': color } as CSSProperties}>
     {cultivation ? <CultivationScene kind={kind} /> : <AtmosphereArtwork kind={kind} color={color} />}
   </span>;
 }
