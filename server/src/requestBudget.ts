@@ -1,4 +1,4 @@
-import { hashSession, readCookie } from './session.ts';
+import { hashSession, readSessionToken } from './session.ts';
 
 /** Bounded per-process protection; five people sharing a connection fit these bursts. */
 export function createRequestBudget(now:()=>number) {
@@ -19,12 +19,12 @@ export function createRequestBudget(now:()=>number) {
     if(path.startsWith('/api/auth/google'))return consume('auth:'+ip,30);
     if(path==='/api/links/preview')return consume('link:'+ip,40);
     if(path==='/api/owner/erase' || path==='/api/owner/groups/erase') {
-      const token=readCookie(request.headers.get('cookie'),'chatx_session');
+      const token=readSessionToken(request);
       const limited=consume('owner:'+(token?hashSession(token):ip),10);
       if(limited)return limited;
     }
     if(['POST','PATCH','DELETE'].includes(request.method)) {
-      const token=readCookie(request.headers.get('cookie'),'chatx_session');
+      const token=readSessionToken(request);
       return consume('write:'+(token?hashSession(token):ip),300);
     }
     return 0;

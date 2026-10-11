@@ -26,10 +26,21 @@ async function setup() {
     method, headers: { cookie: `chatx_session=${owner}`, 'x-chatx-request': '1', 'content-type': body instanceof Uint8Array ? 'application/octet-stream' : 'application/json' },
     body: body instanceof Uint8Array ? new Uint8Array(body).buffer : body === undefined ? undefined : JSON.stringify(body),
   }));
-  return { alice, bob, stranger, roomId, call };
+  return { alice, bob, stranger, roomId, call, api, repo };
 }
 
 describe('end-to-end keys', () => {
+  it('accepts the installed app session header when the cookie is missing', async () => {
+    const { alice, api, repo } = await setup();
+    const token = 'A'.repeat(43);
+    await repo.createSession(hashSession(token), alice.id, new Date(now + 86_400_000));
+    const response = await api(new Request('http://localhost/api/keys', {
+      headers: { origin: 'https://localhost', 'x-chatx-session': token },
+    }));
+    assert.equal(response.status, 200);
+    assert.deepEqual(await response.json(), { publicKey: null, backup: null });
+  });
+
   it('stores one identity per user and refuses silent replacement', async () => {
     const { call } = await setup();
     assert.deepEqual(await (await call('/keys')).json(), { publicKey: null, backup: null });

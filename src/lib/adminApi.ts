@@ -1,5 +1,7 @@
+import { Capacitor } from '@capacitor/core';
 import { nativeNeedsApiOrigin } from './apiOrigin';
 import { nativeApiPath } from './apiFetchOrigin';
+import { currentSession } from './sessionToken';
 import { reportNetworkFailure, reportNetworkSuccess } from '../stores/networkStore';
 import { syncServerClock } from './serverClock';
 import { retryAfterMs } from './retry';
@@ -46,6 +48,12 @@ export class AdminApiError extends Error {
   }
 }
 
+function applySession(headers: Headers) {
+  if (!Capacitor.isNativePlatform()) return;
+  const token = currentSession();
+  if (token) headers.set('x-chatx-session', token);
+}
+
 type RequestOptions = { method?: string; body?: unknown; binary?: Uint8Array; hold?: boolean; signal?: AbortSignal };
 const inFlightReads = new Map<string, Promise<unknown>>();
 export async function adminFetch(path: string, init?: RequestOptions) {
@@ -87,6 +95,7 @@ async function performFetch(path: string, init?: RequestOptions) {
     if (init?.body) headers.set('content-type', 'application/json');
     if (init?.binary) headers.set('content-type', 'application/octet-stream');
     if (method !== 'GET' && method !== 'HEAD') headers.set('x-chatx-request', '1');
+    applySession(headers);
     const response = await fetch(nativeApiPath(path), {
       method,
       credentials: 'include',
@@ -135,8 +144,11 @@ export async function adminFetchBlob(path: string) {
   activeRequests.add(controller);
   const timer = window.setTimeout(() => controller.abort(), 60_000);
   try {
+    const headers = new Headers();
+    applySession(headers);
     const response = await fetch(nativeApiPath(path), {
       credentials: 'include',
+      headers,
       signal: controller.signal,
     });
     if (response.status === 404) throw new AdminApiError('not_found', 404);

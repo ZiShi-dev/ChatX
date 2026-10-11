@@ -8,5 +8,7 @@ export function clientRequestHeaders(incoming: IncomingHttpHeaders) {
   }
   if (incoming['access-control-request-private-network'] === 'true') headers.set('access-control-request-private-network', 'true');
   if (incoming['x-chatx-request'] === '1') headers.set('x-chatx-request', '1');
+  const session = incoming['x-chatx-session'];
+  if (typeof session === 'string' && session.length <= 64) headers.set('x-chatx-session', session);
   return headers;
 }

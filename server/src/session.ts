@@ -20,6 +20,15 @@ export function clearSessionCookie(secure: boolean) {
   return sessionCookie('', secure, 0);
 }
 
+const SESSION_HEADER = /^[A-Za-z0-9_-]{43}$/;
+
+/** The installed app cannot keep a cross-site cookie, so it repeats the token in a header. */
+export function readSessionToken(request: { headers: { get(name: string): string | null } }) {
+  const header = request.headers.get('x-chatx-session') ?? '';
+  if (SESSION_HEADER.test(header)) return header;
+  return readCookie(request.headers.get('cookie'), 'chatx_session');
+}
+
 export function readCookie(header: string | null, name: string) {
   if (!header) return '';
   for (const part of header.split(';')) {

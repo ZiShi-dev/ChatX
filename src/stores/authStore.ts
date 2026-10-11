@@ -4,6 +4,7 @@ import { CURRENT_USER } from '../data/users';
 import { AdminApiError, adminFetch } from '../lib/adminApi';
 import { readDirectoryUser } from '../lib/directory';
 import { readGooglePreview, readGoogleReadyUser } from '../lib/googleAccount';
+import { clearStoredSession, rememberSession } from '../lib/sessionToken';
 import { sanitizeMessageFont, sanitizeUserColor } from '../lib/userStyle';
 import type { MessageFontId, User } from '../types/user';
 import { useUserStore } from './userStore';
@@ -151,7 +152,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   logout: () => {
     set({ activated: false });
     writeAuth(get());
-    void adminFetch('/api/auth/logout', { method: 'POST', body: {} }).catch(() => undefined);
+    void adminFetch('/api/auth/logout', { method: 'POST', body: {} }).finally(() => clearStoredSession()).catch(() => undefined);
   },
   updateProfile: (patch) => {
     const next = { ...get().currentUser, ...patch };
@@ -269,6 +270,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   signInWithGoogle: async (credential) => {
     try {
       const payload = await adminFetch('/api/auth/google', { method: 'POST', body: { credential } });
+      rememberSession(payload);
       const ready = readGoogleReadyUser(payload);
       if (ready) {
         const next = { ...ready, status: 'online' as const };
@@ -292,10 +294,12 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   },
   finishGoogleProfile: async (credential, displayName, extra) => {
     try {
-      const user = readGoogleReadyUser(await adminFetch('/api/auth/google/profile', {
+      const payload = await adminFetch('/api/auth/google/profile', {
         method: 'POST',
         body: { credential, displayName },
-      }));
+      });
+      rememberSession(payload);
+      const user = readGoogleReadyUser(payload);
       if (!user) return 'invalid';
       const bio = extra?.bio?.trim() ?? '';
       const avatarUrl = extra?.avatarUrl?.startsWith('data:image/jpeg') ? extra.avatarUrl : undefined;

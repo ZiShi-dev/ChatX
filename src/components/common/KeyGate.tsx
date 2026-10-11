@@ -13,6 +13,7 @@ function failureText(error: unknown) {
   if (!(error instanceof AdminApiError)) return 'تعذر تجهيز التشفير على هذا الجهاز. افتح ChatX من التطبيق أو من عنوان آمن (https) ثم أعد المحاولة.';
   if (error.code === 'rate_limited') return 'محاولات كثيرة. انتظر قليلًا ثم أعد المحاولة.';
   if (error.code === 'offline') return 'تعذر الاتصال بالخادم. تحقق من الشبكة ثم أعد المحاولة.';
+  if (error.code === 'invalid_credentials' || error.code === 'account_changed') return 'انتهت الجلسة. سجّل الخروج ثم ادخل من جديد.';
   if (error.status >= 500) return 'حدث خطأ في الخادم أثناء حفظ المفتاح. أعد المحاولة بعد قليل.';
   return 'تعذر حفظ المفتاح. أعد المحاولة.';
 }
@@ -36,14 +37,40 @@ export default function KeyGate({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (!needed) return;
     let live = true;
+    let retryTimer = 0;
     const show = (value: Phase) => { if (live) setPhase({ owner, value }); };
     void (async () => {
       // A local key opens the app at once; the server check only catches a reset from another device.
       if (await localIdentity(owner)) show('ready');
-      try { show(await keySetupState(owner)); } catch { if (!(await localIdentity(owner))) show('offline'); }
+      try { show(await keySetupState(owner)); } catch (error) {
+        if (!live) return;
+        if (await localIdentity(owner)) { show('ready'); return; }
+        const temporary = !(error instanceof AdminApiError) || error.code === 'offline' || error.status === 0 || error.status >= 500;
+        if (temporary && attempt < 3) {
+          retryTimer = window.setTimeout(() => { if (live) setAttempt((value) => value + 1); }, 2000);
+          return;
+        }
+        // First login has no key on this phone. A failed check must still open the code form.
+        if (error instanceof AdminApiError && (error.code === 'invalid_credentials' || error.code === 'account_changed' || error.code === 'rate_limited')) {
+          setError(failureText(error));
+        }
+        show('create');
+      }
     })();
-    return () => { live = false; };
+    return () => { live = false; window.clearTimeout(retryTimer); };
   }, [needed, owner, attempt]);
+
+  useEffect(() => {
+    if (!needed || (phase.owner === owner ? phase.value : 'checking') !== 'offline') return;
+    const retry = () => setAttempt((value) => value + 1);
+    window.addEventListener('online', retry);
+    const onVisible = () => { if (document.visibilityState === 'visible') retry(); };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => {
+      window.removeEventListener('online', retry);
+      document.removeEventListener('visibilitychange', onVisible);
+    };
+  }, [needed, owner, phase]);
 
   if (!needed) return <>{children}</>;
   const current = phase.owner === owner ? phase.value : 'checking';
@@ -89,7 +116,7 @@ export default function KeyGate({ children }: { children: ReactNode }) {
             {current === 'offline' ? (
               <>
                 <h1>تشفير الرسائل</h1>
-                <p className="muted">يحتاج إعداد التشفير على هذا الجهاز إلى اتصال بالإنترنت مرة واحدة.</p>
+                <p className="muted">{error || 'يحتاج إعداد التشفير على هذا الجهاز إلى اتصال بالإنترنت مرة واحدة.'}</p>
                 <button type="button" className="gate-go" onClick={() => setAttempt((value) => value + 1)}>إعادة المحاولة</button>
               </>
             ) : (

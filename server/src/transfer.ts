@@ -1,13 +1,13 @@
 import { createHash } from 'node:crypto';
 import type { Deps } from './authService.ts';
-import { hashSession, readCookie } from './session.ts';
+import { hashSession, readSessionToken } from './session.ts';
 import { cleanFileName, messageView, postRoomMessage } from './home.ts';
 import { cleanSealed, FILE_BYTES_MAX, IMAGE_BYTES_MAX, isVideoFileName, SEALED_FILE_NAME, SEALED_OVERHEAD, SEALED_VIDEO_NAME, VIDEO_BYTES_MAX } from './sealed.ts';
 
 const ID = /^[0-9a-f-]{36}$/i;
 const fail = (error: string, status: number) => ({ error, status });
 export async function handleTransfer(deps: Deps, request: Request, roomId: string, id: string, complete: boolean) {
-  const token = readCookie(request.headers.get('cookie'), 'chatx_session');
+  const token = readSessionToken(request);
   const at = new Date(deps.now());
   const user = token ? await deps.repo.findSessionUser(hashSession(token), at) : null;
   if (!user || user.role !== 'member') return fail('invalid_credentials', 401);
