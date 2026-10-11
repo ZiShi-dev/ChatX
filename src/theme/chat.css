@@ -182,6 +182,7 @@ ion-header:has(.home-toolbar) {
   gap: 8px;
   min-height: 64px;
   padding: 8px 12px;
+  border: 2px solid var(--chatx-accent);
   border-radius: 28px;
   background: var(--chatx-surface);
   box-shadow: 0 10px 28px rgb(0 0 0 / 32%);
@@ -1189,24 +1190,68 @@ html[data-wallpaper='1'] .composer-input::placeholder {
   font-weight: 800;
 }
 
-.friend-bar {
+.friend-bar,
+.friend-request {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
+  flex-direction: column;
   gap: 8px;
-  padding: 8px 12px 0;
+  margin: 0 12px 8px;
+  padding: 12px;
+  border: 1px solid var(--chatx-frame);
+  border-radius: 16px;
+  background: var(--chatx-raised);
 }
 
-.friend-bar p {
+.friend-request {
+  margin: 0 16px 8px;
+}
+
+.friend-bar p,
+.friend-request small {
   margin: 0;
-  flex: 1;
+  color: var(--chatx-muted);
   font-size: 13px;
   font-weight: 700;
   line-height: 1.4;
 }
 
-.friend-bar button {
-  flex: none;
+.friend-request-open {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  min-height: 48px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--chatx-text);
+  font: inherit;
+  text-align: start;
+}
+
+.friend-request-open span {
+  min-width: 0;
+}
+
+.friend-request-open strong,
+.friend-request-open small {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.friend-request-open strong {
+  font-size: 16px;
+}
+
+.friend-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.friend-actions button {
+  flex: 1;
   min-height: 44px;
   padding: 0 14px;
   border: 0;
@@ -1215,6 +1260,41 @@ html[data-wallpaper='1'] .composer-input::placeholder {
   color: var(--chatx-text);
   font: inherit;
   font-weight: 800;
+}
+
+.friend-actions button.is-accept,
+.friend-actions button.is-invite {
+  background: var(--chatx-accent);
+  color: var(--chatx-on-accent);
+}
+
+.friend-bar.is-invite {
+  margin: 8px 12px 12px;
+  padding: 16px;
+  gap: 12px;
+}
+
+.friend-bar.is-invite p {
+  color: var(--chatx-text);
+  font-size: 15px;
+  line-height: 1.45;
+}
+
+.friend-actions button.is-invite {
+  min-height: 48px;
+  border-radius: 16px;
+  font-size: 16px;
+}
+
+.friend-actions button.is-cancel {
+  border: 1px solid var(--chatx-frame);
+  background: transparent;
+  color: var(--chatx-muted);
+}
+
+.home-section h2 span {
+  margin-inline-start: 6px;
+  color: var(--chatx-text);
 }
 
 .member-row {
@@ -5009,6 +5089,7 @@ ion-toolbar.network-toolbar.setup {
 }
 
 .file-card ion-icon {
+  flex: none;
   font-size: 28px;
   color: var(--chatx-accent);
 }
@@ -6001,8 +6082,45 @@ ion-toolbar.network-toolbar.setup {
   margin: 16px 16px 8px;
 }
 
+.admin-stats {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  margin: 16px 16px 4px;
+}
+
+.admin-stats p {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  margin: 0;
+  padding: 12px;
+  border: 1px solid var(--chatx-frame);
+  border-radius: 16px;
+  background: var(--chatx-raised);
+  text-align: start;
+}
+
+.admin-stats strong {
+  overflow: hidden;
+  color: var(--chatx-text);
+  font-size: 20px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.2;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.admin-stats span {
+  color: var(--chatx-muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+
 .people-admin h2 {
-  margin: 18px 16px 4px;
+  margin: 18px 16px 8px;
   color: var(--chatx-text);
   font-size: 15px;
   font-weight: 800;
@@ -6023,11 +6141,11 @@ ion-toolbar.network-toolbar.setup {
 }
 
 .owner-system {
-  margin: 0 16px 20px;
+  margin: 8px 16px 12px;
   padding: 14px 16px;
   border: 1px solid var(--chatx-frame);
-  border-radius: 14px;
-  background: color-mix(in srgb, var(--chatx-bg) 92%, var(--chatx-accent) 8%);
+  border-radius: 16px;
+  background: var(--chatx-surface);
 }
 
 .owner-system h2 {
@@ -6113,24 +6231,66 @@ ion-toolbar.network-toolbar.setup {
   background: color-mix(in srgb, var(--chatx-bg) 80%, transparent);
 }
 
+.owner-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0 16px;
+}
+
 .owner-row {
   display: flex;
   align-items: center;
   gap: 12px;
-  width: calc(100% - 32px);
-  min-height: 56px;
-  margin: 0 16px;
-  padding: 8px 0;
-  border: 0;
-  border-bottom: 1px solid var(--chatx-frame);
-  background: transparent;
+  width: 100%;
+  min-height: 68px;
+  margin: 0;
+  padding: 10px 12px;
+  border: 1px solid var(--chatx-frame);
+  border-radius: 16px;
+  background: var(--chatx-raised);
   color: var(--chatx-text);
   font: inherit;
   text-align: start;
 }
 
+.owner-face {
+  position: relative;
+  flex: none;
+}
+
+.owner-face i {
+  position: absolute;
+  inset-inline-end: 0;
+  bottom: 0;
+  width: 10px;
+  height: 10px;
+  border: 2px solid var(--chatx-raised);
+  border-radius: 50%;
+  background: var(--chatx-muted);
+}
+
+.owner-face i.on {
+  background: var(--chatx-accent);
+}
+
+.owner-role {
+  flex: none;
+  max-width: 28%;
+  padding: 4px 8px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--chatx-soft);
+  color: var(--chatx-muted);
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.2;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .owner-row:active {
-  background: var(--chatx-bg);
+  background: var(--chatx-soft);
 }
 
 .owner-row:focus-visible {
@@ -6285,4 +6445,54 @@ ion-toolbar {
 .has-user-display { font-weight:700; }
 
 .bubble .bubble-url { color:var(--chatx-link,var(--chatx-accent-soft)); }
+
+button,
+ion-button,
+ion-segment-button,
+[role="button"] {
+  -webkit-tap-highlight-color: transparent;
+  transition: transform 80ms ease-out, opacity 80ms ease-out;
+}
+
+button:not(:disabled):active,
+ion-button:active,
+[role="button"]:active {
+  transform: scale(0.96);
+  opacity: 0.78;
+}
+
+button.conversation-row:active,
+button.chat-nav-main:active,
+button.media-open:active,
+.app-sheet > button:active,
+.account-actions button:active,
+.group-tabs button:active,
+.account-tabs button:active,
+.inbox-filters button:active,
+.profile-pop-action:active,
+.live-inbox-open:active,
+.group-profile-card:active,
+button.owner-row:active,
+button.friend-request-open:active,
+ion-segment-button:active {
+  transform: none;
+  opacity: 1;
+  box-shadow: inset 0 0 0 999px rgba(255, 255, 255, 0.14);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  button,
+  ion-button,
+  ion-segment-button,
+  [role="button"] {
+    transition: none;
+  }
+
+  button:not(:disabled):active,
+  ion-button:active,
+  [role="button"]:active {
+    transform: none;
+    opacity: 0.72;
+  }
+}
 

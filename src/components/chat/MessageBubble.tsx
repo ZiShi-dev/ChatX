@@ -3,7 +3,7 @@ import MessageReactionFloater from './MessageReactionFloater';
 import MediaViewer from './MediaViewer';
 import './MessageMedia.css';
 import './MentionGesture.css';
-import { memo, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { memo, useEffect, useLayoutEffect, useRef, useState, type SyntheticEvent } from 'react';
 import { chatNavigationSlot, resolveMessageActionsHost } from '../../lib/messageActionsHost';
 import { createPortal } from 'react-dom';
 import { IonIcon } from '@ionic/react';
@@ -129,7 +129,13 @@ function MediaBlock({ message }: { message: Message }) {
   const poster = media.localPreviewUrl;
   const playable = ready && message.type === 'video' && poster && !poster.endsWith('.svg') && !poster.startsWith('data:image/');
   const ratio = media.width && media.height ? `${media.width} / ${media.height}` : undefined;
-  const layout = () => {
+  const layout = (event: SyntheticEvent<HTMLImageElement | HTMLVideoElement>) => {
+    const node = event.currentTarget;
+    if (!ratio) {
+      const width = node instanceof HTMLVideoElement ? node.videoWidth : node.naturalWidth;
+      const height = node instanceof HTMLVideoElement ? node.videoHeight : node.naturalHeight;
+      if (width > 0 && height > 0) node.style.aspectRatio = `${width} / ${height}`;
+    }
     window.dispatchEvent(new CustomEvent('chatx-thread-layout', { detail: { conversationId: message.conversationId } }));
   };
 

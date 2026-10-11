@@ -8,7 +8,6 @@ import NetworkStatusBanner from '../components/common/NetworkBanner';
 import AccountTabs from '../components/account/AccountTabs';
 import PageNav from '../components/common/PageNav';
 import PageSkeleton from '../components/common/PageSkeleton';
-import { useDataSaver } from '../hooks/useDataSaver';
 import { AdminApiError, adminFetch } from '../lib/adminApi';
 import { readDirectoryUsers } from '../lib/directory';
 import { formatBytes } from '../lib/media';
@@ -17,7 +16,8 @@ import { roleLabel } from '../lib/roles';
 import { useChatStore } from '../stores/chatStore';
 import { useUserStore } from '../stores/userStore';
 import type { Message } from '../types/message';
-import type { User } from '../types/user';
+import type { AvatarDecoration } from '../lib/profileCosmetics';
+import type { User, UserStatus } from '../types/user';
 
 type OwnerGroup = { id: string; name: string };
 
@@ -207,6 +207,9 @@ const OwnerRow = memo(function OwnerRow({
   detail,
   color,
   photo,
+  decoration,
+  status,
+  badge,
   label,
   onOpen,
 }: {
@@ -215,16 +218,23 @@ const OwnerRow = memo(function OwnerRow({
   detail: string;
   color: string;
   photo?: string;
+  decoration?: AvatarDecoration;
+  status?: UserStatus;
+  badge?: string;
   label: string;
   onOpen: (id: string) => void;
 }) {
   return (
     <button type="button" className="owner-row" aria-label={label} onClick={() => onOpen(id)}>
-      <Avatar name={title} color={color} src={photo} size={40} />
-      <span className="owner-copy">
-        <strong>{title}</strong>
-        {detail ? <small>{detail}</small> : null}
+      <span className="owner-face">
+        <Avatar name={title} color={color} src={photo} size={48} decoration={decoration} animate={false} />
+        {status ? <i className={status === 'online' ? 'on' : ''} /> : null}
       </span>
+      <span className="owner-copy">
+        <strong dir="auto">{title}</strong>
+        {detail ? <small dir="auto">{detail}</small> : null}
+      </span>
+      {badge ? <span className="owner-role">{badge}</span> : null}
       <IonIcon icon={trashOutline} aria-hidden="true" />
     </button>
   );
@@ -340,7 +350,6 @@ export default function PeopleAdminPage() {
   const setMainOpen = useChatStore((state) => state.setMainOpen);
   const removeUser = useUserStore((state) => state.removeUser);
   const updateUser = useUserStore((state) => state.updateUser);
-  const dataSaver = useDataSaver();
   const alive = useRef(true);
   const [access, setAccess] = useState<'pending' | 'ready' | 'denied'>('pending');
   const [users, setUsers] = useState<User[]>([]);
@@ -466,7 +475,49 @@ export default function PeopleAdminPage() {
         {access === 'pending' ? <PageSkeleton kind="settings" /> : null}
         {access === 'ready' ? (
           <>
-            <p className="settings-lead">اختر ما تريد حذفه لكل حساب أو مجموعة. محادثة ChatX الرئيسية تبقى، ويمكن إخفاؤها عن غير الأعضاء.</p>
+            <section className="admin-stats" aria-label="ملخص">
+              <p><strong>{users.length}</strong><span>الأعضاء</span></p>
+              <p><strong>{groups.length}</strong><span>المجموعات</span></p>
+              <p><strong dir="ltr">{system ? formatBytes(system.diskBytes) : '…'}</strong><span>الوسائط</span></p>
+            </section>
+            {done ? <p className="owner-done" role="status">{done}</p> : null}
+            <h2>الأعضاء <span>{users.length}</span></h2>
+            {users.length === 0 ? <EmptyState title="لا يوجد أعضاء آخرون" /> : (
+              <div className="owner-list">
+                {users.map((user) => (
+                  <OwnerRow
+                    key={user.id}
+                    id={user.id}
+                    title={user.displayName}
+                    detail={`@${user.username}`}
+                    color={user.color}
+                    photo={user.avatarUrl}
+                    decoration={user.avatarDecoration}
+                    status={user.status}
+                    badge={roleLabel(user.role) || 'عضو'}
+                    label={`حذف ${user.displayName}`}
+                    onOpen={openUser}
+                  />
+                ))}
+              </div>
+            )}
+            <h2>المجموعات <span>{groups.length}</span></h2>
+            {groups.length === 0 ? <EmptyState title="لا توجد مجموعات" /> : (
+              <div className="owner-list">
+                {groups.map((item) => (
+                  <OwnerRow
+                    key={item.id}
+                    id={item.id}
+                    title={item.name}
+                    detail=""
+                    color={GROUP_COLOR}
+                    badge="مجموعة"
+                    label={`حذف ${item.name}`}
+                    onOpen={openGroup}
+                  />
+                ))}
+              </div>
+            )}
             <section className="owner-system" aria-labelledby="owner-main-title">
               <h2 id="owner-main-title">المجموعة الرئيسية</h2>
               <p className="owner-system-hint">إخفاؤها يبقيها لمن هم داخلها فقط. إظهارها يعيد كل الحسابات إلى المجموعة.</p>
@@ -475,7 +526,6 @@ export default function PeopleAdminPage() {
                 <button type="button" className="is-allow" onClick={() => void setMainOpen(true).then((ok) => setDone(ok ? 'ظهرت لكل الحسابات.' : 'تعذر إظهار المجموعة.'))}>إظهار للجميع</button>
               </div>
             </section>
-            {done ? <p className="owner-done" role="status">{done}</p> : null}
             <section className="owner-system" aria-labelledby="owner-system-title">
               <h2 id="owner-system-title">حذف الوسائط من القرص</h2>
               {systemError ? <p className="owner-system-alert" role="alert">{systemError}</p> : null}
@@ -496,34 +546,6 @@ export default function PeopleAdminPage() {
               ) : null}
               <button type="button" className="owner-system-refresh" onClick={refreshSystem}>تحديث الحالة</button>
             </section>
-            <h2>الأعضاء <span>{users.length}</span></h2>
-            {users.length === 0 ? <EmptyState title="لا يوجد أعضاء آخرون" /> : users.map((user) => {
-              const role = roleLabel(user.role);
-              return (
-                <OwnerRow
-                  key={user.id}
-                  id={user.id}
-                  title={user.displayName}
-                  detail={role ? `@${user.username} · ${role}` : `@${user.username}`}
-                  color={user.color}
-                  photo={dataSaver ? undefined : user.avatarUrl}
-                  label={`حذف ${user.displayName}`}
-                  onOpen={openUser}
-                />
-              );
-            })}
-            <h2>المجموعات <span>{groups.length}</span></h2>
-            {groups.length === 0 ? <EmptyState title="لا توجد مجموعات" /> : groups.map((item) => (
-              <OwnerRow
-                key={item.id}
-                id={item.id}
-                title={item.name}
-                detail="مجموعة"
-                color={GROUP_COLOR}
-                label={`حذف ${item.name}`}
-                onOpen={openGroup}
-              />
-            ))}
           </>
         ) : null}
         <div className="account-end" aria-hidden="true" />

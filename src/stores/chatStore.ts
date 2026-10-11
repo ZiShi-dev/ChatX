@@ -115,6 +115,7 @@ type ChatState = {
   resetMediaCache: () => void;
   loadHome: () => Promise<'ok' | 'local' | 'offline' | 'invalid'>;
   dismissDeletedChat: (conversationId: string) => Promise<boolean>;
+  withdrawPrivate: (conversationId: string) => Promise<boolean>;
   loadGroupTurn: (conversationId: string) => Promise<'ok' | 'local' | 'offline' | 'invalid'>;
   loadRoom: (conversationId: string, page?: { beforeId?: string; aroundId?: string; wait?: boolean; signal?: AbortSignal }) => Promise<boolean>;
   editingId: string | null;
@@ -1454,6 +1455,24 @@ export const useChatStore = create<ChatState>((set, get) => ({
     const me = useAuthStore.getState().currentUser.id;
     const room = get().conversations.find((item) => item.id === conversationId);
     if (!room || !deletedPrivatePeer(room, me, useUserStore.getState().users)) return false;
+    if (isServerId(me)) {
+      try {
+        await adminFetch(`/api/rooms/${conversationId}`, { method: 'DELETE' });
+      } catch {
+        return false;
+      }
+    }
+    set((state) => ({
+      conversations: state.conversations.filter((item) => item.id !== conversationId),
+      messages: state.messages.filter((item) => item.conversationId !== conversationId),
+      fullRooms: state.fullRooms.filter((id) => id !== conversationId),
+    }));
+    return true;
+  },
+  withdrawPrivate: async (conversationId) => {
+    const me = useAuthStore.getState().currentUser.id;
+    const room = get().conversations.find((item) => item.id === conversationId);
+    if (!room || room.type !== 'private' || room.self || room.friend === 'friends') return false;
     if (isServerId(me)) {
       try {
         await adminFetch(`/api/rooms/${conversationId}`, { method: 'DELETE' });

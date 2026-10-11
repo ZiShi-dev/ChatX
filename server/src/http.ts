@@ -18,7 +18,7 @@ import {
   updateOwnProfile,
   type Deps,
 } from './authService.ts';
-import { GLOBAL_ROOM_ID, messageView, openRoom, postRoomMessage, readHome, readGroupTurn, readRoomFile, readRoomImage, readRoomMessages, setRoomReaction, markRoomSeen, changeMessage, updateRoomProfile, dropOrphanPrivate, listRoomOutsiders, changeRoomMember, setMainRoomOpen, removeCreatedGroup, changeFriend } from './home.ts';
+import { GLOBAL_ROOM_ID, messageView, openRoom, postRoomMessage, readHome, readGroupTurn, readRoomFile, readRoomImage, readRoomMessages, setRoomReaction, markRoomSeen, changeMessage, updateRoomProfile, dropOrphanPrivate, withdrawUnacceptedPrivate, listRoomOutsiders, changeRoomMember, setMainRoomOpen, removeCreatedGroup, changeFriend } from './home.ts';
 import { keepMessage, readSaved } from './saved.ts';
 import { addRoomKeys, readKeys, readRoomKeys, saveKeys } from './keys.ts';
 import { clearInbox, markInboxRead, readInbox } from './inbox.ts';
@@ -417,7 +417,9 @@ async function route(deps: Deps, request: Request) {
     const removed = await removeCreatedGroup(deps, { token: readSessionToken(request), roomId: orphanRoom[1]! });
     if (removed.ok || removed.error !== 'not_group') return removed.ok ? json({ ok: true }) : failure(deps, removed.error);
     const result = await dropOrphanPrivate(deps, { token: readSessionToken(request), roomId: orphanRoom[1]! });
-    return result.ok ? json({ ok: true }) : failure(deps, result.error);
+    if (result.ok || result.error !== 'forbidden') return result.ok ? json({ ok: true }) : failure(deps, result.error);
+    const withdrawn = await withdrawUnacceptedPrivate(deps, { token: readSessionToken(request), roomId: orphanRoom[1]! });
+    return withdrawn.ok ? json({ ok: true }) : failure(deps, withdrawn.error);
   }
   if (request.method === 'POST' && path === '/api/friends') {
     const result = await changeFriend(deps, { token: readSessionToken(request), userId: body.userId, action: body.action });

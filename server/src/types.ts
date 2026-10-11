@@ -132,6 +132,7 @@ export interface AuthRepository {
   privateSendGate(roomId: string, userId: string): Promise<'open' | 'intro' | 'locked' | 'missing'>;
   changeFriend(userId: string, otherId: string, action: 'ask' | 'accept' | 'decline', at: Date): Promise<'created' | 'accepted' | 'ok' | 'missing' | 'forbidden'>;
   dropOrphanPrivate(roomId: string, userId: string): Promise<'ok' | 'missing' | 'forbidden'>;
+  withdrawUnacceptedPrivate(roomId: string, userId: string): Promise<'ok' | 'missing' | 'forbidden'>;
   listSaved(userId: string, limit: number, beforeId?: string): Promise<SavedItem[]>;
   setSaved(userId: string, messageId: string, saved: boolean, at: Date): Promise<'ok' | 'missing'>;
 }

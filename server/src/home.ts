@@ -266,6 +266,15 @@ export async function readGroupTurn(deps: Deps, token: string, roomId: string) {
     participantIds: turn.members, holder: memberView(holder) };
 }
 
+export async function withdrawUnacceptedPrivate(deps: Deps, input: { token: string; roomId: string }) {
+  const user = await sessionUser(deps, input.token);
+  if (!user) return { ok: false as const, error: 'invalid_credentials' as const };
+  if (!ROOM_ID.test(input.roomId) || input.roomId === GLOBAL_ROOM_ID) return { ok: false as const, error: 'forbidden' as const };
+  const result = await deps.repo.withdrawUnacceptedPrivate(input.roomId, user.id);
+  if (result === 'ok') return { ok: true as const };
+  return { ok: false as const, error: result === 'forbidden' ? 'forbidden' as const : 'not_found' as const };
+}
+
 export async function dropOrphanPrivate(deps: Deps, input: { token: string; roomId: string }) {
   const user = await sessionUser(deps, input.token);
   if (!user) return { ok: false as const, error: 'invalid_credentials' as const };

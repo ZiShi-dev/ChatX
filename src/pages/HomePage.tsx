@@ -53,6 +53,7 @@ export default function HomePage() {
   const users = useUserStore((state) => state.users);
   const conversations = useChatStore((state) => state.conversations);
   const loadHome = useChatStore((state) => state.loadHome);
+  const changeFriend = useChatStore((state) => state.changeFriend);
   const serverUnread = useChatStore((state) => state.serverUnread);
   const messages = useChatStore((state) => state.messages);
   const mutes = useMuteStore((state) => state.mutes);
@@ -115,17 +116,24 @@ export default function HomePage() {
     return [...sorted.filter((conversation) => isSelfChat(conversation)), ...sorted.filter((conversation) => !isSelfChat(conversation))];
   }, [conversations, filter, messages]);
   const showGlobal = Boolean(globalChat) && filter !== 'private';
-  const requestChat = (conversation: Conversation) => (
-    isIncomingRequest(conversation, messages, currentUser.id)
-    && !deletedPrivatePeer(conversation, currentUser.id, users)
-  );
   const requests = useMemo(
-    () => visible.filter(requestChat),
+    () => visible.filter((conversation) => (
+      conversation.friend !== 'outgoing'
+      && isIncomingRequest(conversation, messages, currentUser.id)
+      && !deletedPrivatePeer(conversation, currentUser.id, users)
+    )),
     [messages, currentUser.id, users, visible],
+  );
+  const waiting = useMemo(
+    () => visible.filter((conversation) => (
+      conversation.friend === 'outgoing'
+      && !deletedPrivatePeer(conversation, currentUser.id, users)
+    )),
+    [currentUser.id, users, visible],
   );
   const listed = useMemo(
-    () => visible.filter((conversation) => !requestChat(conversation)),
-    [messages, currentUser.id, users, visible],
+    () => visible.filter((conversation) => !requests.includes(conversation) && !waiting.includes(conversation)),
+    [requests, visible, waiting],
   );
   const inboxClearedAt = useChatStore((state) => state.inboxClearedAt);
   const inboxReadIds = useChatStore((state) => state.inboxReadIds);
@@ -213,17 +221,41 @@ export default function HomePage() {
           )}
           {requests.length > 0 && (
             <section className="home-section">
-              <h2>الطلبات</h2>
+              <h2>الطلبات <span>{requests.length}</span></h2>
+              {requests.map((conversation) => {
+                const person = otherParticipant(conversation, currentUser.id, users);
+                if (!person) return null;
+                return (
+                  <article key={conversation.id} className="friend-request">
+                    <button type="button" className="friend-request-open" onClick={() => navigate(`/chat/${conversation.id}`)}>
+                      <Avatar name={person.displayName} color={person.color} size={48} src={person.avatarUrl} decoration={person.avatarDecoration} animate={false} />
+                      <span>
+                        <strong dir="auto">{person.displayName}</strong>
+                        <small>يريد مراسلتك</small>
+                      </span>
+                    </button>
+                    <div className="friend-actions">
+                      <button type="button" className="is-accept" onClick={() => void changeFriend(person.id, 'accept')}>قبول</button>
+                      <button type="button" onClick={() => void changeFriend(person.id, 'decline')}>تجاهل</button>
+                    </div>
+                  </article>
+                );
+              })}
+            </section>
+          )}
+          {waiting.length > 0 && (
+            <section className="home-section">
+              <h2>بانتظار القبول <span>{waiting.length}</span></h2>
               <div className="home-list">
-                {requests.map((conversation) => renderConversation(conversation))}
+                {waiting.map((conversation) => renderConversation(conversation))}
               </div>
             </section>
           )}
-          {listed.length === 0 && requests.length === 0 && !showGlobal ? (
+          {listed.length === 0 && requests.length === 0 && waiting.length === 0 && !showGlobal ? (
             <EmptyState title="لا توجد محادثات حتى الآن" />
           ) : listed.length > 0 ? (
             <section className="home-section">
-              {showGlobal && <h2>المحادثات الأخيرة</h2>}
+              {(showGlobal || requests.length > 0 || waiting.length > 0) && <h2>المحادثات الأخيرة</h2>}
               <div className="home-list">
                 {listed.map((conversation) => renderConversation(conversation))}
               </div>

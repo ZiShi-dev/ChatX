@@ -347,5 +347,39 @@ describe('rooms', () => {
     const friends = await handle(new Request('http://127.0.0.1/api/home', { headers: headers('nora-token') }));
     const friendRooms = await friends.json() as { conversations: Array<{ id: string; friend?: string }> };
     assert.equal(friendRooms.conversations.find((room) => room.id === roomId)?.friend, 'friends');
+    const kept = await handle(new Request(`http://127.0.0.1/api/rooms/${roomId}`, { method: 'DELETE', headers: headers('nora-token') }));
+    assert.equal(kept.status, 403);
+  });
+
+  it('withdraws an unaccepted private intro and its invitation', async () => {
+    const deps = testDeps();
+    const nora = member('11111111-1111-4111-8111-111111111111', 'نورة');
+    const layla = member('22222222-2222-4222-8222-222222222222', 'ليلى');
+    await deps.repo.insertUser(nora);
+    await deps.repo.insertUser(layla);
+    await deps.repo.createSession(hashSession('nora-token'), nora.id, new Date(now + 60_000));
+    await deps.repo.createSession(hashSession('layla-token'), layla.id, new Date(now + 60_000));
+    const handle = createApi(deps);
+    const headers = (token: string) => ({ cookie: `chatx_session=${token}`, 'content-type': 'application/json', 'x-chatx-request': '1' });
+    const opened = await handle(new Request('http://127.0.0.1/api/rooms', {
+      method: 'POST', headers: headers('nora-token'), body: JSON.stringify({ kind: 'private', userId: layla.id }),
+    }));
+    const roomId = ((await opened.json()) as { conversation: { id: string } }).conversation.id;
+    const first = await handle(new Request(`http://127.0.0.1/api/rooms/${roomId}/messages`, {
+      method: 'POST', headers: headers('nora-token'), body: JSON.stringify({ id: '44444444-4444-4444-8444-444444444444', text: 'مرحبا' }),
+    }));
+    assert.equal(first.status, 200);
+    const asked = await handle(new Request('http://127.0.0.1/api/friends', {
+      method: 'POST', headers: headers('nora-token'), body: JSON.stringify({ userId: layla.id, action: 'ask' }),
+    }));
+    assert.equal(asked.status, 200);
+    const dropped = await handle(new Request(`http://127.0.0.1/api/rooms/${roomId}`, { method: 'DELETE', headers: headers('nora-token') }));
+    assert.equal(dropped.status, 200);
+    const noraHome = await handle(new Request('http://127.0.0.1/api/home', { headers: headers('nora-token') }));
+    const laylaHome = await handle(new Request('http://127.0.0.1/api/home', { headers: headers('layla-token') }));
+    const noraRooms = await noraHome.json() as { conversations: Array<{ id: string }> };
+    const laylaRooms = await laylaHome.json() as { conversations: Array<{ id: string }> };
+    assert.equal(noraRooms.conversations.some((room) => room.id === roomId), false);
+    assert.equal(laylaRooms.conversations.some((room) => room.id === roomId), false);
   });
 });

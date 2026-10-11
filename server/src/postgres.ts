@@ -1199,6 +1199,52 @@ export function createPostgresRepository(pool: pg.Pool, store: MediaStore): Auth
       const removed = await pool.query(`DELETE FROM rooms WHERE id = $1 AND kind = 'private'`, [roomId]);
       return removed.rowCount ? 'ok' : 'missing';
     },
+    async withdrawUnacceptedPrivate(roomId, userId) {
+      const client = await pool.connect();
+      try {
+        await client.query('BEGIN');
+        const room = await client.query<{ kind: string; pair_key: string | null }>('SELECT kind, pair_key FROM rooms WHERE id = $1 FOR UPDATE', [roomId]);
+        const kind = room.rows[0]?.kind;
+        if (!kind) {
+          await client.query('ROLLBACK');
+          return 'missing';
+        }
+        if (kind !== 'private' || room.rows[0]?.pair_key === `${userId}:${userId}`) {
+          await client.query('ROLLBACK');
+          return 'forbidden';
+        }
+        const member = await client.query('SELECT 1 FROM room_members WHERE room_id = $1 AND user_id = $2', [roomId, userId]);
+        if (!member.rowCount) {
+          await client.query('ROLLBACK');
+          return 'missing';
+        }
+        const bond = await client.query<{ status: string }>(
+          `SELECT status FROM friendships
+           WHERE user_low = LEAST($1::uuid, (SELECT om.user_id FROM room_members om WHERE om.room_id = $2 AND om.user_id <> $1 LIMIT 1))
+             AND user_high = GREATEST($1::uuid, (SELECT om.user_id FROM room_members om WHERE om.room_id = $2 AND om.user_id <> $1 LIMIT 1))
+           FOR UPDATE`,
+          [userId, roomId],
+        );
+        if (bond.rows[0]?.status === 'accepted') {
+          await client.query('ROLLBACK');
+          return 'forbidden';
+        }
+        await client.query(
+          `DELETE FROM friendships
+           WHERE user_low = LEAST($1::uuid, (SELECT om.user_id FROM room_members om WHERE om.room_id = $2 AND om.user_id <> $1 LIMIT 1))
+             AND user_high = GREATEST($1::uuid, (SELECT om.user_id FROM room_members om WHERE om.room_id = $2 AND om.user_id <> $1 LIMIT 1))`,
+          [userId, roomId],
+        );
+        const removed = await client.query(`DELETE FROM rooms WHERE id = $1 AND kind = 'private'`, [roomId]);
+        await client.query('COMMIT');
+        return removed.rowCount ? 'ok' : 'missing';
+      } catch (error) {
+        await client.query('ROLLBACK');
+        throw error;
+      } finally {
+        client.release();
+      }
+    },
     async listRoomNoticeMembers(roomId, exceptUserId) {
       const result = await pool.query<{ id: string; username: string }>(
         `SELECT u.id, u.username FROM room_members rm JOIN users u ON u.id = rm.user_id WHERE rm.room_id = $1 AND u.id <> $2`,

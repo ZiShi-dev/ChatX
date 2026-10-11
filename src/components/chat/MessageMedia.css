@@ -5,25 +5,19 @@
 
 .chat-thread .bubble.has-media .media-card,
 .chat-thread .bubble.has-media .media-open {
-  width: fit-content;
+  width: 100%;
   max-width: 100%;
   touch-action: pan-y;
 }
 
-.chat-thread .bubble.has-media .media-preview {
+.chat-thread .bubble.has-media .media-preview,
+.chat-thread .bubble.has-media .media-placeholder {
   width: 100%;
   max-width: 100%;
   height: auto;
   max-height: min(78vh, 640px);
-  /* Loaded images use their intrinsic ratio, including old messages without dimensions. */
-  aspect-ratio: auto !important;
   background: transparent;
   -webkit-user-drag: none;
-}
-
-.chat-thread .bubble.has-media .media-placeholder {
-  width: 100%;
-  max-height: min(78vh, 640px);
 }
 
 .chat-thread .bubble.has-media .bubble-time,

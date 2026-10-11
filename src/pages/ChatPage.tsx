@@ -1045,25 +1045,47 @@ export default function ChatPage() {
           </div>
         ) : (
           <>
-            {talk !== 'open' && otherId && (
+            {talk === 'locked' && otherId && conversation.friend !== 'incoming' ? (
+              <div className="friend-bar is-invite">
+                <p>{conversation.friend === 'outgoing' ? 'تم إرسال الدعوة. المحادثة تنتظر القبول.' : 'أرسل دعوة لمتابعة هذه المحادثة.'}</p>
+                <div className="friend-actions">
+                  {conversation.friend !== 'outgoing' && (
+                    <button type="button" className="is-invite" onClick={() => void changeFriend(otherId, 'ask')}>إرسال دعوة</button>
+                  )}
+                  <button
+                    type="button"
+                    className="is-cancel"
+                    onClick={() => {
+                      void useChatStore.getState().withdrawPrivate(conversation.id).then((ok) => {
+                        if (ok) navigate('/home', { replace: true });
+                      });
+                    }}
+                  >
+                    إلغاء
+                  </button>
+                </div>
+              </div>
+            ) : talk !== 'open' && otherId ? (
               <div className="friend-bar">
                 {conversation.friend === 'incoming' ? (
                   <>
                     <p>طلب صداقة</p>
-                    <button type="button" onClick={() => void changeFriend(otherId, 'accept')}>قبول</button>
-                    <button type="button" onClick={() => void changeFriend(otherId, 'decline')}>تجاهل</button>
+                    <div className="friend-actions">
+                      <button type="button" className="is-accept" onClick={() => void changeFriend(otherId, 'accept')}>قبول</button>
+                      <button type="button" onClick={() => void changeFriend(otherId, 'decline')}>تجاهل</button>
+                    </div>
                   </>
-                ) : conversation.friend === 'outgoing' ? (
-                  <p>{talk === 'locked' ? 'المحادثة مقفلة حتى قبول الصداقة' : 'تم إرسال طلب الصداقة'}</p>
                 ) : (
                   <>
-                    <p>{talk === 'locked' ? 'المحادثة مقفلة حتى قبول الصداقة' : 'رسالة نصية واحدة قبل قبول الصداقة'}</p>
-                    <button type="button" onClick={() => void changeFriend(otherId, 'ask')}>طلب صداقة</button>
+                    <p>رسالة نصية واحدة قبل قبول الصداقة</p>
+                    <div className="friend-actions">
+                      <button type="button" className="is-accept" onClick={() => void changeFriend(otherId, 'ask')}>طلب صداقة</button>
+                    </div>
                   </>
                 )}
               </div>
-            )}
-            <MessageComposer conversationId={conversation.id} talk={talk} />
+            ) : null}
+            {talk !== 'locked' && <MessageComposer conversationId={conversation.id} talk={talk} />}
           </>
         )}
       </IonFooter>

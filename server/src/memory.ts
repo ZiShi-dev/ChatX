@@ -847,6 +847,33 @@ export function createMemoryRepository(): AuthRepository {
       rooms.delete(roomId);
       return 'ok';
     },
+    async withdrawUnacceptedPrivate(roomId, userId) {
+      const room = rooms.get(roomId);
+      if (!room || !members.has(memberKey(roomId, userId))) return 'missing';
+      if (room.kind !== 'private' || room.pairKey === `${userId}:${userId}`) return 'forbidden';
+      const people = [...members.values()].filter((item) => item.roomId === roomId).map((item) => item.userId);
+      const otherId = people.find((id) => id !== userId);
+      if (!otherId) return 'forbidden';
+      const bond = friendships.get(friendKey(userId, otherId));
+      if (bond?.status === 'accepted') return 'forbidden';
+      friendships.delete(friendKey(userId, otherId));
+      const removed = new Set(messages.filter((item) => item.roomId === roomId).map((item) => item.id));
+      for (let index = messages.length - 1; index >= 0; index -= 1) {
+        if (messages[index]?.roomId === roomId) messages.splice(index, 1);
+      }
+      for (const id of removed) {
+        images.delete(id);
+        files.delete(id);
+      }
+      for (const [key, reaction] of reactions) if (removed.has(reaction.messageId)) reactions.delete(key);
+      for (let index = notices.length - 1; index >= 0; index -= 1) {
+        if (notices[index]?.roomId === roomId) notices.splice(index, 1);
+      }
+      for (const id of people) members.delete(memberKey(roomId, id));
+      rooms.delete(roomId);
+      journals.delete(roomId);
+      return 'ok';
+    },
     async listRoomNoticeMembers(roomId, exceptUserId) {
       return [...members.values()]
         .filter((member) => member.roomId === roomId && member.userId !== exceptUserId)
