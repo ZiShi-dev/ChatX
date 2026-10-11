@@ -578,13 +578,20 @@ export function createMemoryRepository(): AuthRepository {
       void now;
       return true;
     },
-    async setReaction({ roomId, messageId, userId, emoji, at }) {
+    async setReaction({ roomId, messageId, userId, emoji, remove, at }) {
       if (!members.has(memberKey(roomId, userId))) return 'missing';
       const message = messages.find((item) => item.id === messageId && item.roomId === roomId && !item.deleted && !item.event);
       if (!message) return 'missing';
-      const key = `${messageId}:${userId}`;
-      if (emoji) reactions.set(key, { messageId, userId, emoji, createdAt: at.getTime() });
-      else reactions.delete(key);
+      const mineKey = (glyph: string) => `${messageId}:${userId}:${glyph}`;
+      const mine = () => [...reactions.values()].filter((item) => item.messageId === messageId && item.userId === userId);
+      if (emoji && remove) reactions.delete(mineKey(emoji));
+      else if (emoji) {
+        if (reactions.has(mineKey(emoji))) return 'ok';
+        if (mine().length >= 8) return 'ok';
+        reactions.set(mineKey(emoji), { messageId, userId, emoji, createdAt: at.getTime() });
+      } else {
+        for (const item of mine()) reactions.delete(mineKey(item.emoji));
+      }
       if (message.senderId === userId) return 'ok';
       const index = notices.findIndex((notice) => notice.userId === message.senderId && notice.messageId === messageId && notice.kind === 'reaction');
       const publish = (actorId: string, glyph: string) => {
@@ -603,8 +610,9 @@ export function createMemoryRepository(): AuthRepository {
         if (index >= 0) notices[index] = notice;
         else notices.push(notice);
       };
-      if (emoji) {
-        publish(userId, emoji);
+      const left = mine().sort((a, b) => b.createdAt - a.createdAt)[0];
+      if (left) {
+        publish(userId, left.emoji);
         return 'ok';
       }
       if (index < 0 || notices[index]?.senderId !== userId) return 'ok';

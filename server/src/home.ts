@@ -344,10 +344,12 @@ export async function updateRoomProfile(deps: Deps, input: { token: string; room
   return { ok: true as const, conversation: room ? roomView(room) : null };
 }
 
-export async function setRoomReaction(deps: Deps, input: { token: string; roomId: string; messageId: string; emoji: unknown }) {
+export async function setRoomReaction(deps: Deps, input: { token: string; roomId: string; messageId: string; emoji: unknown; remove?: unknown }) {
   if (!ROOM_ID.test(input.roomId) || !ROOM_ID.test(input.messageId)) return { ok: false as const, error: 'not_found' as const };
   const emoji = cleanEmoji(input.emoji);
   if (emoji === null) return { ok: false as const, error: 'invalid_credentials' as const };
+  const remove = input.remove === true;
+  if (remove && !emoji) return { ok: false as const, error: 'invalid_credentials' as const };
   const user = await sessionUser(deps, input.token);
   if (!user || user.role !== 'member') return { ok: false as const, error: 'invalid_credentials' as const };
   await deps.repo.ensureHome(user.id);
@@ -356,6 +358,7 @@ export async function setRoomReaction(deps: Deps, input: { token: string; roomId
     messageId: input.messageId,
     userId: user.id,
     emoji: emoji || null,
+    remove,
     at: new Date(deps.now()),
   });
   if (saved === 'missing') return { ok: false as const, error: 'not_found' as const };

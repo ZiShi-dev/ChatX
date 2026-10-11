@@ -123,7 +123,7 @@ export interface AuthRepository {
   markNotificationsRead(userId: string, ids: string[] | 'all', now: Date, until?: Date): Promise<void>;
   clearNotifications(userId: string, now: Date): Promise<void>;
   markRoomRead(roomId: string, userId: string, now: Date, messageId: string): Promise<boolean>;
-  setReaction(input: { roomId: string; messageId: string; userId: string; emoji: string | null; at: Date }): Promise<'ok' | 'missing'>;
+  setReaction(input: { roomId: string; messageId: string; userId: string; emoji: string | null; remove?: boolean; at: Date }): Promise<'ok' | 'missing'>;
   listReactions(roomId: string, messageIds?: string[]): Promise<StoredReaction[]>;
   listReaders(roomId: string): Promise<RoomReader[]>;
   createRoom(input: { id: string; kind: 'private' | 'group'; name: string | null; creatorId: string; memberIds: string[]; at: Date }): Promise<string | 'invalid'>;

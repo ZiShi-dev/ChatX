@@ -1,8 +1,10 @@
 import MessageActionBar from './MessageActionBar';
+import MessageReactionFloater from './MessageReactionFloater';
 import MediaViewer from './MediaViewer';
 import './MessageMedia.css';
 import './MentionGesture.css';
-import { memo, useEffect, useRef, useState } from 'react';
+import { memo, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { chatNavigationSlot, resolveMessageActionsHost } from '../../lib/messageActionsHost';
 import { createPortal } from 'react-dom';
 import { IonIcon } from '@ionic/react';
 import { alertCircleOutline, arrowUndoOutline, arrowUpOutline, atOutline, banOutline, bookmark, bookmarkOutline, checkmarkDoneOutline, checkmarkOutline, closeOutline, copyOutline, createOutline, documentOutline, downloadOutline, informationCircleOutline, peopleOutline, play, timeOutline, trashOutline } from 'ionicons/icons';
@@ -17,9 +19,10 @@ import { useDataSaver } from '../../hooks/useDataSaver';
 import { formatBytes, formatDuration, messagePreview } from '../../lib/media';
 import { canSaveMessageMedia, saveMessageToPhone } from '../../lib/mediaExport';
 import { Capacitor } from '@capacitor/core';
+import { Keyboard } from '@capacitor/keyboard';
+import { scrollMessageForActions } from '../../lib/messageFocusScroll';
 import { mentionPieces, mentionTone } from '../../lib/mention';
-import EmojiPanel from './EmojiPanel';
-import { groupReactions, QUICK_REACTIONS } from '../../lib/reactions';
+import { groupReactions } from '../../lib/reactions';
 import type { ReceiptRow } from '../../lib/readReceipts';
 import { useAuthStore } from '../../stores/authStore';
 import { useChatStore } from '../../stores/chatStore';
@@ -381,8 +384,13 @@ function MessageBubble({ message, mine, showAuthor, group = false, direct = fals
   const beginReply = useChatStore((state) => state.beginReply);
   const deleteForEveryone = useChatStore((state) => state.deleteForEveryone);
   const toggleReaction = useChatStore((state) => state.toggleReaction);
+  const removeReaction = useChatStore((state) => state.removeReaction);
+  const keyboardOpen = useChatStore((state) => state.reactionKeyboardId === message.id);
+  const openReactionKeyboard = useChatStore((state) => state.openReactionKeyboard);
+  const closeReactionKeyboard = useChatStore((state) => state.closeReactionKeyboard);
+  const actionRequest = useChatStore((state) => state.messageActionOpenId);
+  const clearActionRequest = useChatStore((state) => state.clearMessageActionRequest);
   const [menuOpen, setMenuOpen] = useState(false);
-  const [moreOpen, setMoreOpen] = useState(false);
   const [reactionsOpen, setReactionsOpen] = useState(false);
   const users = useUserStore((state) => (reactionsOpen ? state.users : NO_DIRECTORY));
   const saved = useSavedStore((state) => state.entries.some((item) => item.userId === currentUserId && item.messageId === message.id));
@@ -428,18 +436,31 @@ function MessageBubble({ message, mine, showAuthor, group = false, direct = fals
   const openMenu = () => {
     if (!canOpenMenu) return;
     suppressClick.current = true;
-    setMoreOpen(false);
+    if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
+    if (Capacitor.isNativePlatform()) void Keyboard.hide().catch(() => undefined);
     window.dispatchEvent(new Event('chatx-message-selection'));
     setMenuOpen(true);
   };
 
+  useEffect(() => {
+    if (actionRequest !== message.id || !canOpenMenu) return;
+    clearActionRequest();
+    suppressClick.current = true;
+    window.dispatchEvent(new Event('chatx-message-selection'));
+    setMenuOpen(true);
+  }, [actionRequest, message.id, canOpenMenu, clearActionRequest]);
+
+  const mineEmojis = message.reactions?.filter((item) => item.userId === currentUserId).map((item) => item.emoji) ?? [];
+
   const reactWith = (emoji: string) => {
+    if (mineEmojis.includes(emoji)) return;
     toggleReaction(message.id, emoji);
-    setMenuOpen(false);
-    setMoreOpen(false);
   };
 
-  const mineEmoji = message.reactions?.find((item) => item.userId === currentUserId)?.emoji;
+  useEffect(() => {
+    if (menuOpen || !keyboardOpen) return;
+    closeReactionKeyboard();
+  }, [menuOpen, keyboardOpen, closeReactionKeyboard]);
   const reactionGroups = groupReactions(message.reactions);
   const reactionTotal = message.reactions?.length ?? 0;
 
@@ -485,31 +506,47 @@ function MessageBubble({ message, mine, showAuthor, group = false, direct = fals
     link.click();
   };
 
+  const closeMenu = () => setMenuOpen(false);
+  const actionsHost = menuOpen ? resolveMessageActionsHost(stackRef.current) : null;
+  const fallbackBar = Boolean(menuOpen && !actionsHost);
+
+  useLayoutEffect(() => {
+    const slot = chatNavigationSlot(stackRef.current);
+    if (!menuOpen) {
+      slot?.classList.remove('has-message-selection');
+      return;
+    }
+    slot?.classList.add('has-message-selection');
+    return () => slot?.classList.remove('has-message-selection');
+  }, [menuOpen]);
+
+  useLayoutEffect(() => {
+    if (!menuOpen || !stackRef.current) return;
+    const node = stackRef.current;
+    const content = node.closest('ion-page')?.querySelector('ion-content');
+    if (!content) return;
+    const scrollIntoBand = (scroller: HTMLElement) => {
+      scrollMessageForActions(scroller, node);
+    };
+    void content.getScrollElement().then((scroller) => {
+      scrollIntoBand(scroller);
+      window.requestAnimationFrame(() => scrollIntoBand(scroller));
+    });
+  }, [menuOpen]);
+
   const menu = menuOpen
     ? createPortal(
-        <MessageActionBar onClose={() => setMenuOpen(false)}>
-            <div className="reaction-bar" role="group" aria-label="تفاعل">
-              {QUICK_REACTIONS.map((emoji) => (
-                <button
-                  key={emoji}
-                  type="button"
-                  className={mineEmoji === emoji ? 'is-on' : undefined}
-                  aria-label={emoji}
-                  aria-pressed={mineEmoji === emoji}
-                  onClick={() => reactWith(emoji)}
-                >
-                  <EmojiText text={emoji} />
-                </button>
-              ))}
-              <button type="button" className="reaction-more-toggle" aria-label="المزيد" aria-expanded={moreOpen} onClick={() => setMoreOpen((open) => !open)}>
-                +
-              </button>
-            </div>
-            {moreOpen && <EmojiPanel selected={mineEmoji} onPick={reactWith} />}
+        <MessageActionBar onClose={closeMenu} fallback={fallbackBar}>
             <button type="button" role="menuitem" onClick={() => { setMenuOpen(false); beginReply(message.id); }}>
               <span>رد</span>
               <IonIcon icon={arrowUndoOutline} />
             </button>
+            {canEdit && (
+              <button type="button" role="menuitem" onClick={() => { setMenuOpen(false); beginEdit(message.id); }}>
+                <span>تعديل</span>
+                <IonIcon icon={createOutline} />
+              </button>
+            )}
             <button type="button" role="menuitem" onClick={keepMessage}>
               <span>{saved ? 'إلغاء الحفظ' : 'حفظ لي فقط'}</span>
               <IonIcon icon={saved ? bookmark : bookmarkOutline} />
@@ -518,12 +555,6 @@ function MessageBubble({ message, mine, showAuthor, group = false, direct = fals
               <button type="button" role="menuitem" onClick={saveToPhone}>
                 <span>حفظ على الهاتف</span>
                 <IonIcon icon={downloadOutline} />
-              </button>
-            )}
-            {canEdit && (
-              <button type="button" role="menuitem" onClick={() => { setMenuOpen(false); beginEdit(message.id); }}>
-                <span>تعديل</span>
-                <IonIcon icon={createOutline} />
               </button>
             )}
             {message.text && (
@@ -569,7 +600,20 @@ function MessageBubble({ message, mine, showAuthor, group = false, direct = fals
               </button>
             )}
           </MessageActionBar>,
-        stackRef.current?.closest('ion-page')?.querySelector('.message-actions-host') ?? document.body,
+        actionsHost ?? document.body,
+      )
+    : null;
+
+  const reactionFloat = menuOpen
+    ? createPortal(
+        <MessageReactionFloater
+          anchorRef={stackRef}
+          mineEmojis={mineEmojis}
+          keyboardOpen={keyboardOpen}
+          onPick={reactWith}
+          onExpand={() => (keyboardOpen ? closeReactionKeyboard() : openReactionKeyboard(message.id))}
+        />,
+        document.body,
       )
     : null;
 
@@ -793,7 +837,7 @@ function MessageBubble({ message, mine, showAuthor, group = false, direct = fals
         {reactionTotal > 0 && (
           <button
             type="button"
-            className={mineEmoji ? 'reaction-pill is-mine' : 'reaction-pill'}
+            className={mineEmojis.length ? 'reaction-pill is-mine' : 'reaction-pill'}
             aria-label={`${reactionTotal} تفاعل`}
             onPointerDown={(event) => event.stopPropagation()}
             onClick={(event) => {
@@ -844,7 +888,7 @@ function MessageBubble({ message, mine, showAuthor, group = false, direct = fals
                       type="button"
                       onClick={() => {
                         if (!own) return;
-                        toggleReaction(message.id, item.emoji);
+                        removeReaction(message.id, item.emoji);
                         setReactionsOpen(false);
                       }}
                     >
@@ -865,6 +909,7 @@ function MessageBubble({ message, mine, showAuthor, group = false, direct = fals
         document.body,
       )}
       {menu}
+      {reactionFloat}
       {infoOpen && createPortal(
         <div className="app-scrim sheet" onClick={() => setInfoOpen(false)}>
           <div className="app-sheet" role="dialog" onClick={(event) => event.stopPropagation()}>

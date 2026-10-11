@@ -1,5 +1,5 @@
 import { returnFromNotificationChat } from '../lib/notificationNavigation';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { IonContent, IonFooter, IonHeader, IonIcon, IonPage } from '@ionic/react';
 import { arrowDown, bookmarkOutline, peopleOutline, searchOutline } from 'ionicons/icons';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
@@ -10,10 +10,9 @@ import NetworkStatusBanner from '../components/common/NetworkBanner';
 import MessageList from '../components/chat/MessageList';
 import MessageSearch from '../components/chat/MessageSearch';
 import MessageComposer from '../components/chat/MessageComposer';
-import TypingIndicator from '../components/chat/TypingIndicator';
+import EmojiPanel from '../components/chat/EmojiPanel';
 import PageNav from '../components/common/PageNav';
 import GroupHeader from '../components/groups/GroupHeader';
-import { typingLabel } from '../lib/typing';
 import UserProfileModal from '../components/users/UserProfileModal';
 import type { Message } from '../types/message';
 import type { User } from '../types/user';
@@ -22,6 +21,7 @@ import { GLOBAL_CHAT_ID } from '../data/conversations';
 import { isServerId, SERVER_GLOBAL_ROOM_ID } from '../lib/home';
 import { catchUpLabel, deletedPrivatePeer, historyLimitForUnread, membersOf, openUnreadCount, otherParticipant, unreadAbove, unreadScrollTop } from '../lib/conversation';
 import { resolveMessageFocus } from '../lib/inbox';
+import { scrollMessageForActions } from '../lib/messageFocusScroll';
 import { watchingRoom } from '../lib/liveInbox';
 import { observeComposerViewport } from '../lib/composerViewport';
 import { dismissOverlayHistory, registerOverlayClose, useOverlayHistory } from '../lib/overlayBack';
@@ -143,6 +143,7 @@ export default function ChatPage() {
   const [params, setParams] = useSearchParams();
   const focusId = params.get('at') ?? '';
   const focusMissing = params.get('missing') === '1';
+  const reactionIntent = params.get('react') === '1';
   const [spotlight, setSpotlight] = useState('');
   const [focusMiss, setFocusMiss] = useState(false);
   const navigate = useNavigate();
@@ -171,6 +172,9 @@ export default function ChatPage() {
   const setTyping = useChatStore((state) => state.setTyping);
   const cancelEdit = useChatStore((state) => state.cancelEdit);
   const openPrivate = useChatStore((state) => state.openPrivate);
+  const reactionKeyboardId = useChatStore((state) => state.reactionKeyboardId);
+  const closeReactionKeyboard = useChatStore((state) => state.closeReactionKeyboard);
+  const toggleReaction = useChatStore((state) => state.toggleReaction);
   const [profile, setProfile] = useState<User>();
   const [ready, setReady] = useState(false);
   const [skeleton, setSkeleton] = useState(false);
@@ -181,7 +185,6 @@ export default function ChatPage() {
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const profileRef = useRef<HTMLButtonElement>(null);
-  const privateProfileRef = useRef<HTMLButtonElement>(null);
   const membersRef = useRef<HTMLButtonElement>(null);
   const savedRef = useRef<HTMLButtonElement>(null);
   const savedHere = useSavedStore((state) => {
@@ -193,8 +196,20 @@ export default function ChatPage() {
   });
   const conversation = conversations.find((item) => item.id === id);
   const roomId = conversation && conversation.type !== 'private' ? conversation.id : '';
-  const privateId = conversation?.type === 'private' ? conversation.id : '';
   const other = conversation?.type === 'private' ? otherParticipant(conversation, currentUser.id, users) : undefined;
+  const openConversationProfile = useCallback(() => {
+    navigate(`/chat/${id}/media`);
+  }, [id, navigate]);
+  const openProfile = useCallback(
+    (user: User) => {
+      if (conversation?.type === 'private') {
+        navigate(`/chat/${id}/media`);
+        return;
+      }
+      setProfile(user);
+    },
+    [conversation?.type, id, navigate],
+  );
   const messages = useMemo(
     () =>
       allMessages
@@ -203,6 +218,14 @@ export default function ChatPage() {
     [allMessages, id],
   );
   const typingIds = typingMap[id] ?? NO_TYPING;
+  const typingTypists = useMemo(
+    () =>
+      typingIds
+        .filter((userId) => userId !== currentUser.id)
+        .map((userId) => users.find((user) => user.id === userId))
+        .filter((user): user is User => Boolean(user)),
+    [typingIds, users, currentUser.id],
+  );
   const searching = searchOpen && searchQuery.trim().length > 0;
   const thread = useMemo(
     () => (searching ? matchingMessages(messages, searchQuery) : messages),
@@ -407,13 +430,26 @@ export default function ChatPage() {
       const current = document.getElementById(`msg-${focusId}`);
       if (!current) return;
       void contentRef.current?.getScrollElement().then((scroller) => {
+        if (reactionIntent) {
+          scrollMessageForActions(scroller, current);
+          window.requestAnimationFrame(() => {
+            scrollMessageForActions(scroller, current);
+            useChatStore.getState().requestMessageActions(focusId);
+            setParams((search) => {
+              const next = new URLSearchParams(search);
+              next.delete('react');
+              return next;
+            }, { replace: true });
+          });
+          return;
+        }
         const nodeRect = current.getBoundingClientRect();
         const scrollRect = scroller.getBoundingClientRect();
         const top = scroller.scrollTop + nodeRect.top - scrollRect.top - (scroller.clientHeight - nodeRect.height) / 2;
         void contentRef.current?.scrollToPoint(0, Math.max(0, top), 280);
       });
-    }, 40);
-  }, [focusId, historyLimit, id, messages.length, ready]);
+    }, reactionIntent ? 120 : 40);
+  }, [focusId, historyLimit, id, messages.length, ready, reactionIntent, setParams]);
 
   useEffect(() => {
     if (!id || focusId || focusMissing || arrivalUnread <= 0) return;
@@ -727,23 +763,31 @@ export default function ChatPage() {
     if (messages.length > previous) setFresh((count) => count + (messages.length - previous));
   }, [arrivalUnread, conversation?.unreadCount, currentUser.id, focusId, id, messages, ready, resumeBack, roomHistoryLimit, searching, setParams]);
 
+  useLayoutEffect(() => {
+    if (!reactionKeyboardId) return;
+    stickRef.current = false;
+    const place = () => {
+      const node = document.getElementById(`msg-${reactionKeyboardId}`);
+      const scroller = scrollerRef.current;
+      if (!node || !scroller) return;
+      scrollMessageForActions(scroller, node);
+    };
+    void contentRef.current?.getScrollElement().then((scroller) => {
+      scrollerRef.current = scroller;
+      place();
+      window.requestAnimationFrame(() => {
+        place();
+        window.requestAnimationFrame(place);
+      });
+    });
+  }, [reactionKeyboardId]);
+
   useEffect(() => {
     if (focusId || !stickRef.current) return;
     const scroller = scrollerRef.current;
     if (scroller) pinBottom(scroller);
     else void contentRef.current?.scrollToBottom(0);
   }, [focusId]);
-
-  useEffect(() => {
-    if (!privateId) return;
-    const openProfile = (event: Event) => {
-      const path = event.composedPath();
-      const title = privateProfileRef.current;
-      if (title && path.includes(title) && other) setProfile(other);
-    };
-    window.addEventListener('click', openProfile, true);
-    return () => window.removeEventListener('click', openProfile, true);
-  }, [other, privateId]);
 
   useEffect(() => {
     const openSaved = (event: Event) => {
@@ -799,24 +843,22 @@ export default function ChatPage() {
   const peerGone = deletedPrivatePeer(conversation, currentUser.id, users);
   const members = membersOf(conversation, users);
   const onlineCount = members.filter((user) => getUserPresence(user.id, users) === 'online').length;
-  const typingNames = typingIds
-    .filter((userId) => userId !== currentUser.id)
-    .map((userId) => users.find((user) => user.id === userId)?.displayName)
-    .filter((name): name is string => Boolean(name));
-  const typingLine = typingLabel(typingNames);
-  const groupSubtitle = typingLine || (currentUser.status === 'online'
+  const groupSubtitle = currentUser.status === 'online'
     ? onlineCount === 0
       ? 'لا أحد متصل'
       : `${onlineCount} متصل`
-    : `${onlineCount === 0 ? 'لا أحد متصل' : `${onlineCount} متصل`} · ${connectionLabel(currentUser)}`);
-  const privateSubtitle = typingLine || (other ? connectionLabel(other) : '');
+    : `${onlineCount === 0 ? 'لا أحد متصل' : `${onlineCount} متصل`} · ${connectionLabel(currentUser)}`;
+  const privateSubtitle = other ? connectionLabel(other) : '';
   const pendingUnread = unreadAbove(arrivalUnread, messages.length, Math.min(messages.length, historyLimit[id] ?? MESSAGE_PAGE_SIZE));
+  const reactionTarget = reactionKeyboardId ? messages.find((item) => item.id === reactionKeyboardId) : undefined;
+  const reactionMine = reactionTarget?.reactions?.filter((item) => item.userId === currentUser.id).map((item) => item.emoji) ?? [];
 
   return (
     <IonPage>
       <IonHeader>
         <NetworkStatusBanner />
         <div className="chat-navigation-slot">
+        <div id="chatx-message-actions-host" className="message-actions-host" aria-live="polite" />
         <PageNav
           quiet
           fallback="/home"
@@ -828,28 +870,26 @@ export default function ChatPage() {
                 <GroupHeader
                   title={conversation.name ?? 'مجموعة'}
                   subtitle={groupSubtitle}
-                  online={!typingLine && onlineCount > 0}
-                  typing={Boolean(typingLine)}
+                  online={onlineCount > 0}
                 />
               </button>
             ) : conversation.self ? (
-              <div className="chat-nav-main">
+              <button type="button" className="chat-nav-main" aria-label="ملف المحادثة" onClick={openConversationProfile}>
                 <Avatar name={currentUser.displayName} color={currentUser.color} size={32} src={currentUser.avatarUrl} decoration={currentUser.avatarDecoration} />
                 <GroupHeader title={currentUser.displayName} subtitle="رسائلك" online={false} />
-              </div>
+              </button>
             ) : peerGone ? (
               <div className="chat-nav-main">
                 <Avatar name="حساب محذوف" color="#8ea099" size={32} />
                 <GroupHeader title="حساب محذوف" subtitle="تم حذف هذا الحساب" online={false} />
               </div>
             ) : other ? (
-              <button ref={privateProfileRef} type="button" className="chat-nav-main" aria-label={`ملف ${other.displayName}`}>
+              <button type="button" className="chat-nav-main" aria-label={`ملف ${other.displayName}`} onClick={openConversationProfile}>
                 <Avatar name={other.displayName} color={other.color} size={32} src={other.avatarUrl} decoration={other.avatarDecoration} />
                 <GroupHeader
                   title={other.displayName}
                   subtitle={privateSubtitle}
-                  online={!typingLine && getUserPresence(other.id, users) === 'online'}
-                  typing={Boolean(typingLine)}
+                  online={getUserPresence(other.id, users) === 'online'}
                 />
               </button>
             ) : null
@@ -887,7 +927,6 @@ export default function ChatPage() {
             </div>
           }
         />
-        <div className="message-actions-host" />
         </div>
         {searchOpen && <MessageSearch value={searchQuery} onChange={setSearchQuery} />}
       </IonHeader>
@@ -915,11 +954,10 @@ export default function ChatPage() {
               unreadCount={arrivalUnread}
               resumeBack={resumeBack}
               spotlightId={spotlight}
-              onOpenProfile={setProfile}
+              onOpenProfile={openProfile}
               onLoadOlder={revealOlder}
             />
           )}
-          <TypingIndicator names={typingNames} />
           <div ref={endRef} />
         </div>
       </IonContent>
@@ -963,7 +1001,16 @@ export default function ChatPage() {
           {fresh > 0 ? <span>{fresh}</span> : null}
         </button>
       )}
-      <IonFooter className="chat-footer">
+      <IonFooter className={reactionTarget ? 'chat-footer is-reaction-keyboard' : 'chat-footer'}>
+        {reactionTarget && (
+          <div className="reaction-keyboard">
+            <EmojiPanel
+              selected={reactionMine}
+              onPick={(emoji) => toggleReaction(reactionTarget.id, emoji)}
+              onClose={closeReactionKeyboard}
+            />
+          </div>
+        )}
         {peerGone ? (
           <div className="deleted-peer">
             <p>تم حذف هذا الحساب</p>
@@ -979,25 +1026,23 @@ export default function ChatPage() {
             </button>
           </div>
         ) : (
-          <MessageComposer conversationId={conversation.id} />
+          <MessageComposer conversationId={conversation.id} typists={typingTypists} />
         )}
       </IonFooter>
-      <UserProfileModal
-        user={profile}
-        isSelf={profile?.id === currentUser.id}
-        room={conversation.type !== 'private' ? { name: conversation.name ?? 'مجموعة', adminId: conversation.adminId } : undefined}
-        onClose={() => setProfile(undefined)}
-        onMedia={privateId ? () => {
-          setProfile(undefined);
-          navigate(`/chat/${privateId}/media`);
-        } : undefined}
-        onMessage={(userId) => {
-          setProfile(undefined);
-          void openPrivate(userId).then((conversationId) => {
-            if (conversationId) navigate(`/chat/${conversationId}`);
-          });
-        }}
-      />
+      {conversation.type !== 'private' && (
+        <UserProfileModal
+          user={profile}
+          isSelf={profile?.id === currentUser.id}
+          room={{ name: conversation.name ?? 'مجموعة', adminId: conversation.adminId }}
+          onClose={() => setProfile(undefined)}
+          onMessage={(userId) => {
+            setProfile(undefined);
+            void openPrivate(userId).then((conversationId) => {
+              if (conversationId) navigate(`/chat/${conversationId}`);
+            });
+          }}
+        />
+      )}
     </IonPage>
   );
 }

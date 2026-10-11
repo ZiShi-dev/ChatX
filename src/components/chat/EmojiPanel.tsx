@@ -6,13 +6,17 @@ import EmojiText from '../common/EmojiText';
 import './EmojiPanel.css';
 
 type EmojiPanelProps = {
-  selected?: string;
+  selected?: string | readonly string[];
   onPick: (emoji: string) => void;
   onClose?: () => void;
 };
 
+function ownsEmoji(selected: string | readonly string[] | undefined, emoji: string) {
+  return Array.isArray(selected) ? selected.includes(emoji) : selected === emoji;
+}
+
 const EmojiOption = memo(function EmojiOption({ emoji, selected, active, onPick }: { emoji: string; selected: boolean; active: boolean; onPick: (emoji: string) => void }) {
-  return <button type="button" role="option" aria-selected={selected} aria-label={emoji} tabIndex={active ? 0 : -1} className={selected ? 'is-on' : undefined} onClick={() => onPick(emoji)}><EmojiText text={emoji} /></button>;
+  return <button type="button" role="option" aria-selected={selected} aria-label={emoji} aria-disabled={selected} disabled={selected} tabIndex={active ? 0 : -1} className={selected ? 'is-on' : undefined} onClick={() => { if (!selected) onPick(emoji); }}><EmojiText text={emoji} /></button>;
 });
 
 export default function EmojiPanel({ selected, onPick, onClose }: EmojiPanelProps) {
@@ -88,7 +92,7 @@ export default function EmojiPanel({ selected, onPick, onClose }: EmojiPanelProp
         const next = event.key === 'Home' ? 0 : event.key === 'End' ? buttons.length - 1 : step ? Math.max(0, Math.min(buttons.length - 1, current + step)) : -1;
         if (next >= 0) { event.preventDefault(); buttons[next]?.focus(); }
       }}>
-        {items.map((emoji, index) => <EmojiOption key={emoji} emoji={emoji} selected={emoji === selected} active={index === active} onPick={pick} />)}
+        {items.map((emoji, index) => <EmojiOption key={emoji} emoji={emoji} selected={ownsEmoji(selected, emoji)} active={index === active} onPick={pick} />)}
         {!items.length && <p className="emoji-picker-empty" role="status">{searching ? 'لا توجد نتائج. جرّب اسم فئة أو إيموجي.' : 'الإيموجي الذي تستخدمه سيظهر هنا.'}</p>}
       </div>
       {items.length < matches.length && <button type="button" className="emoji-picker-more" onClick={() => setLimit(value => value + 120)}>عرض المزيد</button>}

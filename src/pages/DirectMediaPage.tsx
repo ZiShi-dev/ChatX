@@ -26,12 +26,13 @@ export default function DirectMediaPage() {
   const conversation = useChatStore((state) => state.conversations.find((item) => item.id === id));
   const other = conversation?.type === 'private' ? otherParticipant(conversation, currentUser.id, users) : undefined;
   const isSelf = conversation?.self === true;
+  const profileTitle = isSelf ? currentUser.displayName : other?.displayName ?? 'ملف المحادثة';
 
   return (
     <IonPage>
       <IonHeader>
         <NetworkStatusBanner />
-        <PageNav title="ملف المحادثة" fallback={id ? `/chat/${id}` : '/home'} />
+        <PageNav title={profileTitle} fallback={id ? `/chat/${id}` : '/home'} />
       </IonHeader>
       <IonContent className="profile-page group-profile-scroll">
         {!conversation || conversation.type !== 'private' || (!other && !isSelf) ? (

@@ -6,11 +6,12 @@ afterEach(cleanup);
 it('keeps primary actions in the navigation and reveals other actions only on request', () => {
   const reply = vi.fn();
   render(<MessageActionBar onClose={vi.fn()}>
-    <div role="group" aria-label="تفاعل">😀</div>
     <button role="menuitem" onClick={reply}><span>رد</span></button>
+    <button role="menuitem"><span>تعديل</span></button>
     <button role="menuitem"><span>معلومات</span></button>
   </MessageActionBar>);
   expect(screen.getByRole('toolbar')).toBeTruthy();
+  expect(screen.getByRole('button', { name: 'تعديل' })).toBeTruthy();
   expect(screen.queryByText('معلومات')).toBeNull();
   fireEvent.click(screen.getByRole('button', { name: 'رد' }));
   expect(reply).toHaveBeenCalledOnce();

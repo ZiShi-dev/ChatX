@@ -840,7 +840,8 @@ html[data-wallpaper='1'] .chat-heading span,
 html[data-wallpaper='1'] .home-section h2,
 html[data-wallpaper='1'] .chat-event,
 html[data-wallpaper='1'] .focus-miss,
-html[data-wallpaper='1'] .typing-indicator,
+html[data-wallpaper='1'] .composer-typing,
+html[data-wallpaper='1'] .composer-typing-label,
 html[data-wallpaper='1'] .empty-state {
   color: var(--chatx-text);
   text-shadow:
@@ -1469,6 +1470,11 @@ html[data-wallpaper='1'] .composer-input::placeholder {
 
 ion-header:has(.chat-bar) {
   box-shadow: none !important;
+  padding-top: 0;
+}
+
+ion-header:has(.chat-bar) ion-toolbar.chat-bar {
+  padding-top: calc(var(--ion-safe-area-top, env(safe-area-inset-top, 0px)) + 6px);
 }
 
 .page-toolbar.chat-bar {
@@ -1476,6 +1482,8 @@ ion-header:has(.chat-bar) {
   --background: transparent;
   --border-width: 0;
   --box-shadow: none;
+  --padding-top: 0;
+  --padding-bottom: 2px;
 }
 
 .chat-bar .home-nav-menu {
@@ -1867,9 +1875,15 @@ ion-content.chat-scroll::part(scroll) {
 }
 
 .reaction-more-toggle {
-  color: var(--chatx-accent-soft);
-  font-size: 26px;
+  color: var(--chatx-text);
+  background: var(--chatx-soft);
+  font-size: 12px;
   font-weight: 700;
+}
+
+.reaction-more-toggle.is-on {
+  background: var(--chatx-wash);
+  box-shadow: inset 0 0 0 2px var(--chatx-accent);
 }
 
 .reaction-people {
@@ -2928,6 +2942,35 @@ ion-content::part(scroll)::-webkit-scrollbar {
   box-shadow: none;
 }
 
+.chat-footer.is-reaction-keyboard .composer {
+  display: none;
+}
+
+.reaction-keyboard {
+  background: var(--chatx-raised);
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+  animation: reaction-keyboard-in 180ms ease-out;
+}
+
+.reaction-keyboard .emoji-panel.emoji-picker {
+  width: 100%;
+  height: min(320px, 46dvh);
+  margin: 0;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  animation: none;
+}
+
+@keyframes reaction-keyboard-in {
+  from { transform: translateY(100%); }
+  to { transform: translateY(0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .reaction-keyboard { animation: none; }
+}
+
 ion-header:has(.message-search) {
   z-index: 40;
 }
@@ -2950,13 +2993,33 @@ ion-header:has(.message-search) {
 
 
 
-.typing-indicator {
+.composer-typing {
   display: flex;
+  flex: none;
+  flex-direction: column;
   align-items: center;
-  gap: 8px;
-  margin: 0 8px 4px;
+  justify-content: flex-end;
+  gap: 3px;
+  width: 76px;
+  min-width: 64px;
+  max-width: 92px;
+  padding-bottom: 4px;
   color: var(--chatx-accent-soft);
-  font-size: 13px;
+  font-size: 11px;
+  line-height: 1.15;
+  text-align: center;
+}
+
+.composer-typing-label {
+  width: 100%;
+  overflow: hidden;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.composer-typing .typing-dots {
+  justify-content: center;
 }
 
 .typing-dots {
@@ -6041,7 +6104,3 @@ ion-toolbar {
 
 .bubble .bubble-url { color:var(--chatx-link,var(--chatx-accent-soft)); }
 
-/* Keep the thread height stable when the typing status starts or stops. */
-.typing-indicator { height:22px; min-height:22px; flex-shrink:0; overflow:hidden; white-space:nowrap; }
-.typing-indicator > span:last-child { overflow:hidden; text-overflow:ellipsis; }
-.typing-indicator.is-idle { opacity:0; }

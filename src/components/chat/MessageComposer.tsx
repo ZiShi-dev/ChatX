@@ -7,12 +7,23 @@ import { IonIcon } from '@ionic/react';
 import { attachOutline, cameraOutline, checkmark, closeOutline, documentOutline, folderOutline, happyOutline, imagesOutline, send } from 'ionicons/icons';
 import PermissionDialog from '../common/PermissionDialog';
 import EmojiPanel from './EmojiPanel';
+import TypingIndicator from './TypingIndicator';
 import Avatar from '../common/Avatar';
 import EmojiText from '../common/EmojiText';
 import { adminFetch } from '../../lib/adminApi';
 import { isServerId } from '../../lib/home';
 import { activeMention, EVERYONE_HANDLE } from '../../lib/mention';
-import { clipFileName, VIDEO_BYTES_MAX } from '../../lib/chatFile';
+import { clipFileName, FILE_BYTES_MAX, VIDEO_BYTES_MAX } from '../../lib/chatFile';
+import {
+  attachmentLimitSummaryMessage,
+  fileTooLargeMessage,
+  imageTooLargeMessage,
+  MESSAGE_TEXT_MAX,
+  pickerImageTooLargeMessage,
+  PICKER_IMAGE_BYTES_MAX,
+  textTooLongMessage,
+  videoTooLargeMessage,
+} from '../../lib/messageLimits';
 import { fitChatImage, fitChatImageFromSources } from '../../lib/chatImage';
 import { prepareMedia } from '../../lib/mediaPreparation';
 import { expectedImageSize, expectedVideoSize, formatBytes, messagePreview } from '../../lib/media';
@@ -20,6 +31,7 @@ import { useDataSaver } from '../../hooks/useDataSaver';
 import { StorageAccess, type StorageFile } from '../../lib/storageAccess';
 import { useAuthStore } from '../../stores/authStore';
 import { useChatStore } from '../../stores/chatStore';
+import { useNetworkStore } from '../../stores/networkStore';
 import { useSettingsStore } from '../../stores/settingsStore';
 import { useUserStore } from '../../stores/userStore';
 import type { User } from '../../types/user';
@@ -67,6 +79,7 @@ const EMPTY_IDS: string[] = [];
 
 type MessageComposerProps = {
   conversationId: string;
+  typists?: User[];
 };
 
 type Attachment = {
@@ -94,7 +107,7 @@ function kindOf(name: string, mimeType = ''): Attachment['kind'] {
   return 'file';
 }
 
-export default function MessageComposer({ conversationId }: MessageComposerProps) {
+export default function MessageComposer({ conversationId, typists = EMPTY_USERS }: MessageComposerProps) {
   const sendMessage = useChatStore((state) => state.sendMessage);
   const sendImage = useChatStore((state) => state.sendImage);
   const sendVideo = useChatStore((state) => state.sendVideo);
@@ -251,6 +264,12 @@ export default function MessageComposer({ conversationId }: MessageComposerProps
   }, [replying?.id]);
 
   useEffect(() => {
+    const close = () => setEmojiOpen(false);
+    window.addEventListener('chatx-reaction-keyboard', close);
+    return () => window.removeEventListener('chatx-reaction-keyboard', close);
+  }, []);
+
+  useEffect(() => {
     if (!emojiOpen) return;
     const closeForField = (event: FocusEvent) => {
       const target = event.target;
@@ -374,16 +393,49 @@ export default function MessageComposer({ conversationId }: MessageComposerProps
   function acceptFiles<T extends { size: number }>(files: T[], kindFor: (file: T) => Attachment['kind']): T[] {
     const available = Math.max(0, 10 - attachmentsRef.current.length);
     let videos = attachmentsRef.current.filter((item) => item.kind === 'video').length;
+    let videoTooBig = false;
+    let fileTooBig = false;
+    let imageTooBig = false;
+    let extraVideo = false;
     const accepted = files.filter((file) => {
       const kind = kindFor(file);
-      const limit = kind === 'file' ? 262_144 : kind === 'video' ? VIDEO_BYTES_MAX : 20 * 1024 * 1024;
-      if (file.size <= 0 || file.size > limit) return false;
-      if (kind === 'video' && (dataSaver || videos >= 1)) return false;
+      if (file.size <= 0) return false;
+      if (kind === 'image' && file.size > PICKER_IMAGE_BYTES_MAX) {
+        imageTooBig = true;
+        return false;
+      }
+      if (kind === 'file' && file.size > FILE_BYTES_MAX) {
+        fileTooBig = true;
+        return false;
+      }
+      if (kind === 'video' && file.size > VIDEO_BYTES_MAX) {
+        videoTooBig = true;
+        return false;
+      }
+      if (kind === 'video' && (dataSaver || videos >= 1)) {
+        if (!dataSaver && videos >= 1) extraVideo = true;
+        return false;
+      }
       if (kind === 'video') videos += 1;
       return true;
     }).slice(0, available);
-    if (files.some((file) => kindFor(file) === 'video') && dataSaver) setPickerError('لا يمكن إرسال فيديو أثناء توفير البيانات أو الاتصال الضعيف.');
-    else if (accepted.length !== files.length) setPickerError('يمكن اختيار 10 مرفقات كحد أقصى، وفيديو واحد حتى 8 MB. الصور حتى 20 MB والملفات حتى 256 KB.');
+    const dropped = accepted.length !== files.length || files.length > available;
+    if (files.some((file) => kindFor(file) === 'video') && dataSaver) {
+      setPickerError('لا يمكن إرسال فيديو أثناء توفير البيانات أو الاتصال الضعيف.');
+    } else if (videoTooBig) {
+      const sample = files.find((file) => kindFor(file) === 'video' && file.size > VIDEO_BYTES_MAX);
+      setPickerError(videoTooLargeMessage(sample?.size));
+    } else if (fileTooBig) {
+      const sample = files.find((file) => kindFor(file) === 'file' && file.size > FILE_BYTES_MAX);
+      setPickerError(fileTooLargeMessage(sample?.size));
+    } else if (imageTooBig) {
+      const sample = files.find((file) => kindFor(file) === 'image' && file.size > PICKER_IMAGE_BYTES_MAX);
+      setPickerError(pickerImageTooLargeMessage(sample?.size));
+    } else if (extraVideo) {
+      setPickerError('يمكن إرفاق فيديو واحد فقط في كل رسالة.');
+    } else if (dropped) {
+      setPickerError(attachmentLimitSummaryMessage());
+    }
     return accepted;
   }
 
@@ -400,7 +452,7 @@ export default function MessageComposer({ conversationId }: MessageComposerProps
       }).catch(() => {
         if (!attachmentsRef.current.some((attachment) => attachment.id === item.id)) return;
         removeAttachment(item.id);
-        setPickerError('تعذر قراءة الصورة أو أنها كبيرة جدًا. اختر صورة أصغر.');
+        setPickerError(imageTooLargeMessage());
       });
     }
   }
@@ -533,6 +585,10 @@ export default function MessageComposer({ conversationId }: MessageComposerProps
       return;
     }
     const text = draft.trim();
+    if (text.length > MESSAGE_TEXT_MAX) {
+      setPickerError(textTooLongMessage(text.length));
+      return;
+    }
     if (editing) {
       if (!text) return;
       setSavingEdit(true);
@@ -548,6 +604,25 @@ export default function MessageComposer({ conversationId }: MessageComposerProps
     }
     if (!text && attachments.length === 0) return;
     const queue = attachments.slice();
+    setPickerError('');
+    const serverRoom = isServerId(conversationId);
+    const saving = useSettingsStore.getState().dataSaver || useNetworkStore.getState().network !== 'online';
+    for (const item of queue) {
+      if (item.kind === 'file' && item.size > FILE_BYTES_MAX) {
+        setPickerError(fileTooLargeMessage(item.size));
+        return;
+      }
+      if (item.kind === 'video') {
+        if (item.size < 1 || item.size > VIDEO_BYTES_MAX) {
+          setPickerError(videoTooLargeMessage(item.size));
+          return;
+        }
+        if (serverRoom && saving) {
+          setPickerError('لا يمكن إرسال فيديو أثناء توفير البيانات أو الاتصال الضعيف.');
+          return;
+        }
+      }
+    }
     if (text) sendMessage(conversationId, text);
     for (const item of queue) {
       if (item.kind === 'image') {
@@ -727,6 +802,7 @@ export default function MessageComposer({ conversationId }: MessageComposerProps
         )}
         {emojiOpen && <EmojiPanel onPick={insertEmoji} onClose={() => { setEmojiOpen(false); fieldRef.current?.focus(); }} />}
         <div className="composer-bar">
+          <TypingIndicator names={typists.map((user) => user.displayName)} typists={typists} />
           <div className="composer-field">
             <button
               type="button"
@@ -749,6 +825,7 @@ export default function MessageComposer({ conversationId }: MessageComposerProps
               className="composer-input"
               rows={1}
               dir="auto"
+              maxLength={MESSAGE_TEXT_MAX}
               value={draft}
               placeholder="اكتب رسالة"
               enterKeyHint="send"

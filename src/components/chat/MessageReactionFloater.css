@@ -1,0 +1,84 @@
+.message-reaction-float {
+  position: fixed;
+  z-index: 10055;
+  box-sizing: border-box;
+  width: max-content;
+  max-width: calc(100vw - 24px);
+  padding: 4px 6px;
+  border: 1px solid var(--chatx-frame, #2a3d38);
+  border-radius: 999px;
+  background: var(--chatx-raised, var(--ion-background-color, #1c2e2a));
+  box-shadow: 0 6px 22px #0006;
+  pointer-events: auto;
+}
+.message-reaction-float:has(.emoji-panel) {
+  border-radius: 18px;
+  padding: 6px;
+  width: min(calc(100vw - 24px), 340px);
+  max-width: min(calc(100vw - 24px), 340px);
+}
+.message-reaction-float .message-reaction-picker { gap: 6px; }
+.message-reaction-float .reaction-bar {
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: 0;
+  margin: 0;
+  padding: 0;
+  max-width: calc(100vw - 36px);
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+}
+.message-reaction-float .reaction-bar::-webkit-scrollbar { display: none; }
+.message-reaction-float .reaction-bar button {
+  flex: none;
+  width: 42px;
+  min-width: 42px;
+  height: 42px;
+  margin: 0;
+  padding: 0;
+  border-radius: 50%;
+  background: transparent;
+  font-size: 26px;
+  line-height: 1;
+}
+.message-reaction-float .reaction-bar button.is-on {
+  background: var(--chatx-wash);
+}
+.message-reaction-float .reaction-more-toggle {
+  display: grid;
+  place-items: center;
+  width: 42px;
+  min-width: 42px;
+  height: 42px;
+  margin-inline-start: 2px;
+  padding: 0;
+  border-radius: 50%;
+  background: var(--chatx-soft);
+  color: var(--chatx-text);
+}
+.message-reaction-float .reaction-more-toggle.is-on {
+  background: var(--chatx-wash);
+  color: var(--chatx-accent);
+}
+.message-reaction-float .reaction-plus {
+  font-size: 26px;
+  font-weight: 300;
+  line-height: 1;
+}
+.message-reaction-float .emoji-panel {
+  position: relative;
+  inset: auto;
+  top: auto;
+  z-index: 1;
+  width: 100%;
+  max-height: min(40vh, 300px);
+  margin: 0;
+  border-radius: 14px;
+  box-shadow: none;
+}
+.message-reaction-float.is-below .emoji-panel {
+  top: auto;
+  bottom: auto;
+}

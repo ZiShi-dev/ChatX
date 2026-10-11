@@ -95,7 +95,10 @@ export async function startPushRegistration(userId: string) {
     const conversationId = event.notification.data?.conversationId;
     const messageId = event.notification.data?.messageId;
     if (typeof conversationId !== 'string' || !conversationId) return;
-    const path = typeof messageId === 'string' && messageId ? `/chat/${conversationId}?at=${messageId}` : `/chat/${conversationId}`;
+    const kind = event.notification.data?.kind;
+    const path = typeof messageId === 'string' && messageId
+      ? (kind === 'reaction' ? `/chat/${conversationId}?at=${messageId}&react=1` : `/chat/${conversationId}?at=${messageId}`)
+      : `/chat/${conversationId}`;
     window.dispatchEvent(new CustomEvent('chatx-push-open', { detail: { path } }));
   });
   await PushNotifications.addListener('pushNotificationReceived', (event) => {

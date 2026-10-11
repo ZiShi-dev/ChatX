@@ -1,15 +1,31 @@
 import { describe, expect, it } from 'vitest';
-import { applyReaction, groupReactions } from './reactions';
+import { applyReaction, groupReactions, removeReaction } from './reactions';
 
 describe('applyReaction', () => {
-  it('keeps one reaction per person and replaces it', () => {
+  it('keeps several different reactions from the same person', () => {
     const first = applyReaction([], 'me', '👍');
     expect(first).toEqual([{ emoji: '👍', userId: 'me' }]);
-    expect(applyReaction(first, 'me', '❤️')).toEqual([{ emoji: '❤️', userId: 'me' }]);
+    expect(applyReaction(first, 'me', '❤️')).toEqual([
+      { emoji: '👍', userId: 'me' },
+      { emoji: '❤️', userId: 'me' },
+    ]);
   });
 
-  it('removes the reaction when the same emoji is chosen again', () => {
-    expect(applyReaction([{ emoji: '❤️', userId: 'me' }], 'me', '❤️')).toEqual([]);
+  it('ignores choosing the same emoji again', () => {
+    const current = [{ emoji: '❤️', userId: 'me' }];
+    expect(applyReaction(current, 'me', '❤️')).toEqual(current);
+  });
+
+  it('removes only the chosen emoji', () => {
+    const current = [
+      { emoji: '👍', userId: 'me' },
+      { emoji: '❤️', userId: 'me' },
+      { emoji: '👍', userId: 'other' },
+    ];
+    expect(removeReaction(current, 'me', '👍')).toEqual([
+      { emoji: '❤️', userId: 'me' },
+      { emoji: '👍', userId: 'other' },
+    ]);
   });
 
   it('groups the same emoji together', () => {

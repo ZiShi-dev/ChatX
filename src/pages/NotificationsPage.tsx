@@ -1,4 +1,5 @@
 import { openNotificationChat } from '../lib/notificationNavigation';
+import { chatDeepLink } from '../lib/messageFocusScroll';
 import { memo, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { IonContent, IonHeader, IonIcon, IonPage, IonRefresher, IonRefresherContent } from '@ionic/react';
@@ -161,12 +162,18 @@ export default function NotificationsPage() {
 
   const open = (item: InboxItem) => {
     markNotificationsRead(item.ids);
+    const reaction = item.kind === 'reaction';
     if (isServerId(item.conversationId)) {
-      openNotificationChat(navigate, `/chat/${item.conversationId}?at=${item.id}`);
+      openNotificationChat(navigate, chatDeepLink(item.conversationId, item.id, reaction ? 'reaction' : undefined));
       return;
     }
     const focus = resolveMessageFocus(messages, item.conversationId, item.id);
-    openNotificationChat(navigate, focus === 'missing' ? `/chat/${item.conversationId}?missing=1` : `/chat/${item.conversationId}?at=${item.id}`);
+    openNotificationChat(
+      navigate,
+      focus === 'missing'
+        ? `/chat/${item.conversationId}?missing=1`
+        : chatDeepLink(item.conversationId, item.id, reaction ? 'reaction' : undefined),
+    );
   };
 
   return (

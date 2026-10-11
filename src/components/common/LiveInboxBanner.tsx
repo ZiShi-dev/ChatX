@@ -7,6 +7,7 @@ import { useSettingsStore } from '../../stores/settingsStore';
 import EmojiText from './EmojiText';
 import './LiveInboxBanner.css';
 import { allowsNotificationAlert } from '../../lib/inbox';
+import { chatDeepLink } from '../../lib/messageFocusScroll';
 import { useChatStore } from '../../stores/chatStore';
 export default function LiveInboxBanner() {
   const notices = useLiveInbox(state => state.notices);
@@ -37,7 +38,7 @@ export default function LiveInboxBanner() {
   }, [notice, dismiss]);
   if (!notice) return null;
   return <aside className="live-inbox-banner" aria-label="إشعار جديد" dir="rtl">
-    <button className="live-inbox-open" type="button" onClick={() => { dismiss(notice.key); openNotificationChat(navigate, `/chat/${notice.conversationId}?at=${encodeURIComponent(notice.messageId)}`); }}>
+    <button className="live-inbox-open" type="button" onClick={() => { dismiss(notice.key); openNotificationChat(navigate, chatDeepLink(notice.conversationId, notice.messageId, notice.kind === 'reaction' ? 'reaction' : undefined)); }}>
       <span role="status"><strong>{notice.title}</strong><span><EmojiText text={notice.body} /></span></span>
     </button>
     <button className="live-inbox-close" type="button" aria-label="إخفاء الإشعار" onClick={() => dismiss(notice.key)}>×</button>

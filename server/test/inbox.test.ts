@@ -170,6 +170,23 @@ describe('inbox', () => {
     assert.equal(reactions.some((item) => item.userId === layla.id && item.emoji === '❤️'), true);
     assert.equal(reactions.some((item) => item.userId === nora.id && item.emoji === '👍'), true);
 
+    const extra = await handle(new Request(`http://127.0.0.1/api/rooms/${GLOBAL_ROOM_ID}/messages/${messageId}/reaction`, {
+      method: 'POST',
+      headers: laylaHeaders,
+      body: JSON.stringify({ emoji: '😂' }),
+    }));
+    assert.equal(extra.status, 200);
+    const duplicate = await handle(new Request(`http://127.0.0.1/api/rooms/${GLOBAL_ROOM_ID}/messages/${messageId}/reaction`, {
+      method: 'POST',
+      headers: laylaHeaders,
+      body: JSON.stringify({ emoji: '❤️' }),
+    }));
+    assert.equal(duplicate.status, 200);
+    const stacked = await handle(new Request(`http://127.0.0.1/api/rooms/${GLOBAL_ROOM_ID}/messages`, { headers: { cookie: `chatx_session=${noraToken}` } }));
+    const stackedBody = await stacked.json() as { messages: Array<{ reactions?: Array<{ emoji: string; userId: string }> }> };
+    const laylaReactions = (stackedBody.messages.find((item) => item.reactions)?.reactions ?? []).filter((item) => item.userId === layla.id);
+    assert.deepEqual(laylaReactions.map((item) => item.emoji).sort(), ['❤️', '😂']);
+
     const seen = await handle(new Request(`http://127.0.0.1/api/rooms/${GLOBAL_ROOM_ID}/messages`, { headers: { cookie: `chatx_session=${laylaToken}` } }));
     assert.equal(seen.status, 200);
     const read = await handle(new Request(`http://127.0.0.1/api/rooms/${GLOBAL_ROOM_ID}/read`, {

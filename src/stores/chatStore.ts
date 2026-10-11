@@ -7,7 +7,7 @@ import { MESSAGE_PAGE_SIZE, NOTIFICATIONS_PAGE_SIZE, READ_DELAY_MS, READ_STAGGER
 import { CONVERSATIONS, GLOBAL_CHAT_ID } from '../data/conversations';
 import { MESSAGES } from '../data/messages';
 import { SEED_READ_CURSORS, SEED_READ_TIMES } from '../data/readCursors';
-import { applyReaction } from '../lib/reactions';
+import { applyReaction, MAX_USER_REACTIONS, removeReaction } from '../lib/reactions';
 import { advanceCursor, noteReadTime, type ReadCursors, type ReadTimes } from '../lib/readReceipts';
 import { isServerId, mergeHomeMessages, readHomePayload, readOpenedRoom, readRoomMessages, readRoomReaders, readUpdatedRoom, SERVER_GLOBAL_ROOM_ID } from '../lib/home';
 import { notificationPreview, reactionNotice, readInboxPayload, readInboxUnread, resolveMessageFocus } from '../lib/inbox';
@@ -22,6 +22,7 @@ import { mergeRoomWindow } from '../lib/chatWindow';
 import { prepareMedia } from '../lib/mediaPreparation';
 import { fitChatImageFromSources, jpegDataUrl } from '../lib/chatImage';
 import { bytesToBase64, FILE_BYTES_MAX, localMediaBytes, VIDEO_BYTES_MAX } from '../lib/chatFile';
+import { MESSAGE_TEXT_MAX, outgoingFailureMessage, textTooLongMessage, fileTooLargeMessage, videoTooLargeMessage } from '../lib/messageLimits';
 import { ORIGINAL_IMAGE_SIZE, ORIGINAL_VIDEO_SIZE, expectedImageSize, expectedVideoSize } from '../lib/media';
 import { isPrivateBetween } from '../lib/conversation';
 import { canEditRoom } from '../lib/roles';
@@ -118,6 +119,13 @@ type ChatState = {
   editMessage: (messageId: string, content: string) => Promise<boolean>;
   deleteForEveryone: (messageId: string) => void;
   toggleReaction: (messageId: string, emoji: string) => void;
+  removeReaction: (messageId: string, emoji: string) => void;
+  reactionKeyboardId: string | null;
+  openReactionKeyboard: (messageId: string) => void;
+  closeReactionKeyboard: () => void;
+  messageActionOpenId: string | null;
+  requestMessageActions: (messageId: string) => void;
+  clearMessageActionRequest: () => void;
   forgetUser: (userId: string) => void;
 };
 
@@ -263,12 +271,14 @@ function noticeHints(text: string, conversationId: string) {
 function cleanText(value: string | undefined) {
   // eslint-disable-next-line no-control-regex -- Strip control characters from untrusted input.
   const text = (value ?? '').replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/g, '').trim();
-  return text.length <= 4000 ? text : '';
+  return text.length <= MESSAGE_TEXT_MAX ? text : '';
 }
 
 async function publishText(message: Message) {
+  const raw = (message.text ?? '').replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/g, '').trim();
   const text = cleanText(message.text);
   if (!text) {
+    if (raw.length > MESSAGE_TEXT_MAX) useChatStore.setState({ lastError: textTooLongMessage(raw.length) });
     patchMessage(message.id, { status: 'failed' });
     return;
   }
@@ -379,6 +389,7 @@ async function publishFile(message: Message) {
   }
   const bytes = await localMediaBytes(source);
   if (bytes.byteLength < 1 || bytes.byteLength > FILE_BYTES_MAX) {
+    useChatStore.setState({ lastError: fileTooLargeMessage(bytes.byteLength) });
     patchMessage(message.id, { status: 'failed' });
     return;
   }
@@ -412,6 +423,7 @@ async function publishVideo(message: Message) {
   }
   const bytes = await localMediaBytes(source);
   if (bytes.byteLength < 1 || bytes.byteLength > VIDEO_BYTES_MAX) {
+    useChatStore.setState({ lastError: videoTooLargeMessage(bytes.byteLength) });
     patchMessage(message.id, { status: 'failed' });
     return;
   }
@@ -580,7 +592,7 @@ async function prepareAndSend(message: Message) {
       retryable: temporary, sendAttempts: attempts, retryAt: temporary ? Date.now() + retryDelay(attempts, error instanceof AdminApiError ? error.retryAfter : 0) : undefined };
     patchMessage(message.id, patch);
     try { await saveOutgoing(owner, { ...current, ...patch }); } catch { useChatStore.setState({ lastError: 'تعذر حفظ الرسالة محليًا. تحقق من المساحة المتاحة ثم أعد المحاولة.' }); }
-    if (!temporary) useChatStore.setState({ lastError: 'تعذر تجهيز أو إرسال الرسالة. تحقق من الملف أو صلاحية الوصول ثم أعد المحاولة.' });
+    if (!temporary) useChatStore.setState({ lastError: outgoingFailureMessage(error, current ?? message) });
   } finally {
     preparing.delete(message.id);
     outgoing.wake();
@@ -674,6 +686,8 @@ export const useChatStore = create<ChatState>((set, get) => ({
   inboxHasMore: false,
   editingId: null,
   replyingTo: null,
+  reactionKeyboardId: null,
+  messageActionOpenId: null,
   beginReply: (messageId) => {
     const message = get().messages.find((item) => item.id === messageId);
     if (!message || message.deletedForEveryone) return;
@@ -683,6 +697,10 @@ export const useChatStore = create<ChatState>((set, get) => ({
   sendMessage: (conversationId, content) => {
     const text = content.trim();
     if (!text) return;
+    if (text.length > MESSAGE_TEXT_MAX) {
+      set({ lastError: textTooLongMessage(text.length) });
+      return;
+    }
     const roomId = accountRoom(conversationId);
     const url = firstUrl(text);
     appendMessage({
@@ -729,13 +747,16 @@ export const useChatStore = create<ChatState>((set, get) => ({
         return;
       }
       const tooBig = size < 1 || size > VIDEO_BYTES_MAX;
-      if (tooBig) set({ lastError: 'الفيديو أكبر من 8 MB. اختر مقطعًا أقصر.' });
+      if (tooBig) {
+        set({ lastError: videoTooLargeMessage(size) });
+        return;
+      }
       appendMessage({
         id: crypto.randomUUID(),
         conversationId: roomId,
         senderId: useAuthStore.getState().currentUser.id,
         type: 'video',
-        status: tooBig ? 'failed' : outgoingStatus(),
+        status: outgoingStatus(),
         createdAt: new Date().toISOString(),
         replyToId: takeReply(roomId),
         media: {
@@ -769,12 +790,16 @@ export const useChatStore = create<ChatState>((set, get) => ({
   sendFile: (conversationId, picked) => {
     const roomId = accountRoom(conversationId);
     const tooBig = picked.fileSize > FILE_BYTES_MAX;
+    if (tooBig) {
+      set({ lastError: fileTooLargeMessage(picked.fileSize) });
+      return;
+    }
     appendMessage({
       id: crypto.randomUUID(),
       conversationId: roomId,
       senderId: useAuthStore.getState().currentUser.id,
       type: 'file',
-      status: tooBig ? 'failed' : outgoingStatus(),
+      status: outgoingStatus(),
       createdAt: new Date().toISOString(),
       replyToId: takeReply(roomId),
       media: {
@@ -1407,12 +1432,19 @@ export const useChatStore = create<ChatState>((set, get) => ({
     const message = get().messages.find((item) => item.id === messageId);
     const text = content.trim();
     if (!message || !text || message.senderId !== me || message.deletedForEveryone || message.event) return false;
+    if (text.length > MESSAGE_TEXT_MAX) {
+      set({ lastError: textTooLongMessage(text.length) });
+      return false;
+    }
     if (message.type !== 'text' && message.type !== 'link') return false;
     const url = firstUrl(text);
     if (isServerId(message.conversationId)) {
       try {
         const clean = cleanText(text);
-        if (!clean) return false;
+        if (!clean) {
+          if (text.length > MESSAGE_TEXT_MAX) set({ lastError: textTooLongMessage(text.length) });
+          return false;
+        }
         const sealed = await sealMessageText(me, message.conversationId, message.id, clean, roomMembers(message.conversationId));
         await adminFetch(`/api/rooms/${message.conversationId}/messages/${message.id}`, { method: 'PATCH', body: { text: sealed } });
         if (me !== useAuthStore.getState().currentUser.id || !useAuthStore.getState().activated) return false;
@@ -1470,17 +1502,48 @@ export const useChatStore = create<ChatState>((set, get) => ({
     const message = get().messages.find((item) => item.id === messageId);
     if (!message || message.deletedForEveryone || message.event || !emoji.trim()) return;
     const previous = message.reactions;
+    const mine = previous?.filter((item) => item.userId === me) ?? [];
+    if (mine.some((item) => item.emoji === emoji)) return;
+    if (mine.length >= MAX_USER_REACTIONS) {
+      set({ lastError: 'يمكنك إضافة 8 تفاعلات مختلفة كحد أقصى.' });
+      return;
+    }
     const next = applyReaction(previous, me, emoji);
+    if (next === previous) return;
     patchMessage(messageId, { reactions: next });
     if (!isServerId(message.conversationId) || !isServerId(message.id)) return;
-    const mine = next.find((item) => item.userId === me);
     void adminFetch(`/api/rooms/${message.conversationId}/messages/${message.id}/reaction`, {
       method: 'POST',
-      body: { emoji: mine?.emoji ?? '' },
+      body: { emoji },
     }).catch(() => {
       patchMessage(messageId, { reactions: previous });
+      useChatStore.setState({ lastError: 'تعذر إضافة التفاعل. أعد المحاولة.' });
     });
   },
+  removeReaction: (messageId, emoji) => {
+    const me = useAuthStore.getState().currentUser.id;
+    const message = get().messages.find((item) => item.id === messageId);
+    if (!message || !emoji.trim()) return;
+    const previous = message.reactions;
+    if (!previous?.some((item) => item.userId === me && item.emoji === emoji)) return;
+    const next = removeReaction(previous, me, emoji);
+    patchMessage(messageId, { reactions: next.length ? next : undefined });
+    if (!isServerId(message.conversationId) || !isServerId(message.id)) return;
+    void adminFetch(`/api/rooms/${message.conversationId}/messages/${message.id}/reaction`, {
+      method: 'POST',
+      body: { emoji, remove: true },
+    }).catch(() => {
+      patchMessage(messageId, { reactions: previous });
+      useChatStore.setState({ lastError: 'تعذر إزالة التفاعل. أعد المحاولة.' });
+    });
+  },
+  openReactionKeyboard: (messageId) => {
+    window.dispatchEvent(new Event('chatx-reaction-keyboard'));
+    set({ reactionKeyboardId: messageId });
+  },
+  closeReactionKeyboard: () => set({ reactionKeyboardId: null }),
+  requestMessageActions: (messageId) => set({ messageActionOpenId: messageId }),
+  clearMessageActionRequest: () => set({ messageActionOpenId: null }),
   forgetUser: (userId) => {
     const me = useAuthStore.getState().currentUser.id;
     if (!userId || userId === me) return;
@@ -1587,7 +1650,7 @@ function switchChatAccount() {
     fullRooms: snapshot?.conversations.map((room) => room.id) ?? [],
     roomHasMore: {}, historyLimit: {}, readCursors: {}, readTimes: {}, typingByConversation: {},
     serverInbox: auth.activated ? overlayPendingReads(auth.currentUser.id, pendingReads(auth.currentUser.id).inbox ?? []) : [], serverUnread: auth.activated ? pendingReads(auth.currentUser.id).unread ?? 0 : 0, inboxHasMore: false, inboxReadIds: [], inboxClearedAt: null,
-    editingId: null, replyingTo: null, lastError: '',
+    editingId: null, replyingTo: null, messageActionOpenId: null, reactionKeyboardId: null, lastError: '',
   });
   useUserStore.setState({ users: snapshot?.users ?? [auth.currentUser] });
   if (auth.activated) void loadOutgoing(auth.currentUser.id).then((durable) => {

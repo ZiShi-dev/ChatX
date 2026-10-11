@@ -21,7 +21,7 @@ export function useFcmPush() {
     void startPushRegistration(userId).catch(() => undefined);
     const opened = (event: Event) => {
       const path = (event as CustomEvent<{ path?: string }>).detail?.path;
-      if (path && /^\/chat\/[^/?]+(?:\?at=[^&]+)?$/.test(path)) openNotificationChat(navigate, path);
+      if (path && /^\/chat\/[^/?]+(?:\?[^#]+)?$/.test(path)) openNotificationChat(navigate, path);
     };
     let refresh: ReturnType<typeof setTimeout> | undefined;
     const received = (event: Event) => {

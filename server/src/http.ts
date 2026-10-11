@@ -329,6 +329,7 @@ async function route(deps: Deps, request: Request) {
       roomId: reaction[1] ?? '',
       messageId: reaction[2] ?? '',
       emoji: body.emoji,
+      remove: body.remove,
     });
     if (!result.ok) return failure(deps, result.error);
     return json({ ok: true });

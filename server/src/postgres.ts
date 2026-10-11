@@ -648,7 +648,12 @@ export function createPostgresRepository(pool: pg.Pool, store: MediaStore): Auth
          JOIN rooms r ON r.id = n.room_id
          JOIN users u ON u.id = m.sender_id
          LEFT JOIN users actor ON actor.id = n.actor_id
-         LEFT JOIN message_reactions react ON react.message_id = n.message_id AND react.user_id = n.actor_id
+         LEFT JOIN LATERAL (
+           SELECT emoji FROM message_reactions
+           WHERE message_id = n.message_id AND user_id = n.actor_id
+           ORDER BY created_at DESC
+           LIMIT 1
+         ) react ON true
          LEFT JOIN inbox_state s ON s.user_id = n.user_id
          WHERE n.user_id = $1
            AND (s.cleared_at IS NULL OR n.created_at > s.cleared_at)
@@ -776,7 +781,7 @@ export function createPostgresRepository(pool: pg.Pool, store: MediaStore): Auth
         client.release();
       }
     },
-    async setReaction({ roomId, messageId, userId, emoji, at }) {
+    async setReaction({ roomId, messageId, userId, emoji, remove, at }) {
       const member = await pool.query('SELECT 1 FROM room_members WHERE room_id = $1 AND user_id = $2', [roomId, userId]);
       if ((member.rowCount ?? 0) === 0) return 'missing';
       const message = await pool.query<{ sender_id: string }>(
@@ -785,13 +790,24 @@ export function createPostgresRepository(pool: pg.Pool, store: MediaStore): Auth
       );
       const authorId = message.rows[0]?.sender_id;
       if (!authorId) return 'missing';
-      if (emoji) {
+      if (emoji && remove) {
         await pool.query(
+          'DELETE FROM message_reactions WHERE message_id = $1 AND user_id = $2 AND emoji = $3',
+          [messageId, userId, emoji],
+        );
+      } else if (emoji) {
+        const count = await pool.query<{ n: number }>(
+          'SELECT count(*)::int AS n FROM message_reactions WHERE message_id = $1 AND user_id = $2',
+          [messageId, userId],
+        );
+        if ((count.rows[0]?.n ?? 0) >= 8) return 'ok';
+        const inserted = await pool.query(
           `INSERT INTO message_reactions (message_id, user_id, emoji, created_at)
            VALUES ($1, $2, $3, $4)
-           ON CONFLICT (message_id, user_id) DO UPDATE SET emoji = EXCLUDED.emoji, created_at = EXCLUDED.created_at`,
+           ON CONFLICT (message_id, user_id, emoji) DO NOTHING`,
           [messageId, userId, emoji, at],
         );
+        if ((inserted.rowCount ?? 0) === 0) return 'ok';
       } else {
         await pool.query('DELETE FROM message_reactions WHERE message_id = $1 AND user_id = $2', [messageId, userId]);
       }
@@ -805,7 +821,11 @@ export function createPostgresRepository(pool: pg.Pool, store: MediaStore): Auth
           [authorId, messageId, roomId, actorId, at],
         );
       };
-      if (emoji) {
+      const still = await pool.query(
+        'SELECT 1 FROM message_reactions WHERE message_id = $1 AND user_id = $2 LIMIT 1',
+        [messageId, userId],
+      );
+      if ((still.rowCount ?? 0) > 0) {
         await publish(userId);
         return 'ok';
       }
