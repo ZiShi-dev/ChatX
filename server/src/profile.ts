@@ -75,7 +75,7 @@ export function cleanCustomRoleColors(value: unknown) {
 }
 
 export function cleanCosmetic(value: unknown, kind: 'avatar' | 'profile') {
-  const choices = kind === 'avatar' ? ['none', 'orbit', 'laurel', 'prism', 'hat', 'hat-rain', 'dragon'] : ['none', 'aurora', 'stars', 'meteors', 'celestial-dragon', 'sword-domain', 'time-cicada', 'jade-lotus', 'heavenly-tribulation', 'jade-petals', 'spirit-embers'];
+  const choices = kind === 'avatar' ? ['none', 'orbit', 'laurel', 'prism', 'hat', 'hat-rain', 'dragon', 'soul-fire'] : ['none', 'aurora', 'stars', 'meteors', 'celestial-dragon', 'sword-domain', 'time-cicada', 'jade-lotus', 'heavenly-tribulation', 'jade-petals', 'spirit-embers'];
   if (value === null) return { ok: true as const, value: 'none' };
   return typeof value === 'string' && choices.includes(value) ? { ok: true as const, value } : { ok: false as const };
 }

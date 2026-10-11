@@ -1,5 +1,19 @@
 .avatar-frame { position:relative; display:inline-flex; align-items:center; justify-content:center; flex:none; aspect-ratio:1; vertical-align:middle; overflow:visible; isolation:isolate; }
 .avatar-frame > .avatar { flex:none; aspect-ratio:1; box-shadow:none !important; }
+.decoration-soul-fire > .avatar { position:absolute; width:82% !important; height:82% !important; top:2%; left:9%; z-index:1; }
+.decoration-soul-fire::after { display:none; }
+.soul-fire-back { z-index:0; }
+.soul-fire-front { z-index:2; }
+.soul-flame { transform-box:fill-box; transform-origin:50% 100%; }
+.decoration-soul-fire.is-animated .soul-flame { animation:soul-fire-dance 1.9s ease-in-out infinite; }
+.decoration-soul-fire.is-animated .flame-inner { animation-duration:1.3s; animation-delay:-.7s; }
+.decoration-soul-fire.is-animated .flame-crown { animation-duration:1.6s; animation-delay:-.4s; }
+.decoration-soul-fire.is-animated .flame-wisp { animation-duration:2.3s; animation-delay:-1.1s; }
+.decoration-soul-fire.is-animated .wisp-right { animation-delay:-.3s; }
+.decoration-soul-fire.is-animated .soul-eye { animation:soul-eye-glow 3s ease-in-out infinite; }
+@keyframes soul-fire-dance { 0%,100% { transform:skewX(-4deg) scale(1,.94); opacity:.85; } 35% { transform:skewX(6deg) scale(.93,1.09); opacity:1; } 70% { transform:skewX(-7deg) scale(1.04,.98); opacity:.92; } }
+@keyframes soul-eye-glow { 50% { opacity:.65; } }
+@media (prefers-reduced-motion:reduce) { .decoration-soul-fire.is-animated .soul-flame, .decoration-soul-fire.is-animated .soul-eye { animation:none; } }
 .avatar-frame::after { content:''; position:absolute; inset:2%; border-radius:50%; pointer-events:none; border:clamp(1px,.035em,3px) solid var(--cosmetic-color); }
 .decoration-orbit::after { border:2px dashed var(--cosmetic-color); }
 .decoration-laurel::after { border:3px double #d1af67; border-left-color:var(--cosmetic-color); border-right-color:var(--cosmetic-color); }

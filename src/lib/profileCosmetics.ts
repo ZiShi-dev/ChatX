@@ -6,6 +6,7 @@ export const AVATAR_DECORATIONS = [
   { id: 'hat', label: 'قبعة الخيزران' },
   { id: 'hat-rain', label: 'قبعة المطر' },
   { id: 'dragon', label: 'التنين' },
+  { id: 'soul-fire', label: 'جماجم ولهيب الروح' },
 ] as const;
 export const PROFILE_EFFECTS = [
   { id: 'none', label: 'بدون تأثير' },
