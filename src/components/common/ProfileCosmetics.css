@@ -59,6 +59,13 @@
 @keyframes profile-prism { 50% { transform:rotate(6deg); opacity:.7; } }
 .profile-frame, .member-sheet, .profile-editor-preview, .account-hero { position:relative; isolation:isolate; }
 .profile-effect { position:absolute; inset:0; border-radius:inherit; overflow:hidden; pointer-events:none; z-index:-1; }
+.profile-frame > .profile-effect, .member-sheet > .profile-effect { border-radius:24px; opacity:.65; }
+.profile-effect > .cultivation-scene { position:absolute; width:100%; height:clamp(200px,46%,320px); right:0; bottom:4%; opacity:.46; }
+.profile-effect > .cultivation-scene .cultivation-aura, .profile-effect > .cultivation-scene .storm-orbit { display:none; }
+.profile-effect > .cultivation-scene .cultivation-smoke { opacity:.28; }
+.profile-effect > .atmosphere-artwork { position:absolute; inset:0; opacity:.45; }
+.profile-frame > .profile-effect::after, .member-sheet > .profile-effect::after { content:''; position:absolute; inset:0; background:linear-gradient(180deg,transparent 15%,var(--chatx-bg,#0e1714) 42%,transparent 76%); opacity:.5; }
+.profile-editor-preview > .profile-effect > .cultivation-scene, .account-hero > .profile-effect > .cultivation-scene { height:60%; bottom:0; opacity:.4; }
 .profile-effect i { position:absolute; display:block; }
 .atmosphere-artwork { width:100%; height:100%; display:block; }
 .is-animated .atmosphere-veil { animation:atmosphere-curtain 14s ease-in-out infinite alternate; transform-origin:center; }

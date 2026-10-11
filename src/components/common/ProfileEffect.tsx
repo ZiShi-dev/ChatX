@@ -12,6 +12,9 @@ export default function ProfileEffect({ effect, color }: { effect?: ProfileEffec
   const cultivation = isBannerScene(kind);
   if (kind === 'none') return null;
   return <span aria-hidden="true" className={`profile-effect effect-${kind}${animate ? ' is-animated' : ''}`} style={{ '--cosmetic-color': color } as CSSProperties}>
-    {cultivation ? <CultivationScene kind={kind} /> : <AtmosphereArtwork kind={kind} color={color} />}
+    {cultivation ? <>
+      <AtmosphereArtwork kind="aurora" color={color} />
+      <CultivationScene kind={kind} />
+    </> : <AtmosphereArtwork kind={kind} color={color} />}
   </span>;
 }
