@@ -147,7 +147,7 @@ try {
   const bannerSaved = await api(new Request(origin + '/api/profile', { method: 'PATCH', headers: { 'content-type': 'application/json', 'x-chatx-request': '1', cookie: 'chatx_session=' + alice.id }, body: JSON.stringify({ banner: customBanner }) }));
   assert.equal(bannerSaved.status, 200);
   await page.reload(); await page.locator('.startup-screen').waitFor({ state: 'detached' });
-  for (const [effect, label] of [['celestial-dragon', 'التنين السماوي'], ['sword-domain', 'تشكيل السيوف'], ['time-cicada', 'زيز الزمن']]) {
+  for (const [effect, label] of [['celestial-dragon', 'التنين السماوي'], ['sword-domain', 'تشكيل السيوف'], ['time-cicada', 'زيز الزمن'], ['jade-lotus', 'لوتس اليشم'], ['heavenly-tribulation', 'المحنة السماوية']]) {
     await page.getByRole('button', { name: 'تعديل الملف', exact: true }).click();
     await page.getByRole('dialog').getByRole('tab', { name: 'الزينة والتأثيرات', exact: true }).click();
     await page.getByRole('dialog').getByRole('button', { name: label, exact: true }).click();
@@ -171,8 +171,9 @@ try {
     assert.notEqual(await smoke.evaluate(node => getComputedStyle(node).transform), firstTransform, 'Smoke must actually move');
     assert.equal(await viewer.locator('.cultivation-scene .cultivation-aura').evaluate(node => getComputedStyle(node).animationName), 'cultivation-aura');
     assert.equal(await viewer.locator('.cultivation-scene rect, .cultivation-scene image').count(), 0, 'The overlay must not replace or darken the banner');
+    const motion = viewer.locator('.cultivation-scene .celestial-dragon-body, .cultivation-scene .immortal-sword, .cultivation-scene .gu-cicada, .cultivation-scene .lotus-petal, .cultivation-scene .tribulation-bolt').first();
+    assert.notEqual(await motion.evaluate(node => getComputedStyle(node).animationName), 'none', 'Each selected scene must animate its own artwork');
     await viewer.emulateMedia({ reducedMotion: 'reduce' });
-    const motion = viewer.locator('.cultivation-scene .celestial-dragon-body, .cultivation-scene .immortal-sword, .cultivation-scene .gu-cicada').first();
     assert.equal(await motion.evaluate(node => getComputedStyle(node).animationName), 'none');
     assert.equal(await smoke.evaluate(node => getComputedStyle(node).animationName), 'none');
     await viewer.emulateMedia({ reducedMotion: 'no-preference' });

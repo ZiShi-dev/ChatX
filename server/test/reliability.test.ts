@@ -175,7 +175,7 @@ it('verifies PostgreSQL migrations, cursor SQL and transaction rollback', { skip
       assert.equal(await repo.updateMemberProfile(person.id, { avatarDecoration: 'dragon', profileEffect: 'meteors' }), 'ok');
       assert.equal((await repo.findUserById(person.id))?.avatarDecoration, 'dragon');
       assert.equal((await repo.listUsers()).find(user => user.id === person.id)?.profileEffect, 'meteors');
-      for (const profileEffect of ['celestial-dragon', 'sword-domain', 'time-cicada']) {
+      for (const profileEffect of ['celestial-dragon', 'sword-domain', 'time-cicada', 'jade-lotus', 'heavenly-tribulation']) {
         assert.equal(await repo.updateMemberProfile(person.id, { profileEffect }), 'ok');
         assert.equal((await repo.findUserById(person.id))?.profileEffect, profileEffect);
       }

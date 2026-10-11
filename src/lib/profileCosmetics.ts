@@ -14,6 +14,8 @@ export const PROFILE_EFFECTS = [
   { id: 'celestial-dragon', label: 'التنين السماوي' },
   { id: 'sword-domain', label: 'تشكيل السيوف' },
   { id: 'time-cicada', label: 'زيز الزمن' },
+  { id: 'jade-lotus', label: 'لوتس اليشم' },
+  { id: 'heavenly-tribulation', label: 'المحنة السماوية' },
 ] as const;
 export type AvatarDecoration = typeof AVATAR_DECORATIONS[number]['id'];
 export type ProfileEffectId = typeof PROFILE_EFFECTS[number]['id'];

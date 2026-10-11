@@ -118,3 +118,21 @@
 @keyframes cultivation-smoke-reverse { 0%,100% { transform:translate(12px,7px) scale(1.02); opacity:.4; } 50% { transform:translate(-18px,-16px) scale(.97); opacity:.85; } }
 @keyframes cultivation-aura { 50% { transform:scale(1.08,.85); opacity:.45; } }
 @media (prefers-reduced-motion:reduce) { .profile-effect.is-animated .cultivation-scene * { animation:none; } }
+
+/* Separate petal, pearl and storm layers; no strobing or layout animation. */
+.is-animated .lotus-petal { animation:lotus-breathe 7s ease-in-out infinite; transform-origin:320px 158px; }
+.is-animated .petal-1, .is-animated .petal-5 { animation-delay:-2s; }
+.is-animated .petal-2, .is-animated .petal-4 { animation-delay:-4s; }
+.is-animated .lotus-pearl { animation:lotus-pearl 6s ease-in-out infinite; }
+.is-animated .tribulation-bolt { animation:tribulation-glow 8s ease-in-out infinite; }
+.is-animated .bolt-1 { animation-delay:-3s; }
+.is-animated .bolt-2 { animation-delay:-5s; }
+.is-animated .tribulation-core { animation:tribulation-core 9s ease-in-out infinite; transform-origin:320px 108px; }
+.is-animated .storm-clouds { animation:storm-drift 11s ease-in-out infinite alternate; }
+.is-animated .storm-orbit { animation:cultivation-aura 8s ease-in-out infinite; transform-origin:320px 172px; }
+@keyframes lotus-breathe { 50% { transform:scale(.93,1.04) rotate(3deg); opacity:.7; } }
+@keyframes lotus-pearl { 50% { transform:translateY(-8px); opacity:.65; } }
+@keyframes tribulation-glow { 0%,100% { opacity:.35; transform:translateY(-3px); } 50% { opacity:.9; transform:translateY(3px); } }
+@keyframes tribulation-core { 50% { transform:scale(1.16); opacity:.45; } }
+@keyframes storm-drift { to { transform:translateX(14px); opacity:.6; } }
+@media (prefers-reduced-motion:reduce) { .profile-effect.is-animated .cultivation-scene * { animation:none; } }

@@ -8,7 +8,7 @@ import './ProfileCosmetics.css';
 export default function ProfileEffect({ effect, color, placement = 'ambient' }: { effect?: ProfileEffectId; color: string; placement?: 'ambient' | 'banner' }) {
   const animate = useProfileMotion();
   const kind = profileEffect(effect);
-  const cultivation = kind === 'celestial-dragon' || kind === 'sword-domain' || kind === 'time-cicada';
+  const cultivation = kind === 'celestial-dragon' || kind === 'sword-domain' || kind === 'time-cicada' || kind === 'jade-lotus' || kind === 'heavenly-tribulation';
   if (kind === 'none' || cultivation && placement !== 'banner') return null;
   return <span aria-hidden="true" className={`profile-effect effect-${kind}${placement === 'banner' ? ' is-banner' : ''}${animate ? ' is-animated' : ''}`} style={{ '--cosmetic-color': color } as CSSProperties}>
     {cultivation ? <CultivationScene kind={kind} /> : <><i /><i /><i /><i /><i /></>}

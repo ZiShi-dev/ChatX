@@ -46,7 +46,7 @@ export function cleanMessageFont(value: unknown) {
 }
 
 export function cleanCosmetic(value: unknown, kind: 'avatar' | 'profile') {
-  const choices = kind === 'avatar' ? ['none', 'orbit', 'laurel', 'prism', 'hat', 'dragon'] : ['none', 'aurora', 'stars', 'meteors', 'celestial-dragon', 'sword-domain', 'time-cicada'];
+  const choices = kind === 'avatar' ? ['none', 'orbit', 'laurel', 'prism', 'hat', 'dragon'] : ['none', 'aurora', 'stars', 'meteors', 'celestial-dragon', 'sword-domain', 'time-cicada', 'jade-lotus', 'heavenly-tribulation'];
   if (value === null) return { ok: true as const, value: 'none' };
   return typeof value === 'string' && choices.includes(value) ? { ok: true as const, value } : { ok: false as const };
 }

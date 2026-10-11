@@ -1,6 +1,6 @@
 import { useId } from 'react';
 
-type SceneKind = 'celestial-dragon' | 'sword-domain' | 'time-cicada';
+type SceneKind = 'celestial-dragon' | 'sword-domain' | 'time-cicada' | 'jade-lotus' | 'heavenly-tribulation';
 const SWORDS = [[170, 130, -32], [230, 96, -18], [285, 79, -6], [355, 79, 6], [410, 96, 18], [470, 130, 32]] as const;
 
 /** Original cultivation artwork, drawn locally and animated with transform/opacity only. */
@@ -11,7 +11,7 @@ export default function CultivationScene({ kind }: { kind: SceneKind }) {
     <defs>
       <linearGradient id={jade} x1="0" y1="0" x2="1" y2="1"><stop stopColor="#f6e6b0" /><stop offset=".4" stopColor="#92dbbd" /><stop offset="1" stopColor="#1d6a72" /></linearGradient>
       <linearGradient id={gold} x1="0" y1="0" x2="0" y2="1"><stop stopColor="#fff3cb" /><stop offset=".5" stopColor="#dab66b" /><stop offset="1" stopColor="#927041" /></linearGradient>
-      <radialGradient id={halo}><stop stopColor="#beeecf" stopOpacity=".45" /><stop offset="1" stopColor="#62beaa" stopOpacity="0" /></radialGradient>
+      <radialGradient id={halo}><stop stopColor={kind === 'heavenly-tribulation' ? '#d5baff' : '#beeecf'} stopOpacity=".45" /><stop offset="1" stopColor={kind === 'heavenly-tribulation' ? '#9070cc' : '#62beaa'} stopOpacity="0" /></radialGradient>
       <linearGradient id={smoke} x1="0" y1="0" x2="0" y2="1"><stop stopColor="#d3eee2" stopOpacity="0" /><stop offset=".5" stopColor="#a6dccf" stopOpacity=".28" /><stop offset="1" stopColor="#62bea9" stopOpacity="0" /></linearGradient>
     </defs>
     <circle className="cultivation-halo" cx="320" cy="110" r="136" fill={`url(#${halo})`} />
@@ -72,6 +72,28 @@ export default function CultivationScene({ kind }: { kind: SceneKind }) {
         <circle cx="315" cy="92" r="2.5" fill="#1f4b46" /><circle cx="325" cy="92" r="2.5" fill="#1f4b46" />
       </g>
     </>}
+    {kind === 'jade-lotus' && <g className="jade-lotus">
+      <ellipse cx="320" cy="170" rx="92" ry="14" fill={`url(#${halo})`} />
+      {[-65, -42, -22, 0, 22, 42, 65].map((angle, index) => <g key={angle} transform={`rotate(${angle} 320 158)`}>
+        <g className={`lotus-petal petal-${index}`}>
+          <path d="M320 163C275 134 290 75 320 42C350 75 365 134 320 163Z" fill={`url(#${jade})`} fillOpacity=".7" stroke="#e6dfac" strokeWidth="1.5" />
+          <path d="M320 155Q306 108 320 57" fill="none" stroke="#f2e7bc" strokeWidth="1" opacity=".7" />
+        </g>
+      </g>)}
+      <path d="M255 157Q282 126 320 163Q358 126 385 157Q348 187 320 175Q292 187 255 157Z" fill={`url(#${jade})`} stroke="#d7e6c4" />
+      <g className="lotus-pearl"><circle cx="320" cy="137" r="22" fill={`url(#${halo})`} /><circle cx="320" cy="137" r="7" fill={`url(#${gold})`} /></g>
+    </g>}
+    {kind === 'heavenly-tribulation' && <g className="heavenly-tribulation">
+      <g className="storm-clouds" fill="none" stroke="#c3b4ed" strokeLinecap="round">
+        <path d="M79 68Q133 27 174 54T257 44M383 44Q430 27 466 53T561 65" strokeWidth="18" opacity=".09" />
+        <path d="M79 68Q133 27 174 54T257 44M383 44Q430 27 466 53T561 65" strokeWidth="2" opacity=".4" />
+      </g>
+      <g className="tribulation-core"><circle cx="320" cy="108" r="52" fill={`url(#${halo})`} /><circle cx="320" cy="108" r="29" fill="none" stroke="#dac6ff" strokeWidth="2" opacity=".6" /><circle cx="320" cy="108" r="10" fill="#ddd1ff" opacity=".65" /></g>
+      {['M177 58L159 93L180 89L165 131L193 109L189 148', 'M320 37L300 73L324 66L312 112L340 83L330 139', 'M464 58L444 94L467 87L447 128L480 112L471 150'].map((d, index) => <g className={`tribulation-bolt bolt-${index}`} key={d} fill="none" strokeLinejoin="round">
+        <path d={d} stroke="#987cdd" strokeWidth="9" opacity=".13" /><path d={d} stroke="#e7d9ff" strokeWidth="1.8" opacity=".8" />
+      </g>)}
+      <g className="storm-orbit" fill="none" stroke="#cbb9ef" opacity=".45"><ellipse cx="320" cy="172" rx="118" ry="20" /><ellipse cx="320" cy="172" rx="90" ry="12" /></g>
+    </g>}
     <g className="spirit-particles" fill="#e9dba8">
       <circle cx="139" cy="60" r="2" /><circle cx="209" cy="168" r="1.5" /><circle cx="436" cy="49" r="2" /><circle cx="490" cy="168" r="1.5" /><circle cx="351" cy="198" r="2" />
     </g>
