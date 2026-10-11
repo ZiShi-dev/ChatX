@@ -1,7 +1,12 @@
 #!/bin/sh
 set -e
-if [ -d /media ]; then
+if [ "$(id -u)" = "0" ] && [ -d /media ]; then
   mkdir -p /media/images /media/files
-  chown -R node:node /media
+  # Do not recursively change Alpine's unrelated /media mount points.
+  chown node:node /media
+  chown -Rh node:node /media/images /media/files
 fi
-exec su-exec node "$@"
+if [ "$(id -u)" = "0" ]; then
+  exec su-exec node "$@"
+fi
+exec "$@"

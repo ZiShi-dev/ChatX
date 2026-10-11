@@ -21,6 +21,11 @@ services:
       - /tmp:size=16m,mode=1777
     cap_drop:
       - ALL
+    # Required only by the root entrypoint before it switches to user node.
+    cap_add:
+      - CHOWN
+      - SETUID
+      - SETGID
     security_opt:
       - no-new-privileges:true
     pids_limit: 128
