@@ -54,6 +54,7 @@ setupIonicReact({ mode: 'md' });
 
 function NativeChrome() {
   const navigate = useNavigate();
+  useFcmPush();
 
   useEffect(() => {
     if (!Capacitor.isNativePlatform()) return;
@@ -108,7 +109,6 @@ function AppRoutes() {
   useEffect(observeNetwork, []);
   useEffect(installOfflineShell, []);
   usePresenceSync();
-  useFcmPush();
   useInboxAlerts();
   const guard = (element: ReactElement) => (activated ? element : <Navigate to="/activation" replace />);
   const page = (element: ReactElement, kind: SkeletonKind) => <Suspense fallback={<PageSkeleton kind={kind} />}>{guard(element)}</Suspense>;
