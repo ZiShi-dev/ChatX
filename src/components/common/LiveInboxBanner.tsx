@@ -1,3 +1,4 @@
+import { openNotificationChat } from '../../lib/notificationNavigation';
 import { useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useLiveInbox, watchingRoom } from '../../lib/liveInbox';
@@ -26,7 +27,7 @@ export default function LiveInboxBanner() {
   }, [notice, dismiss]);
   if (!notice) return null;
   return <aside className="live-inbox-banner" aria-label="إشعار جديد" dir="rtl">
-    <button className="live-inbox-open" type="button" onClick={() => { dismiss(notice.key); navigate(`/chat/${notice.conversationId}?at=${encodeURIComponent(notice.messageId)}`); }}>
+    <button className="live-inbox-open" type="button" onClick={() => { dismiss(notice.key); openNotificationChat(navigate, `/chat/${notice.conversationId}?at=${encodeURIComponent(notice.messageId)}`); }}>
       <span role="status"><strong>{notice.title}</strong><span><EmojiText text={notice.body} /></span></span>
     </button>
     <button className="live-inbox-close" type="button" aria-label="إخفاء الإشعار" onClick={() => dismiss(notice.key)}>×</button>

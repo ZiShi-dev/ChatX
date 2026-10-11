@@ -1,3 +1,4 @@
+import { returnFromNotificationChat } from '../lib/notificationNavigation';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { IonContent, IonFooter, IonHeader, IonIcon, IonPage } from '@ionic/react';
 import { arrowDown, bookmarkOutline, peopleOutline, searchOutline } from 'ionicons/icons';
@@ -819,6 +820,7 @@ export default function ChatPage() {
         <PageNav
           quiet
           fallback="/home"
+          onBack={() => returnFromNotificationChat(navigate)}
           title={
             conversation.type !== 'private' ? (
               <button ref={profileRef} type="button" className="chat-nav-main" aria-label="ملف المجموعة">

@@ -1,3 +1,4 @@
+import { openNotificationChat, returnFromNotificationChat } from './lib/notificationNavigation';
 import { installOfflineShell } from './lib/offlineShell';
 import { lazy, Suspense, useEffect, type ReactElement } from 'react';
 import { BrowserRouter, Navigate, Route, Routes, useNavigate } from 'react-router-dom';
@@ -58,11 +59,11 @@ function NativeChrome() {
     if (!Capacitor.isNativePlatform()) return;
     void StatusBar.setStyle({ style: Style.Light }).catch(() => undefined);
     void StatusBar.setBackgroundColor({ color: '#121a18' }).catch(() => undefined);
-    const opened = listenForChatNotificationOpens((conversationId) => navigate(`/chat/${conversationId}`));
+    const opened = listenForChatNotificationOpens((conversationId) => openNotificationChat(navigate, `/chat/${conversationId}`));
     const inboxOpen = Capacitor.isNativePlatform()
       ? InboxWatch.addListener('open', (event) => {
           if (!event.conversationId) return;
-          navigate(event.messageId ? `/chat/${event.conversationId}?at=${event.messageId}` : `/chat/${event.conversationId}`);
+          openNotificationChat(navigate, event.messageId ? `/chat/${event.conversationId}?at=${event.messageId}` : `/chat/${event.conversationId}`);
         })
       : Promise.resolve({ remove: async () => undefined });
     const leaveScreen = () => {
@@ -71,7 +72,7 @@ function NativeChrome() {
         void CapApp.exitApp();
         return;
       }
-      navigate(-1);
+      if (!returnFromNotificationChat(navigate)) navigate(-1);
     };
     const onHardwareBack = () => {
       if (closeTopOverlay()) return;
@@ -86,6 +87,7 @@ function NativeChrome() {
           void CapApp.exitApp();
           return;
         }
+        if (returnFromNotificationChat(navigate)) return;
         next();
       });
     };
