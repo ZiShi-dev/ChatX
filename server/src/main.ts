@@ -124,7 +124,9 @@ try {
   const localServer = createHttpServer(onRequest);
   configureHttpServer(localServer);
   const bindHost = process.env.CHATX_BIND === '0.0.0.0' ? '0.0.0.0' : '127.0.0.1';
-  localServer.listen(config.port, bindHost);
+  localServer.listen(config.port, bindHost, () => {
+    console.log(`api listening ${bindHost}:${config.port}`);
+  });
   const tlsServer = config.tlsCertPath && config.tlsKeyPath
     ? createHttpsServer({ cert: readFileSync(config.tlsCertPath), key: readFileSync(config.tlsKeyPath) }, onRequest)
     : null;

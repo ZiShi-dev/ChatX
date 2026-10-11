@@ -22,7 +22,7 @@ import { mergeRoomWindow } from '../lib/chatWindow';
 import { prepareMedia } from '../lib/mediaPreparation';
 import { fitChatImageFromSources, jpegDataUrl } from '../lib/chatImage';
 import { bytesToBase64, FILE_BYTES_MAX, localMediaBytes, VIDEO_BYTES_MAX } from '../lib/chatFile';
-import { MESSAGE_TEXT_MAX, outgoingFailureMessage, textTooLongMessage, fileTooLargeMessage, videoTooLargeMessage } from '../lib/messageLimits';
+import { MESSAGE_TEXT_MAX, SEND_CONNECTION_MESSAGE, outgoingFailureMessage, quietOutgoingError, textTooLongMessage, fileTooLargeMessage, videoTooLargeMessage } from '../lib/messageLimits';
 import { ORIGINAL_IMAGE_SIZE, ORIGINAL_VIDEO_SIZE, expectedImageSize, expectedVideoSize } from '../lib/media';
 import { isPrivateBetween } from '../lib/conversation';
 import { canEditRoom } from '../lib/roles';
@@ -586,7 +586,7 @@ async function prepareAndSend(message: Message) {
     if (owner !== useAuthStore.getState().currentUser.id) return;
     const current = useChatStore.getState().messages.find((item) => item.id === message.id);
     if (!current || current.status === 'sent' || error instanceof AdminApiError && error.code === 'cancelled') return;
-    const temporary = error instanceof AdminApiError && retryableStatus(error.status) && error.code !== 'account_changed';
+    const temporary = quietOutgoingError(error);
     const attempts = (current.sendAttempts ?? 0) + 1;
     const patch: Partial<Message> = { status: temporary && attempts < 5 ? 'pending' : 'failed', uploadProgress: undefined,
       retryable: temporary, sendAttempts: attempts, retryAt: temporary ? Date.now() + retryDelay(attempts, error instanceof AdminApiError ? error.retryAfter : 0) : undefined };
@@ -1405,8 +1405,10 @@ export const useChatStore = create<ChatState>((set, get) => ({
       });
       if (page?.aroundId) get().revealMessage(conversationId, page.aroundId);
       return true;
-    } catch {
-      if (owner === useAuthStore.getState().currentUser.id) set({ lastError: 'تعذر تحميل الرسائل. تحقق من الاتصال ثم أعد المحاولة.' });
+    } catch (error) {
+      if (owner === useAuthStore.getState().currentUser.id && useNetworkStore.getState().network !== 'offline' && !quietOutgoingError(error)) {
+        set({ lastError: 'تعذر تحميل الرسائل. تحقق من الاتصال ثم أعد المحاولة.' });
+      }
       return false;
     }
   },
@@ -1628,7 +1630,11 @@ useNetworkStore.subscribe((state, previous) => {
   if (state.network === previous.network) return;
   if (state.network !== 'offline') { readRetryAt = readServerRetryAt; void syncPendingReadWrites(); }
   if (state.network === 'offline') useChatStore.getState().pauseOutgoing();
-  else if (previous.network === 'offline') useChatStore.getState().flushOutgoing();
+  else if (previous.network === 'offline') {
+    const banner = useChatStore.getState().lastError;
+    if (banner === SEND_CONNECTION_MESSAGE || banner.startsWith('تعذر تحميل الرسائل')) useChatStore.setState({ lastError: '' });
+    useChatStore.getState().flushOutgoing();
+  }
   else outgoing.wake();
 });
 

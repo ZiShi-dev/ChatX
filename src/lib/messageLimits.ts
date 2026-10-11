@@ -2,6 +2,26 @@ import { FILE_BYTES_MAX, VIDEO_BYTES_MAX } from './chatFile';
 import { formatBytes } from './media';
 import type { Message } from '../types/message';
 import { AdminApiError } from './adminApi';
+import { retryableStatus } from './retry';
+
+export const SEND_CONNECTION_MESSAGE = 'تعذر تجهيز أو إرسال الرسالة. تحقق من الملف أو الاتصال ثم أعد المحاولة.';
+
+const PERMANENT_SEND = new Set(['file_too_large', 'invalid_image', 'unsupported_media', 'size']);
+
+/** A dropped session or network should wait and retry, without a red banner. */
+export function quietOutgoingError(error: unknown) {
+  if (error instanceof AdminApiError) {
+    if (error.code === 'invalid_upload') return false;
+    return error.code === 'offline'
+      || error.code === 'account_changed'
+      || error.code === 'no_identity'
+      || error.code === 'invalid_credentials'
+      || error.status === 0
+      || retryableStatus(error.status);
+  }
+  if (error instanceof Error) return !PERMANENT_SEND.has(error.message);
+  return true;
+}
 
 export const MESSAGE_TEXT_MAX = 4000;
 /** Avant compression côté appareil (sélection galerie). */
@@ -51,5 +71,5 @@ export function outgoingFailureMessage(error: unknown, message: Message) {
     if (message.type === 'image') return imageTooLargeMessage();
     return 'تعذر رفع المرفق. تحقق من الحجم والصيغة ثم أعد المحاولة.';
   }
-  return 'تعذر تجهيز أو إرسال الرسالة. تحقق من الملف أو الاتصال ثم أعد المحاولة.';
+  return SEND_CONNECTION_MESSAGE;
 }

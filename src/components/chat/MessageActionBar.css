@@ -25,6 +25,10 @@
   z-index: 2;
   align-self: start;
   width: 100%;
+  overflow: visible;
+}
+ion-header:has(.has-message-selection) {
+  overflow: visible;
 }
 .message-selection {
   position: relative;
@@ -65,7 +69,7 @@ ion-header:has(.network-toolbar) .message-selection {
 .message-selection-more {
   position: absolute;
   inset-inline-end: 8px;
-  top: 56px;
+  top: calc(100% + 8px);
   z-index: 6;
   min-width: 220px;
   max-height: min(60vh, 420px);
