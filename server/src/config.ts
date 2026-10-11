@@ -1,8 +1,12 @@
+import { dirname, isAbsolute, join, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
 export type AppConfig = {
   allowDevOrigins: boolean;
   trustProxy: boolean;
   corsOrigin: string | null;
   port: number;
+  releaseDir: string;
   tlsCertPath: string | null;
   tlsKeyPath: string | null;
   tlsPort: number;
@@ -16,6 +20,12 @@ export type AppConfig = {
 const AUTH_RATE_LIMIT = 5;
 const AUTH_RATE_WINDOW_MS = 10 * 60 * 1000;
 const AUTH_COOLDOWN_MS = 30 * 1000;
+
+function releaseDirectory(env: NodeJS.ProcessEnv) {
+  const configured = env.CHATX_RELEASE_DIR?.trim() ?? '';
+  if (!configured) return join(dirname(fileURLToPath(import.meta.url)), '..', '..', 'releases');
+  return isAbsolute(configured) ? configured : resolve(configured);
+}
 
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
   const databaseUrl = env.DATABASE_URL?.trim() ?? '';
@@ -36,6 +46,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     trustProxy: env.CHATX_TRUST_PROXY === 'true',
     corsOrigin,
     port: Number.isInteger(port) && port > 0 ? port : 8787,
+    releaseDir: releaseDirectory(env),
     tlsCertPath,
     tlsKeyPath,
     tlsPort: Number.isInteger(tlsPort) && tlsPort > 0 ? tlsPort : 8443,

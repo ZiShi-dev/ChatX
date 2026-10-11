@@ -1,6 +1,7 @@
 import { compressJson } from './compression.ts';
 import { createRequestBudget } from './requestBudget.ts';
 import { handleTransfer } from './transfer.ts';
+import { bundledUpdatePublicKey, readAppRelease } from './releases.ts';
 import { createHash } from 'node:crypto';
 import {
   acceptGoogle,
@@ -158,6 +159,7 @@ async function route(deps: Deps, request: Request) {
     return new Response(null, { status: 204, headers });
   }
   if (request.method === 'GET' && path === '/api/health') return json({ ok: true, groupTurnPolicy: 'weekly-v3-direct', networkPolicy: 'durable-delta-v1', securityPolicy:'bounded-api-v1', turnNotificationPolicy:'all-members-v1', notificationReadPolicy:'durable-v1' });
+  if (request.method === 'GET' && path === '/api/app/release') return json(readAppRelease(deps.config.releaseDir, bundledUpdatePublicKey()));
   const groupTurn = path.match(/^\/api\/rooms\/([0-9a-f-]{36})\/turn$/i);
   if (groupTurn && request.method === 'GET') {
     const result = await readGroupTurn(deps, readCookie(request.headers.get('cookie'), 'chatx_session'), groupTurn[1]!);

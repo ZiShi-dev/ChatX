@@ -10,6 +10,8 @@
     "test.e2e": "cypress run",
     "test": "vitest run && npm test --prefix server",
     "server": "npm start --prefix server",
+    "release:web": "npm run build && node scripts/publish-release.mjs web",
+    "release:apk": "node scripts/publish-release.mjs apk",
     "test.unit": "vitest",
     "lint": "eslint"
   },
@@ -24,6 +26,7 @@
     "@capacitor/push-notifications": "^8.0.2",
     "@capacitor/status-bar": "8.0.4",
     "@capawesome/capacitor-file-picker": "^8.1.0",
+    "@capawesome/capacitor-live-update": "^8.6.0",
     "@ionic/react": "^9.0.0",
     "ionicons": "^8.1.0",
     "react": "19.0.0",

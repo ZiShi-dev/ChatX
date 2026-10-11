@@ -1,0 +1,2 @@
+/** RSA public key baked into the app. The private key stays in server/certs and is never shipped. */
+export const UPDATE_PUBLIC_KEY = '-----BEGIN PUBLIC KEY-----MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAjKEU1Gnw1Pvj9/XSCRjNU8ZZvxp+dqVV5SiJh5/Fx2C2GUNSYK7G/S/7S6aiFCKH5lBUaEChhfOWRkA9aNquze6wn287vsXqEZK8Q/WjEhytt9zFOmQpp5Sm6nutjNEvENxChPiCcKrJVjmhoIfQTQTnyQGUxKXKzfPlg2L/3tKanlfYuReiWPmFaCdMvBo8NLoIa+kpz2iYDfTGYqfpDzpLuwOg3s0COGotC0La20MZeUUqVAcadu9BSQOrcr1lCea74JVFCFroPBHwtj3udQcWQc2p9Nw6mEyoJqMiKD05a+GZMnk2YB+RnJRj7jWrALMrjjV/edCrAUC6fs189wIDAQAB-----END PUBLIC KEY-----';

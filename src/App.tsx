@@ -27,6 +27,7 @@ const PeopleAdminPage = lazy(() => import('./pages/PeopleAdminPage'));
 import { useInboxAlerts } from './hooks/useInboxAlerts';
 import { closeTopOverlay } from './lib/overlayBack';
 import LiveInboxBanner from './components/common/LiveInboxBanner';
+import AppReleasePrompt from './components/common/AppReleasePrompt';
 import { usePresenceSync } from './hooks/usePresenceSync';
 import { InboxWatch } from './lib/inboxWatch';
 import { listenForChatNotificationOpens } from './lib/notifications';
@@ -112,6 +113,7 @@ function AppRoutes() {
     <BrowserRouter>
       <NativeChrome />
       <LiveInboxBanner />
+      <AppReleasePrompt />
       <NotificationPermissionDialog />
       <KeyGate>
         <IonRouterOutlet>

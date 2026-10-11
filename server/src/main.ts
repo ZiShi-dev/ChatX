@@ -9,6 +9,7 @@ import { configureHttpServer, proxyClientAddress } from './transportSecurity.ts'
 import { clientRequestHeaders } from './requestHeaders.ts';
 import { migrate } from './migrate.ts';
 import { createPool, createPostgresRepository } from './postgres.ts';
+import { tryServeRelease } from './releases.ts';
 import { loadThrottle, saveThrottle } from './throttle.ts';
 
 function safeMessage(error: unknown) {
@@ -80,6 +81,7 @@ try {
   });
   const onRequest = async (req: IncomingMessage, res: ServerResponse) => {
     try {
+      if (tryServeRelease(config.releaseDir, req.url, req.method, res)) return;
       const body = await readBody(req);
       if (!body) {
         const headers = new Headers();securityHeaders(headers);headers.set('cache-control','no-store');headers.set('content-type','application/json');

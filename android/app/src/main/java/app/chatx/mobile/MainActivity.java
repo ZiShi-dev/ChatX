@@ -62,6 +62,7 @@ public class MainActivity extends BridgeActivity {
     public void onCreate(Bundle savedInstanceState) {
         registerPlugin(StorageAccessPlugin.class);
         registerPlugin(InboxWatchPlugin.class);
+        registerPlugin(AppReleasePlugin.class);
         super.onCreate(savedInstanceState);
         getBridge().getWebView().getSettings().setAllowFileAccess(false);
         getBridge().getWebView().getSettings().setAllowContentAccess(false);
