@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { IonContent, IonHeader, IonPage } from '@ionic/react';
 import { useSearchParams } from 'react-router-dom';
 import NetworkStatusBanner from '../components/common/NetworkBanner';
@@ -55,6 +55,26 @@ export default function AccountPage() {
     if (next === tab) return;
     setParams(next === 'profile' ? {} : { tab: next }, { replace: true });
   };
+
+  useLayoutEffect(() => {
+    const content = contentRef.current;
+    if (!content) return;
+    let alive = true;
+    const apply = () => {
+      if (!alive) return;
+      const inner = content.shadowRoot?.querySelector('.inner-scroll');
+      if (inner instanceof HTMLElement) inner.scrollTop = 0;
+      void content.getScrollElement().then((scroller) => {
+        if (alive) scroller.scrollTop = 0;
+      });
+    };
+    apply();
+    const frame = window.requestAnimationFrame(apply);
+    return () => {
+      alive = false;
+      window.cancelAnimationFrame(frame);
+    };
+  }, [tab]);
 
   return (
     <IonPage>

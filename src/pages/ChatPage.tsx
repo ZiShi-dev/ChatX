@@ -660,8 +660,8 @@ export default function ChatPage() {
       const roomId = (event as CustomEvent<{ conversationId?: string }>).detail?.conversationId;
       if (roomId !== id) return;
       const scroller = scrollerRef.current;
-      stickRef.current = true;
-      if (scroller) stickThread(scroller, stickRef);
+      if (!scroller || !stickRef.current) return;
+      stickThread(scroller, stickRef);
     };
     window.addEventListener('chatx-thread-layout', onLayout);
     return () => window.removeEventListener('chatx-thread-layout', onLayout);
@@ -866,7 +866,7 @@ export default function ChatPage() {
           title={
             conversation.type !== 'private' ? (
               <button ref={profileRef} type="button" className="chat-nav-main" aria-label="ملف المجموعة">
-                <Avatar name={conversation.name ?? 'مجموعة'} color="#3d9b84" size={32} src={conversation.avatarUrl} />
+                <Avatar name={conversation.name ?? 'مجموعة'} color="#3d9b84" size={44} src={conversation.avatarUrl} />
                 <GroupHeader
                   title={conversation.name ?? 'مجموعة'}
                   subtitle={groupSubtitle}
@@ -875,17 +875,17 @@ export default function ChatPage() {
               </button>
             ) : conversation.self ? (
               <button type="button" className="chat-nav-main" aria-label="ملف المحادثة" onClick={openConversationProfile}>
-                <Avatar name={currentUser.displayName} color={currentUser.color} size={32} src={currentUser.avatarUrl} decoration={currentUser.avatarDecoration} />
+                <Avatar name={currentUser.displayName} color={currentUser.color} size={44} src={currentUser.avatarUrl} decoration={currentUser.avatarDecoration} />
                 <GroupHeader title={currentUser.displayName} subtitle="رسائلك" online={false} />
               </button>
             ) : peerGone ? (
               <div className="chat-nav-main">
-                <Avatar name="حساب محذوف" color="#8ea099" size={32} />
+                <Avatar name="حساب محذوف" color="#8ea099" size={44} />
                 <GroupHeader title="حساب محذوف" subtitle="تم حذف هذا الحساب" online={false} />
               </div>
             ) : other ? (
               <button type="button" className="chat-nav-main" aria-label={`ملف ${other.displayName}`} onClick={openConversationProfile}>
-                <Avatar name={other.displayName} color={other.color} size={32} src={other.avatarUrl} decoration={other.avatarDecoration} />
+                <Avatar name={other.displayName} color={other.color} size={44} src={other.avatarUrl} decoration={other.avatarDecoration} />
                 <GroupHeader
                   title={other.displayName}
                   subtitle={privateSubtitle}

@@ -1478,7 +1478,7 @@ ion-header:has(.chat-bar) ion-toolbar.chat-bar {
 }
 
 .page-toolbar.chat-bar {
-  --min-height: 48px;
+  --min-height: 58px;
   --background: transparent;
   --border-width: 0;
   --box-shadow: none;
@@ -1698,6 +1698,40 @@ ion-content.chat-scroll::part(scroll) {
   max-width: min(82%, 300px);
   overflow-anchor: none;
   touch-action: pan-y;
+}
+
+.bubble-stack.is-media {
+  width: min(100%, 540px);
+  max-width: min(100%, 540px);
+}
+
+.bubble-stack.is-media .swipe-shift,
+.bubble-stack.is-media .bubble-row {
+  width: 100%;
+}
+
+.bubble-stack.is-media .swipe-shift {
+  align-items: stretch;
+}
+
+.bubble-stack.is-media .bubble-row {
+  position: relative;
+}
+
+.bubble-stack.is-media.theirs .bubble-person {
+  position: absolute;
+  z-index: 3;
+  inset-inline-start: 8px;
+  top: 8px;
+}
+
+.bubble-stack.is-media .bubble.has-media {
+  width: 100%;
+  max-width: 100%;
+}
+
+.bubble-stack.is-media .bubble.has-media .bubble-author {
+  inset-inline-start: 62px;
 }
 
 .swipe-shift {
@@ -4642,7 +4676,7 @@ ion-toolbar.network-toolbar.setup {
 
 .bubble.has-media {
   position: relative;
-  width: min(268px, 74vw);
+  width: min(540px, calc(100vw - 40px));
   padding: 3px;
   overflow: visible;
 }
@@ -5901,6 +5935,31 @@ ion-toolbar.network-toolbar.setup {
   margin: 0 0 10px;
   color: var(--chatx-muted);
   font-size: 13px;
+  line-height: 1.55;
+}
+
+.owner-system-clock {
+  margin: 0 0 12px;
+}
+
+.owner-system-clock-label,
+.owner-system-clock-when {
+  margin: 0;
+  color: var(--chatx-muted);
+  font-size: 13px;
+  text-align: center;
+}
+
+.owner-system-timer {
+  display: block;
+  margin: 4px 0;
+  color: var(--chatx-text);
+  font-size: 32px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.04em;
+  line-height: 1.2;
+  text-align: center;
 }
 
 .owner-system-refresh {

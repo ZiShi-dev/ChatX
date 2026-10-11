@@ -25,6 +25,8 @@ export type OwnerSystemStatus = {
     lastExpiredImages: number;
     lastExpiredFiles: number;
     lastOrphans: number;
+    nextPurgeAt: string | null;
+    purgeIntervalMs: number;
   };
 };
 

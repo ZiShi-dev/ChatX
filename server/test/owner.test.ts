@@ -70,6 +70,8 @@ describe('owner tools', () => {
         lastExpiredImages: 1,
         lastExpiredFiles: 0,
         lastOrphans: 0,
+        nextPurgeAt: '2026-10-09T12:00:00.000Z',
+        purgeIntervalMs: 86_400_000,
       },
     });
     const operator = person(operatorId, 'إبراهيم', ERASE_OPERATOR_EMAIL, 'google-operator');

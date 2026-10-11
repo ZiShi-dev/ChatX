@@ -6,10 +6,17 @@ export type MediaKind = 'image' | 'file';
 
 const MESSAGE_ID = /^[0-9a-f-]{36}$/i;
 const DAY_MS = 24 * 60 * 60 * 1000;
+/** The disk sweep runs on this cadence. Retention decides which files are old enough. */
+export const MEDIA_PURGE_INTERVAL_MS = DAY_MS;
 
 export function mediaRetentionMs(env: NodeJS.ProcessEnv = process.env) {
   const raw = Number(env.CHATX_MEDIA_RETENTION_MS ?? String(DAY_MS));
   return Number.isInteger(raw) && raw >= 60_000 ? raw : DAY_MS;
+}
+
+/** Images, ordinary files and videos share one clock: stored_at must be strictly older than the retention window. */
+export function isDiskMediaExpired(storedAtMs: number, nowMs: number, retentionMs: number) {
+  return storedAtMs < nowMs - retentionMs;
 }
 
 export function createMediaStore(root: string) {
@@ -103,6 +110,7 @@ export type MediaOpsStatus = {
   lastExpiredImages: number;
   lastExpiredFiles: number;
   lastOrphans: number;
+  nextRunAt: string | null;
 };
 
 let mediaOps: MediaOpsStatus = {
@@ -111,12 +119,14 @@ let mediaOps: MediaOpsStatus = {
   lastExpiredImages: 0,
   lastExpiredFiles: 0,
   lastOrphans: 0,
+  nextRunAt: null,
 };
 
 export function readMediaOpsStatus(): MediaOpsStatus {
   return mediaOps;
 }
 
+/** Videos live in message_files (name video.bin or a video extension) and leave with the other files. */
 export async function purgeExpiredMedia(pool: pg.Pool, store: MediaStore, before: Date) {
   let images = 0;
   let files = 0;
@@ -184,6 +194,8 @@ export type OwnerMediaStatus = {
   lastExpiredImages: number;
   lastExpiredFiles: number;
   lastOrphans: number;
+  nextPurgeAt: string | null;
+  purgeIntervalMs: number;
 };
 
 export async function collectOwnerMediaStatus(pool: pg.Pool, store: MediaStore, retentionMs: number): Promise<OwnerMediaStatus> {
@@ -212,10 +224,13 @@ export async function collectOwnerMediaStatus(pool: pg.Pool, store: MediaStore, 
     lastExpiredImages: ops.lastExpiredImages,
     lastExpiredFiles: ops.lastExpiredFiles,
     lastOrphans: ops.lastOrphans,
+    nextPurgeAt: ops.nextRunAt,
+    purgeIntervalMs: MEDIA_PURGE_INTERVAL_MS,
   };
 }
 
 export function startMediaPurgeScheduler(pool: pg.Pool, store: MediaStore, retentionMs: number, log: (message: string) => void = () => undefined) {
+  let timer: ReturnType<typeof setTimeout> | undefined;
   const tick = async () => {
     try {
       const before = new Date(Date.now() - retentionMs);
@@ -227,6 +242,7 @@ export function startMediaPurgeScheduler(pool: pg.Pool, store: MediaStore, reten
         lastExpiredImages: expired.images,
         lastExpiredFiles: expired.files,
         lastOrphans: orphans,
+        nextRunAt: mediaOps.nextRunAt,
       };
       log('media purge complete');
     } catch (error) {
@@ -238,8 +254,12 @@ export function startMediaPurgeScheduler(pool: pg.Pool, store: MediaStore, reten
       throw error;
     }
   };
-  void tick().catch((error) => log(error instanceof Error ? error.message : 'media purge failed'));
-  return setInterval(() => {
-    void tick().catch((error) => log(error instanceof Error ? error.message : 'media purge failed'));
-  }, DAY_MS);
+  const arm = () => {
+    mediaOps = { ...mediaOps, nextRunAt: new Date(Date.now() + MEDIA_PURGE_INTERVAL_MS).toISOString() };
+    timer = setTimeout(() => {
+      void tick().catch((error) => log(error instanceof Error ? error.message : 'media purge failed')).finally(arm);
+    }, MEDIA_PURGE_INTERVAL_MS);
+  };
+  void tick().catch((error) => log(error instanceof Error ? error.message : 'media purge failed')).finally(arm);
+  return () => { if (timer) clearTimeout(timer); };
 }

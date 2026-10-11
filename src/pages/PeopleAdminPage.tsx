@@ -12,6 +12,7 @@ import { useDataSaver } from '../hooks/useDataSaver';
 import { AdminApiError, adminFetch } from '../lib/adminApi';
 import { readDirectoryUsers } from '../lib/directory';
 import { formatBytes } from '../lib/media';
+import { formatPurgeCountdown, nextMediaPurgeAt } from '../lib/mediaRetention';
 import { roleLabel } from '../lib/roles';
 import { useChatStore } from '../stores/chatStore';
 import { useUserStore } from '../stores/userStore';
@@ -34,6 +35,8 @@ type OwnerSystemMedia = {
   lastExpiredImages: number;
   lastExpiredFiles: number;
   lastOrphans: number;
+  nextPurgeAt?: string | null;
+  purgeIntervalMs?: number;
 };
 
 type ChoiceKey = 'messages' | 'images' | 'files' | 'reactions' | 'privateChats' | 'profile' | 'membership' | 'account';
@@ -63,6 +66,37 @@ const GROUP_OPTIONS = GROUP_CHOICES.map((item) => ({ key: item.key, label: item.
 const GROUP_COLOR = '#3d9b84';
 
 const GROUP_ID = /^[0-9a-f-]{36}$/i;
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+function MediaPurgeClock({ system }: { system: OwnerSystemMedia }) {
+  const hours = Math.max(1, Math.round(system.mediaRetentionMs / 3_600_000));
+  const intervalMs = system.purgeIntervalMs && system.purgeIntervalMs > 0 ? system.purgeIntervalMs : DAY_MS;
+  const intervalHours = Math.max(1, Math.round(intervalMs / 3_600_000));
+  const nextAt = nextMediaPurgeAt(system.lastPurgeAt, system.nextPurgeAt ?? null, intervalMs);
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    if (nextAt == null) return;
+    const timer = window.setInterval(() => setNow(Date.now()), 1000);
+    return () => window.clearInterval(timer);
+  }, [nextAt]);
+  const remaining = nextAt == null ? null : Math.max(0, nextAt - now);
+  return (
+    <div className="owner-system-clock">
+      <p className="owner-system-hint">
+        تُحفظ الصور والملفات والفيديو على القرص <span dir="ltr">{hours}</span> ساعة من وقت حفظها. يحذفها الفحص التالي بعد هذه المدة. يعمل الفحص كل <span dir="ltr">{intervalHours}</span> ساعة، لذلك قد يبقى ملف حتى الفحص الذي يلي بلوغه المهلة.
+      </p>
+      {remaining == null ? (
+        <p className="owner-system-hint">يبدأ المؤقت بعد أول فحص للخادم.</p>
+      ) : (
+        <>
+          <p className="owner-system-clock-label">الوقت حتى الفحص التالي</p>
+          <time className="owner-system-timer" dir="ltr" dateTime={new Date(nextAt!).toISOString()}>{formatPurgeCountdown(remaining)}</time>
+          <p className="owner-system-clock-when" dir="ltr">{new Date(nextAt!).toLocaleString('ar')}</p>
+        </>
+      )}
+    </div>
+  );
+}
 
 function readGroups(payload: unknown): OwnerGroup[] {
   if (!payload || typeof payload !== 'object' || !Array.isArray((payload as { groups?: unknown }).groups)) return [];
@@ -434,23 +468,23 @@ export default function PeopleAdminPage() {
             <p className="settings-lead">اختر ما تريد حذفه لكل حساب أو مجموعة. محادثة ChatX الرئيسية تبقى.</p>
             {done ? <p className="owner-done" role="status">{done}</p> : null}
             <section className="owner-system" aria-labelledby="owner-system-title">
-              <h2 id="owner-system-title">حالة الخادم</h2>
+              <h2 id="owner-system-title">حذف الوسائط من القرص</h2>
               {systemError ? <p className="owner-system-alert" role="alert">{systemError}</p> : null}
               {system?.lastPurgeError ? <p className="owner-system-alert" role="alert">آخر تنظيف للوسائط فشل: {system.lastPurgeError}</p> : null}
               {system && (system.legacyImageRows > 0 || system.legacyFileRows > 0) ? (
                 <p className="owner-system-alert" role="alert">ما زالت هناك وسائط قديمة داخل قاعدة البيانات. أعد تشغيل الخادم لإكمال النقل إلى القرص.</p>
               ) : null}
+              {system ? <MediaPurgeClock system={system} /> : !systemError ? <p className="owner-system-hint">جارٍ قراءة حالة الوسائط…</p> : null}
               {system ? (
                 <ul className="owner-system-list">
-                  <li>الاحتفاظ على القرص: <span dir="ltr">{Math.round(system.mediaRetentionMs / 3_600_000)}</span> ساعة</li>
-                  <li>على القرص: <span dir="ltr">{system.diskImageFiles + system.diskFileFiles}</span> ملف · {formatBytes(system.diskBytes)}</li>
-                  <li>في قاعدة البيانات: <span dir="ltr">{system.metadataImages}</span> صورة · <span dir="ltr">{system.metadataFiles}</span> ملف</li>
-                  <li>آخر تنظيف: {system.lastPurgeAt ? new Date(system.lastPurgeAt).toLocaleString('ar') : 'لم يُنفَّذ بعد'}</li>
+                  <li>على القرص الآن: <span dir="ltr">{system.diskImageFiles}</span> صورة · <span dir="ltr">{system.diskFileFiles}</span> ملف أو فيديو · {formatBytes(system.diskBytes)}</li>
+                  <li>في قاعدة البيانات: <span dir="ltr">{system.metadataImages}</span> صورة · <span dir="ltr">{system.metadataFiles}</span> ملف أو فيديو</li>
+                  <li>آخر فحص: {system.lastPurgeAt ? new Date(system.lastPurgeAt).toLocaleString('ar') : 'لم يُنفَّذ بعد'}</li>
                   {system.lastPurgeAt ? (
-                    <li>آخر حذف: <span dir="ltr">{system.lastExpiredImages}</span> صورة · <span dir="ltr">{system.lastExpiredFiles}</span> ملف · <span dir="ltr">{system.lastOrphans}</span> ملف يتيم</li>
+                    <li>آخر حذف: <span dir="ltr">{system.lastExpiredImages}</span> صورة · <span dir="ltr">{system.lastExpiredFiles}</span> ملف أو فيديو · <span dir="ltr">{system.lastOrphans}</span> ملف بلا سجل</li>
                   ) : null}
                 </ul>
-              ) : !systemError ? <p className="owner-system-hint">جارٍ قراءة حالة الوسائط…</p> : null}
+              ) : null}
               <button type="button" className="owner-system-refresh" onClick={refreshSystem}>تحديث الحالة</button>
             </section>
             <h2>الأعضاء <span>{users.length}</span></h2>

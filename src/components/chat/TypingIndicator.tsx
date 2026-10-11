@@ -20,7 +20,7 @@ export default function TypingIndicator({ names, typists }: TypingIndicatorProps
         <Avatar
           name={solo.displayName}
           color={solo.color}
-          size={34}
+          size={44}
           src={solo.avatarUrl}
           decoration={solo.avatarDecoration}
         />

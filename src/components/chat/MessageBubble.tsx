@@ -329,7 +329,7 @@ function ReplyQuote({ messageId }: { messageId: string }) {
 }
 
 function PersonButton({ user, onOpen }: { user: User; onOpen?: (user: User) => void }) {
-  const avatar = <Avatar name={user.displayName} color={user.color} size={32} src={user.avatarUrl} decoration={user.avatarDecoration} />;
+  const avatar = <Avatar name={user.displayName} color={user.color} size={48} src={user.avatarUrl} decoration={user.avatarDecoration} />;
   if (!onOpen) return avatar;
   return (
     <button
@@ -690,7 +690,7 @@ function MessageBubble({ message, mine, showAuthor, group = false, direct = fals
     <div
       ref={stackRef}
       id={`msg-${message.id}`}
-      className={`bubble-stack ${mine ? 'mine' : 'theirs'}${menuOpen ? ' is-picked' : ''}${direct && canSeeReceipts ? ' is-receipt' : ''}${spotlight ? ' is-target' : ''}${reactionTotal > 0 ? ' has-reactions' : ''}${bornSending.current ? ' is-new' : ''}`}
+      className={`bubble-stack ${mine ? 'mine' : 'theirs'}${message.type === 'image' || message.type === 'video' ? ' is-media' : ''}${menuOpen ? ' is-picked' : ''}${direct && canSeeReceipts ? ' is-receipt' : ''}${spotlight ? ' is-target' : ''}${reactionTotal > 0 ? ' has-reactions' : ''}${bornSending.current ? ' is-new' : ''}`}
       onContextMenu={(event) => {
         if (!canOpenMenu) return;
         event.preventDefault();

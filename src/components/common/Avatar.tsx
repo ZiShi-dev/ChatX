@@ -26,7 +26,7 @@ export default function Avatar({ name, color, size = 44, slot, src, decoration, 
     <span
       slot={kind === 'none' ? slot : undefined}
       className="avatar"
-      style={{ width: faceSize, height: faceSize, background: src ? '#24312c' : color, fontSize: size <= 18 ? 8 : size < 36 ? 12 : 15 }}
+      style={{ width: faceSize, height: faceSize, background: src ? '#24312c' : color, fontSize: size <= 18 ? 8 : size < 36 ? 12 : size >= 48 ? 18 : 15 }}
       aria-hidden="true"
     >
       {src ? <img src={src} alt="" loading="lazy" decoding="async" /> : initials(name)}
