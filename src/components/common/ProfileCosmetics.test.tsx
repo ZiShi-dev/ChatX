@@ -40,3 +40,16 @@ it('pauses animations when the page is hidden and removes its listener on unmoun
   unmount();
   expect(remove).toHaveBeenCalledWith('visibilitychange', expect.any(Function));
 });
+
+it('reserves a square decoration slot and keeps tiny avatars unobstructed', () => {
+  const { container, rerender } = render(<Avatar name="User" color="#3d9b84" size={36} decoration="dragon" />);
+  const frame = container.querySelector<HTMLElement>('.avatar-frame')!;
+  expect(frame.style.width).toBe('36px');
+  expect(frame.style.height).toBe('36px');
+  expect(frame.style.minWidth).toBe('36px');
+  expect(container.querySelector('.dragon-artwork')).not.toBeNull();
+  expect(container.querySelector('.is-animated')).toBeNull();
+  rerender(<Avatar name="User" color="#3d9b84" size={18} decoration="dragon" />);
+  expect(container.querySelector('.avatar-frame')).toBeNull();
+  expect(container.querySelector<HTMLElement>('.avatar')!.style.width).toBe('18px');
+});

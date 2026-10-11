@@ -1,11 +1,23 @@
-.avatar-frame { position:relative; display:inline-flex; flex-shrink:0; vertical-align:middle; overflow:visible; }
-.avatar-frame::after { content:''; position:absolute; inset:-4px; border-radius:50%; pointer-events:none; border:2px solid var(--cosmetic-color); }
-.decoration-orbit::after { border-style:dashed; outline:1px solid var(--cosmetic-color); outline-offset:3px; }
-.decoration-laurel::after { border:4px double #cba759; border-left-color:var(--cosmetic-color); border-right-color:var(--cosmetic-color); }
-.decoration-prism::after { border-radius:30%; transform:rotate(45deg); border:3px solid var(--cosmetic-color); }
-.decoration-hat::after { inset:auto; width:140%; height:55%; left:-20%; top:-25%; border:0; border-radius:0; background:repeating-linear-gradient(78deg,transparent 0 8px,rgba(102,66,20,.18) 8px 9px),linear-gradient(135deg,#f3dca0,#c69843); clip-path:polygon(50% 0,100% 80%,88% 94%,50% 100%,12% 94%,0 80%); transform-origin:50% 85%; }
-.decoration-hat.is-animated::after { animation:profile-hat 4s ease-in-out infinite; }
-@keyframes profile-hat { 25% { transform:rotate(-4deg) translateY(-2px); } 75% { transform:rotate(4deg) translateY(-2px); } }
+.avatar-frame { position:relative; display:inline-flex; align-items:center; justify-content:center; flex:none; aspect-ratio:1; vertical-align:middle; overflow:visible; isolation:isolate; }
+.avatar-frame > .avatar { flex:none; aspect-ratio:1; box-shadow:none !important; }
+.avatar-frame::after { content:''; position:absolute; inset:2%; border-radius:50%; pointer-events:none; border:clamp(1px,.035em,3px) solid var(--cosmetic-color); }
+.decoration-orbit::after { border:2px dashed var(--cosmetic-color); }
+.decoration-laurel::after { border:3px double #d1af67; border-left-color:var(--cosmetic-color); border-right-color:var(--cosmetic-color); }
+.decoration-prism::after { border-radius:34%; transform:rotate(45deg); border:2px solid var(--cosmetic-color); inset:16%; }
+.decoration-hat { align-items:flex-end; }
+.decoration-hat::after, .decoration-dragon::after { display:none; }
+.avatar-artwork { position:absolute; inset:0; width:100%; height:100%; pointer-events:none; overflow:hidden; z-index:1; }
+.hat-crown { transform:scaleY(.72); transform-origin:60px 0; }
+.decoration-hat.is-animated .hat-artwork { animation:profile-hat 5s ease-in-out infinite; transform-origin:50% 25%; }
+.decoration-dragon.is-animated .dragon-artwork { animation:profile-dragon 7s ease-in-out infinite; }
+.decoration-dragon.is-animated .dragon-spark { animation:profile-ember 2.8s ease-in-out infinite; transform-origin:114px 55px; }
+.decoration-orbit.is-animated::after { animation:profile-orbit 24s linear infinite; }
+.decoration-prism.is-animated::after { animation:profile-prism 6s ease-in-out infinite; }
+@keyframes profile-hat { 25% { transform:rotate(-3deg) translateY(-1%); } 75% { transform:rotate(3deg) translateY(-1%); } }
+@keyframes profile-dragon { 30% { transform:rotate(-2deg); } 70% { transform:rotate(2deg); } }
+@keyframes profile-ember { 50% { opacity:.35; transform:translateY(-3px) scale(.8); } }
+@keyframes profile-orbit { to { transform:rotate(360deg); } }
+@keyframes profile-prism { 50% { transform:rotate(6deg); opacity:.7; } }
 .profile-hero, .member-sheet, .cosmetic-preview { position:relative; isolation:isolate; }
 .profile-effect { position:absolute; inset:0; border-radius:inherit; overflow:hidden; pointer-events:none; z-index:-1; }
 .profile-effect i { position:absolute; display:block; }
@@ -22,12 +34,43 @@
 .effect-stars.is-animated i { animation:profile-star 5s ease-in-out infinite alternate; }
 .effect-stars i:nth-child(2n) { animation-delay:-2s; }
 .effect-stars i:nth-child(3n) { animation-delay:-4s; }
+.effect-meteors i { height:2px; width:48px; background:linear-gradient(90deg,transparent,var(--cosmetic-color)); transform:rotate(-35deg); opacity:.35; top:18%; left:10%; }
+.effect-meteors i:nth-child(2) { top:65%; left:76%; }
+.effect-meteors i:nth-child(3) { top:85%; left:18%; }
+.effect-meteors i:nth-child(n+4) { display:none; }
+.effect-meteors.is-animated i { animation:profile-meteor 7s ease-in-out infinite; }
+.effect-meteors.is-animated i:nth-child(2) { animation-delay:-3s; }
+.effect-meteors.is-animated i:nth-child(3) { animation-delay:-5s; }
 @keyframes profile-aurora { to { transform:translate(12%,18%); opacity:.25; } }
 @keyframes profile-star { to { opacity:.75; transform:translateY(-8px) scale(1.3); } }
-.cosmetic-preview { padding:20px; border:1px solid var(--line,#304039); border-radius:18px; display:flex; align-items:center; gap:20px; overflow:hidden; min-height:108px; }
-.cosmetic-options { display:flex; flex-wrap:wrap; gap:8px; margin:12px 0; }
-.cosmetic-options button { padding:10px 14px; min-height:44px; border-radius:12px; border:1px solid var(--line,#304039); background:transparent; color:inherit; }
-.cosmetic-options button.is-on { border-color:var(--cosmetic-color,#3d9b84); background:rgba(61,155,132,.12); }
-.profile-editor { max-height:calc(100vh - 24px); max-height:calc(100dvh - 24px); overflow-y:auto; overscroll-behavior:contain; }
+@keyframes profile-meteor { 0%,65%,100% { opacity:0; transform:translate(0,0) rotate(-35deg); } 15% { opacity:.6; } 45% { opacity:0; transform:translate(45px,-30px) rotate(-35deg); } }
+.cosmetic-preview { padding:16px; border:1px solid var(--chatx-frame); border-radius:18px; display:flex; align-items:center; gap:20px; overflow:hidden; min-height:112px; background:var(--chatx-raised); }
+.cosmetic-preview strong { min-width:0; overflow-wrap:anywhere; font-size:20px; }
+.cosmetic-options { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px; margin:12px 0; }
+.cosmetic-options button { padding:12px; min-height:48px; border-radius:12px; border:1px solid var(--chatx-frame); background:transparent; color:inherit; }
+.cosmetic-options button.is-on { border-color:var(--chatx-accent); background:var(--chatx-soft); box-shadow:inset 0 0 0 1px var(--chatx-accent); }
+.profile-pop.profile-editor { display:flex; flex-direction:column; width:min(680px,100%); max-height:calc(100vh - 24px); max-height:calc(100dvh - 24px); padding:0; overflow:hidden; overscroll-behavior:contain; }
+.profile-editor-header { padding:12px 20px 14px; flex:none; }
+.profile-editor-header h2 { margin:4px 0 12px; font-size:20px; }
+.profile-editor-tabs { display:flex; padding:0 16px 12px; gap:6px; flex:none; border-bottom:1px solid var(--chatx-frame); }
+.profile-editor-tabs button { flex:1; min-width:0; min-height:44px; padding:8px 6px; border:1px solid transparent; border-radius:10px; background:transparent; color:var(--chatx-muted); font:inherit; font-size:12px; }
+.profile-editor-tabs button[aria-selected='true'] { color:var(--chatx-text); background:var(--chatx-soft); border-color:var(--chatx-accent); }
+.profile-editor-tabs button:focus-visible { outline:2px solid var(--chatx-accent); outline-offset:2px; }
+.profile-editor-fields { min-height:0; overflow-y:auto; overscroll-behavior:contain; padding:0 16px; flex:1; }
+.profile-editor-fields .profile-editor-section { margin:16px 0; }
+.profile-editor-fields [hidden] { display:none; }
+.profile-editor .profile-editor-footer { position:static; flex:none; padding:12px 20px max(12px,env(safe-area-inset-bottom)); margin:0; border-top:1px solid var(--chatx-frame); background:var(--chatx-surface); }
 .profile-pop .user-card-banner + .avatar-frame { margin-top:-36px; position:relative; }
-@media (prefers-reduced-motion:reduce) { .profile-effect.is-animated i, .decoration-hat.is-animated::after { animation:none; } }
+@media (min-width:760px) { .profile-editor-tabs button { font-size:14px; } .profile-editor-fields { max-height:48vh; } }
+@media (max-height:550px) { .profile-editor-header { padding-top:4px; } .profile-editor-header h2 { margin:0 0 4px; font-size:16px; } .profile-editor-header .cosmetic-preview { min-height:72px; padding:8px 12px; } .profile-editor-header .avatar-frame, .profile-editor-header .avatar { transform:scale(.8); margin:-8px; } }
+@media (prefers-reduced-motion:reduce) { .profile-effect.is-animated i, .avatar-frame.is-animated::after, .avatar-frame.is-animated .avatar-artwork, .avatar-frame.is-animated .dragon-spark { animation:none; } }
+
+.cosmetic-options[aria-label="زينة الصورة"] button { display:flex; flex-direction:column; align-items:center; justify-content:center; gap:10px; min-height:100px; }
+
+.profile-editor-header, .profile-editor-tabs, .profile-editor-fields, .profile-editor .profile-editor-footer { width:100%; box-sizing:border-box; }
+
+.app-scrim.profile-editor-scrim { justify-content:center; }
+@media (min-width:760px) { .app-scrim.profile-editor-scrim { align-items:center; padding:12px; } .profile-pop.profile-editor { border-radius:22px; } }
+
+.decoration-prism::after { display:none; }
+.decoration-prism.is-animated .prism-artwork { animation:profile-prism 6s ease-in-out infinite; }

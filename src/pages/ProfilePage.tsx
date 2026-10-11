@@ -37,6 +37,9 @@ export default function ProfilePage({ embedded = false, onShowSettings, scrollHo
   const photoRef = useRef<HTMLInputElement>(null);
   const bannerRef = useRef<HTMLInputElement>(null);
   const [editing, setEditing] = useState(false);
+  const [editorTab, setEditorTab] = useState<'details' | 'name' | 'effects'>('details');
+  const editorFields = useRef<HTMLDivElement>(null);
+  const editorDialog = useRef<HTMLDivElement>(null);
   const [confirmLeave, setConfirmLeave] = useState(false);
   const [bannerPreview, setBannerPreview] = useState('');
   const [displayName, setDisplayName] = useState(currentUser.displayName);
@@ -57,6 +60,22 @@ export default function ProfilePage({ embedded = false, onShowSettings, scrollHo
     return () => window.removeEventListener('focus', onFocus);
   }, [scrollHold]);
 
+  useEffect(() => {
+    if (!editing) return;
+    const previous = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    const frame = window.requestAnimationFrame(() => editorDialog.current?.querySelector<HTMLButtonElement>('[role="tab"][aria-selected="true"]')?.focus());
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') { event.preventDefault(); setEditing(false); return; }
+      if (event.key !== 'Tab') return;
+      const controls = [...(editorDialog.current?.querySelectorAll<HTMLElement>('button:not(:disabled), input:not(:disabled), textarea:not(:disabled), [tabindex="0"]') ?? [])].filter(node => node.getClientRects().length > 0 && node.tabIndex >= 0);
+      const first = controls[0], last = controls.at(-1);
+      if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last?.focus(); }
+      else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first?.focus(); }
+    };
+    document.addEventListener('keydown', onKey);
+    return () => { window.cancelAnimationFrame(frame); document.removeEventListener('keydown', onKey); previous?.focus(); };
+  }, [editing]);
+
   const openEditor = () => {
     setDisplayName(currentUser.displayName);
     setDraftBio(currentUser.bio);
@@ -65,6 +84,7 @@ export default function ProfilePage({ embedded = false, onShowSettings, scrollHo
     setDraftDecoration(currentUser.avatarDecoration ?? 'none');
     setDraftEffect(currentUser.profileEffect ?? 'none');
     setSaveError('');
+    setEditorTab('details');
     setEditing(true);
   };
 
@@ -252,16 +272,27 @@ export default function ProfilePage({ embedded = false, onShowSettings, scrollHo
         )}
       {editing &&
         createPortal(
-          <div className="app-scrim sheet" onClick={() => setEditing(false)}>
-            <div className="app-sheet profile-pop profile-editor" role="dialog" aria-label="تعديل الملف" onClick={(event) => event.stopPropagation()}>
-              <span className="app-handle" />
+          <div className="app-scrim sheet profile-editor-scrim" onClick={() => setEditing(false)}>
+            <div ref={editorDialog} className="app-sheet profile-pop profile-editor" role="dialog" aria-modal="true" aria-label="تعديل الملف" onClick={(event) => event.stopPropagation()}>
+              <div className="profile-editor-header"><span className="app-handle" />
               <h2>تعديل الملف</h2>
               <div className="cosmetic-preview" aria-label="معاينة مظهر الملف">
                 <ProfileEffect effect={draftEffect} color={draftColor} />
-                <Avatar name={displayName || currentUser.displayName} color={draftColor} size={64} src={currentUser.avatarUrl} decoration={draftDecoration} animate={animate} />
+                <Avatar name={displayName || currentUser.displayName} color={draftColor} size={80} src={currentUser.avatarUrl} decoration={draftDecoration} animate={animate} />
                 <strong {...displayNameStyleForUser(draftColor, draftFont)} dir="auto">{displayName || currentUser.displayName}</strong>
               </div>
-              <section className="profile-editor-section"><h3>المعلومات الشخصية</h3>
+              </div>
+              <div className="profile-editor-tabs" role="tablist" aria-label="أقسام تعديل الملف" onKeyDown={event => {
+                const tabs = ['details', 'name', 'effects'] as const;
+                const next = event.key === 'Home' ? 0 : event.key === 'End' ? 2 : event.key === 'ArrowLeft' ? (tabs.indexOf(editorTab) + 1) % 3 : event.key === 'ArrowRight' ? (tabs.indexOf(editorTab) + 2) % 3 : -1;
+                if (next < 0) return;
+                event.preventDefault(); setEditorTab(tabs[next]); editorFields.current?.scrollTo(0, 0);
+                document.getElementById('profile-tab-' + tabs[next])?.focus();
+              }}>
+                {([{ id: 'details', label: 'المعلومات' }, { id: 'name', label: 'الاسم والألوان' }, { id: 'effects', label: 'الزينة والتأثيرات' }] as const).map(tab => <button type="button" key={tab.id} id={'profile-tab-' + tab.id} role="tab" aria-selected={editorTab === tab.id} aria-controls={'profile-panel-' + tab.id} tabIndex={editorTab === tab.id ? 0 : -1} onClick={() => { setEditorTab(tab.id); editorFields.current?.scrollTo(0, 0); }}>{tab.label}</button>)}
+              </div>
+              <div className="profile-editor-fields" ref={editorFields}>
+              <section id="profile-panel-details" role="tabpanel" aria-labelledby="profile-tab-details" hidden={editorTab !== 'details'} className="profile-editor-section"><h3>المعلومات الشخصية</h3>
               <button type="button" className="profile-photo-action" onClick={pickPhoto}><IonIcon icon={cameraOutline} /> تغيير الصورة</button>
               <label className="group-name">
                 <span>الاسم</span>
@@ -273,7 +304,7 @@ export default function ProfilePage({ embedded = false, onShowSettings, scrollHo
                 <textarea dir="auto" maxLength={160} value={draftBio} placeholder="نبذة قصيرة" onChange={(event) => setDraftBio(event.target.value)} />
               </label>
               </section>
-              <section className="profile-editor-section"><h3>مظهر الاسم</h3>
+              <section id="profile-panel-name" role="tabpanel" aria-labelledby="profile-tab-name" hidden={editorTab !== 'name'} className="profile-editor-section"><h3>مظهر الاسم</h3>
               <div className="profile-style-block">
                 <span className="profile-style-title">لون الاسم</span>
                 <p className="profile-style-hint">اختر أي لون، مثل مظهر التطبيق. يظهر اسمك في المجموعات للجميع.</p>
@@ -339,12 +370,12 @@ export default function ProfilePage({ embedded = false, onShowSettings, scrollHo
                 </div>
               </div>
               </section>
-              <section className="profile-editor-section"><h3>الزينة والتأثيرات</h3>
+              <section id="profile-panel-effects" role="tabpanel" aria-labelledby="profile-tab-effects" hidden={editorTab !== 'effects'} className="profile-editor-section"><h3>الزينة والتأثيرات</h3>
               <div className="profile-style-block">
                 <span className="profile-style-title">زينة الصورة</span>
-                <p className="profile-style-hint">اختر الزينة أو أزلها. القبعة تتحرك داخل الملف فقط، وتبقى ثابتة في وضع التوفير وعلى الأجهزة الضعيفة.</p>
+                <p className="profile-style-hint">اختر زينة للصورة وتأثيرًا للملف. المعاينة تبقى أمامك، والحركة تتوقف في وضع التوفير وعلى الأجهزة الضعيفة.</p>
                 <div className="cosmetic-options" role="group" aria-label="زينة الصورة">
-                  {AVATAR_DECORATIONS.map(item => <button key={item.id} type="button" aria-pressed={draftDecoration === item.id} className={draftDecoration === item.id ? 'is-on' : ''} onClick={() => setDraftDecoration(item.id)}>{item.label}</button>)}
+                  {AVATAR_DECORATIONS.map(item => <button key={item.id} type="button" aria-pressed={draftDecoration === item.id} className={draftDecoration === item.id ? 'is-on' : ''} onClick={() => setDraftDecoration(item.id)}><Avatar name={displayName || currentUser.displayName} color={draftColor} size={48} src={currentUser.avatarUrl} decoration={item.id} /><span>{item.label}</span></button>)}
                 </div>
                 <span className="profile-style-title">تأثير الملف</span>
                 <div className="cosmetic-options" role="group" aria-label="تأثير الملف">
@@ -352,6 +383,7 @@ export default function ProfilePage({ embedded = false, onShowSettings, scrollHo
                 </div>
               </div>
               </section>
+              </div>
               {saveError ? <p className="form-error">{saveError}</p> : null}
               <div className="account-actions profile-editor-footer">
                 <button type="button" onClick={() => setEditing(false)}>إلغاء</button>

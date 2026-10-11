@@ -201,6 +201,9 @@ describe('profile', () => {
     assert.equal((await patch({ avatarDecoration: 'https://example.com/hat.gif', profileEffect: 'stars' })).status, 401);
     assert.equal((await patch({ profileEffect: '<script>' })).status, 401);
     assert.equal((await deps.repo.findUserById(member.id))?.avatarDecoration, 'hat');
+    assert.equal((await patch({ avatarDecoration: 'dragon', profileEffect: 'meteors' })).status, 200);
+    assert.equal((await deps.repo.findUserById(member.id))?.avatarDecoration, 'dragon');
+    assert.equal((await deps.repo.findUserById(member.id))?.profileEffect, 'meteors');
     assert.equal((await patch({ avatarDecoration: null, profileEffect: 'none' })).status, 200);
     assert.equal((await deps.repo.findUserById(member.id))?.avatarDecoration, 'none');
     assert.equal((await deps.repo.findUserById(member.id))?.profileEffect, 'none');

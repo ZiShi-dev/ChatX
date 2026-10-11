@@ -4,11 +4,13 @@ export const AVATAR_DECORATIONS = [
   { id: 'laurel', label: 'إكليل' },
   { id: 'prism', label: 'منشور' },
   { id: 'hat', label: 'قبعة الخيزران' },
+  { id: 'dragon', label: 'التنين' },
 ] as const;
 export const PROFILE_EFFECTS = [
   { id: 'none', label: 'بدون تأثير' },
   { id: 'aurora', label: 'شفق' },
   { id: 'stars', label: 'نجوم' },
+  { id: 'meteors', label: 'شهب' },
 ] as const;
 export type AvatarDecoration = typeof AVATAR_DECORATIONS[number]['id'];
 export type ProfileEffectId = typeof PROFILE_EFFECTS[number]['id'];
