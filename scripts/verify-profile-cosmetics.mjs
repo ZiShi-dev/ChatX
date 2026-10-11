@@ -59,7 +59,7 @@ try {
   await editor.getByRole('button', { name: 'قبعة الخيزران', exact: true }).click();
   await editor.getByRole('button', { name: 'نجوم', exact: true }).click();
   assert.equal(await editor.locator('.cosmetic-preview .decoration-hat').count(), 1);
-  assert.equal(await editor.locator('.effect-stars').count(), 1);
+  assert.equal(await editor.locator('.cosmetic-preview .effect-stars').count(), 1);
   await editor.getByRole('button', { name: 'حفظ', exact: true }).click();
   await editor.waitFor({ state: 'detached' });
   assert.equal((await repo.findUserById(alice.id)).avatarDecoration, 'hat');
@@ -86,7 +86,7 @@ try {
   assert.equal(await viewer.locator('.decoration-hat.is-animated').count(), 0);
   await viewer.getByRole('button', { name: 'Alice', exact: true }).first().click();
   await viewer.locator('.member-sheet .decoration-hat').waitFor();
-  assert.equal(await viewer.locator('.member-sheet .effect-stars').count(), 1);
+  assert.equal(await viewer.locator('.member-sheet .user-card-banner .effect-stars').count(), 1);
   assert.match(await viewer.locator('#member-sheet-name').evaluate(node => getComputedStyle(node).fontFamily), /ChatX Amiri/);
   assert.equal(await viewer.locator('#member-sheet-name').evaluate(node => getComputedStyle(node).color), 'rgb(18, 171, 239)');
   await viewer.goto(origin + '/chat/' + roomId);
@@ -137,6 +137,38 @@ try {
   await page.getByRole('dialog').press('Escape');
   await page.getByRole('dialog').waitFor({ state: 'detached' });
   assert.equal((await repo.findUserById(bob.id)).avatarDecoration ?? 'none', 'none');
+  const customBanner = await page.evaluate(() => {
+    const canvas = document.createElement('canvas'); canvas.width = 480; canvas.height = 180;
+    const ctx = canvas.getContext('2d'); const gradient = ctx.createLinearGradient(0, 0, 480, 180);
+    gradient.addColorStop(0, '#bf925f'); gradient.addColorStop(1, '#305477');
+    ctx.fillStyle = gradient; ctx.fillRect(0, 0, 480, 180);
+    return canvas.toDataURL('image/jpeg', .7);
+  });
+  const bannerSaved = await api(new Request(origin + '/api/profile', { method: 'PATCH', headers: { 'content-type': 'application/json', 'x-chatx-request': '1', cookie: 'chatx_session=' + alice.id }, body: JSON.stringify({ banner: customBanner }) }));
+  assert.equal(bannerSaved.status, 200);
+  await page.reload(); await page.locator('.startup-screen').waitFor({ state: 'detached' });
+  for (const [effect, label] of [['celestial-dragon', 'التنين السماوي'], ['sword-domain', 'تشكيل السيوف'], ['time-cicada', 'زيز الزمن']]) {
+    await page.getByRole('button', { name: 'تعديل الملف', exact: true }).click();
+    await page.getByRole('dialog').getByRole('tab', { name: 'الزينة والتأثيرات', exact: true }).click();
+    await page.getByRole('dialog').getByRole('button', { name: label, exact: true }).click();
+    assert.equal(await page.locator('.profile-editor-banner .scene-' + effect).count(), 1);
+    assert.equal(await page.locator('.cosmetic-preview .cultivation-scene').count(), 0);
+    await page.getByRole('dialog').getByRole('button', { name: 'حفظ', exact: true }).click();
+    await page.getByRole('dialog').waitFor({ state: 'detached' });
+    assert.equal((await repo.findUserById(alice.id)).profileEffect, effect);
+    await viewer.goto(origin + '/chat/' + roomId);
+    await viewer.locator('.startup-screen').waitFor({ state: 'detached' });
+    await viewer.getByRole('button', { name: 'Alice', exact: true }).first().click();
+    await viewer.locator('.user-card-banner .scene-' + effect).waitFor();
+    assert.equal(await viewer.locator('.user-card-banner > img').count(), 1, 'The custom photograph and banner scene must coexist');
+    assert.equal(await viewer.locator('.user-card-banner .profile-effect').evaluate(node => getComputedStyle(node).zIndex), '2');
+    await viewer.screenshot({ path: 'docs/cultivation-' + effect + '-mobile.png' });
+    assert.equal(await viewer.locator('.user-card-banner .profile-effect.is-animated').count(), 1);
+    await viewer.emulateMedia({ reducedMotion: 'reduce' });
+    const motion = viewer.locator('.cultivation-scene .celestial-dragon-body, .cultivation-scene .immortal-sword, .cultivation-scene .gu-cicada').first();
+    assert.equal(await motion.evaluate(node => getComputedStyle(node).animationName), 'none');
+    await viewer.emulateMedia({ reducedMotion: 'no-preference' });
+  }
   await page.goto(origin + '/account?tab=settings');
   const linkColor = page.getByLabel('لون الروابط', { exact: true });
   await linkColor.fill('#ab34ef');
@@ -146,5 +178,5 @@ try {
   assert.equal(await page.getByLabel('لون الروابط', { exact: true }).inputValue(), '#ab34ef');
   assert.equal(await page.evaluate(() => document.documentElement.style.getPropertyValue('--chatx-link')), '#ab34ef');
   assert.deepEqual(errors, []); assert.deepEqual(external, []);
-  console.log('PASS optional hat/effects preview, save, reload, visibility for another account, static chat avatar, reduced motion, cancel/removal, mobile/desktop, no external asset requests');
+  console.log('PASS persistent profile preview, vector avatar decorations, cultivation scenes over custom banners opened from chat, save/reload, reduced motion, cancel/removal, mobile/desktop, no external asset requests');
 } finally { await browser.close(); }

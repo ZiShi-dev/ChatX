@@ -42,6 +42,7 @@ export default function UserProfileModal({ user, isSelf, room, onClose, onMessag
         <ProfileEffect effect={user.profileEffect} color={user.color} />
         <div className={user.bannerUrl ? 'user-card-banner is-photo' : 'user-card-banner'} style={{ '--banner': user.color } as CSSProperties}>
           {user.bannerUrl ? <img src={user.bannerUrl} alt="" /> : null}
+          <ProfileEffect effect={user.profileEffect} color={user.color} placement="banner" />
         </div>
         <Avatar name={user.displayName} color={user.color} size={84} src={user.avatarUrl} decoration={user.avatarDecoration} animate={animate} />
         <h2 id="member-sheet-name" {...displayNameStyleForUser(user.color, user.messageFont)} dir="auto">{user.displayName}</h2>

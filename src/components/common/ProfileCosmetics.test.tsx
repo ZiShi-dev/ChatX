@@ -53,3 +53,16 @@ it('reserves a square decoration slot and keeps tiny avatars unobstructed', () =
   expect(container.querySelector('.avatar-frame')).toBeNull();
   expect(container.querySelector<HTMLElement>('.avatar')!.style.width).toBe('18px');
 });
+
+it('confines cultivation artwork to the banner and keeps it static with data saving', () => {
+  useSettingsStore.setState({ dataSaver: true });
+  const { container, rerender } = render(<ProfileEffect effect="celestial-dragon" color="#3d9b84" placement="banner" />);
+  expect(container.querySelector('.is-banner .scene-celestial-dragon')).not.toBeNull();
+  expect(container.querySelector('.is-animated')).toBeNull();
+  rerender(<ProfileEffect effect="celestial-dragon" color="#3d9b84" />);
+  expect(container.querySelector('.cultivation-scene')).toBeNull();
+  rerender(<ProfileEffect effect="sword-domain" color="#3d9b84" placement="banner" />);
+  expect(container.querySelectorAll('.immortal-sword')).toHaveLength(6);
+  rerender(<ProfileEffect effect="time-cicada" color="#3d9b84" placement="banner" />);
+  expect(container.querySelector('.gu-cicada')).not.toBeNull();
+});

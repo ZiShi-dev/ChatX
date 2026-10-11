@@ -21,3 +21,11 @@ Tests interface et serveur et compilation Android. Le scénario PostgreSQL véri
 Trois onglets séparent les informations, le style du nom et les effets. La prévisualisation et les actions restent visibles ; seul le panneau de réglages défile. Les onglets suivent les commandes clavier du [modèle W3C](https://www.w3.org/WAI/ARIA/apg/patterns/tabs/), avec flèches, début et fin. Échap ferme le dialogue et le focus revient à son déclencheur.
 
 Les dessins occupent un emplacement carré fixe dans le chat et son en-tête. Les avatars de 24 px ou moins restent sans décoration pour conserver la lisibilité. Les versions animées sont réservées aux profils ouverts ; elles respectent aussi la [réduction des mouvements](https://support.discord.com/hc/en-us/articles/360040613412-Reduced-Motion-Setting).
+
+## Bannières de cultivation
+
+Dans l’onglet **الزينة والتأثيرات**, choisir **التنين السماوي** (dragon céleste), **تشكيل السيوف** (formation d’épées) ou **زيز الزمن** (cigale du temps). Ces scènes se superposent à la bannière, y compris une photographie personnalisée, dans le profil personnel, l’aperçu et le profil ouvert depuis un message ou l’en-tête du chat. Elles ne recouvrent pas le nom, la biographie ou les boutons.
+
+Les visuels sont des créations vectorielles originales : dragon de jade dans la brume, six épées en suspension et cigale entourée d’un sceau temporel. L’inspiration littéraire est [Reverend Insanity de Gu Zhen Ren](https://www.webnovel.com/book/reverend-insanity_7996858406002505), dont le synopsis décrit la cultivation des Gu et la Cigale du printemps et de l’automne. Le fonctionnement de sélection et de prévisualisation s’inspire des [effets de profil Discord](https://support.discord.com/hc/en-us/articles/17828465914263-Profile-Effects), sans utiliser leur code ou leurs assets.
+
+Les scènes sont intégrées à l’application : aucun GIF, vidéo, bibliothèque d’animation ou téléchargement distant. Transformations et opacité animent uniquement les profils ouverts. Les contraintes de performance existantes restent appliquées. La migration 028 étend uniquement la liste des effets permis ; les choix existants restent valides.

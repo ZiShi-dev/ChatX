@@ -157,6 +157,7 @@ export default function ProfilePage({ embedded = false, onShowSettings, scrollHo
             style={{ '--banner': currentUser.color } as CSSProperties}
           >
             {currentUser.bannerUrl ? <img src={currentUser.bannerUrl} alt="" /> : null}
+            <ProfileEffect effect={currentUser.profileEffect} color={currentUser.color} placement="banner" />
             <div className="banner-actions">
               <button type="button" className="banner-pick" aria-label="تغيير الغلاف" onClick={pickBanner}>
                 <IonIcon icon={cameraOutline} />
@@ -276,10 +277,16 @@ export default function ProfilePage({ embedded = false, onShowSettings, scrollHo
             <div ref={editorDialog} className="app-sheet profile-pop profile-editor" role="dialog" aria-modal="true" aria-label="تعديل الملف" onClick={(event) => event.stopPropagation()}>
               <div className="profile-editor-header"><span className="app-handle" />
               <h2>تعديل الملف</h2>
+              <div className="profile-editor-preview">
+                <div className="profile-editor-banner" style={{ '--banner': draftColor } as CSSProperties}>
+                  {currentUser.bannerUrl ? <img src={currentUser.bannerUrl} alt="" /> : null}
+                  <ProfileEffect effect={draftEffect} color={draftColor} placement="banner" />
+                </div>
               <div className="cosmetic-preview" aria-label="معاينة مظهر الملف">
                 <ProfileEffect effect={draftEffect} color={draftColor} />
                 <Avatar name={displayName || currentUser.displayName} color={draftColor} size={80} src={currentUser.avatarUrl} decoration={draftDecoration} animate={animate} />
                 <strong {...displayNameStyleForUser(draftColor, draftFont)} dir="auto">{displayName || currentUser.displayName}</strong>
+              </div>
               </div>
               </div>
               <div className="profile-editor-tabs" role="tablist" aria-label="أقسام تعديل الملف" onKeyDown={event => {
