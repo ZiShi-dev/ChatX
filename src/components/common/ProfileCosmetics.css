@@ -4,17 +4,22 @@
 .decoration-orbit::after { border:2px dashed var(--cosmetic-color); }
 .decoration-laurel::after { border:3px double #d1af67; border-left-color:var(--cosmetic-color); border-right-color:var(--cosmetic-color); }
 .decoration-prism::after { border-radius:34%; transform:rotate(45deg); border:2px solid var(--cosmetic-color); inset:16%; }
-.decoration-hat { align-items:flex-end; }
-.decoration-hat::after, .decoration-dragon::after { display:none; }
+.decoration-hat, .decoration-hat-rain { align-items:flex-end; }
+.decoration-hat::after, .decoration-hat-rain::after, .decoration-dragon::after { display:none; }
 .avatar-artwork { position:absolute; inset:0; width:100%; height:100%; pointer-events:none; overflow:hidden; z-index:1; }
-.hat-crown { transform:scaleY(.72); transform-origin:60px 0; }
-.decoration-hat.is-animated .hat-artwork { animation:profile-hat 5s ease-in-out infinite; transform-origin:50% 25%; }
+.decoration-hat > .avatar, .decoration-hat-rain > .avatar { position:absolute; bottom:6%; left:50%; transform:translateX(-50%); z-index:1; }
+.hat-back-artwork { z-index:0; }
+.hat-artwork { z-index:2; }
+.decoration-hat.is-animated .hat-artwork, .decoration-hat.is-animated .hat-back-artwork, .decoration-hat-rain.is-animated .hat-artwork, .decoration-hat-rain.is-animated .hat-back-artwork { animation:profile-hat 5s ease-in-out infinite; transform-origin:50% 28%; }
+.decoration-hat-rain.is-animated .hat-rain-back { animation:hat-rain 3.6s linear infinite; }
+.decoration-hat-rain.is-animated .hat-rain-front { animation:hat-rain 2.8s linear infinite; animation-delay:-1.4s; }
+@keyframes hat-rain { 0% { transform:translateY(-6px); opacity:0; } 25%,75% { opacity:.28; } 100% { transform:translateY(9px); opacity:0; } }
 .decoration-dragon.is-animated .dragon-artwork { animation:profile-dragon 7s ease-in-out infinite; }
 .decoration-dragon.is-animated .dragon-spark { animation:profile-ember 2.8s ease-in-out infinite; transform-origin:114px 55px; }
 .decoration-dragon.is-animated .spark-far { animation-duration:3.6s; animation-delay:-1.4s; transform-origin:11px 73px; }
 .decoration-orbit.is-animated::after { animation:profile-orbit 24s linear infinite; }
 .decoration-prism.is-animated::after { animation:profile-prism 6s ease-in-out infinite; }
-@keyframes profile-hat { 25% { transform:rotate(-3deg) translateY(-1%); } 75% { transform:rotate(3deg) translateY(-1%); } }
+@keyframes profile-hat { 25% { transform:rotate(-1.5deg) translateY(-.5%); } 75% { transform:rotate(1.5deg) translateY(-.5%); } }
 @keyframes profile-dragon { 30% { transform:rotate(-2deg); } 70% { transform:rotate(2deg); } }
 @keyframes profile-ember { 50% { opacity:.35; transform:translateY(-3px) scale(.8); } }
 @keyframes profile-orbit { to { transform:rotate(360deg); } }
@@ -161,3 +166,5 @@
 @keyframes petal-fall { 0% { transform:translateY(-16px) rotate(-10deg); opacity:0; } 14% { opacity:.9; } 100% { transform:translateY(86px) rotate(28deg); opacity:0; } }
 @keyframes ember-rise { 0% { transform:translate(0,8px); opacity:0; } 16% { opacity:.9; } 100% { transform:translate(8px,-72px); opacity:0; } }
 @media (prefers-reduced-motion:reduce) { .profile-effect.is-animated .cultivation-scene * { animation:none; } }
+
+@media (prefers-reduced-motion:reduce) { .avatar-frame.is-animated .hat-rain-back, .avatar-frame.is-animated .hat-rain-front { animation:none; } }

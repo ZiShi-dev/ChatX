@@ -33,7 +33,9 @@ export default function NameColorField({ color, colorInput, onColor, onInput, hi
             aria-label="رمز اللون"
             onChange={(event) => {
               onInput(event.target.value);
-              onColor(normalizeUserColorInput(event.target.value, color));
+              if (/^#?[0-9a-f]{6}$/i.test(event.target.value.trim())) {
+                onColor(normalizeUserColorInput(event.target.value, color));
+              }
             }}
           />
         </label>

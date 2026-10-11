@@ -16,7 +16,7 @@ type AvatarProps = {
 
 export default function Avatar({ name, color, size = 44, slot, src, decoration, animate = false }: AvatarProps) {
   const kind = size <= 24 ? 'none' : avatarDecoration(decoration);
-  const faceSize = kind === 'none' ? size : Math.round(size * (kind === 'hat' ? 0.78 : kind === 'dragon' ? 0.74 : 0.82));
+  const faceSize = kind === 'none' ? size : Math.round(size * ((kind === 'hat' || kind === 'hat-rain') ? 0.78 : kind === 'dragon' ? 0.74 : 0.82));
   const face = (
     <span
       slot={kind === 'none' ? slot : undefined}
@@ -28,5 +28,5 @@ export default function Avatar({ name, color, size = 44, slot, src, decoration, 
     </span>
   );
   if (kind === 'none') return face;
-  return <span slot={slot} className={`avatar-frame decoration-${kind}${animate ? ' is-animated' : ''}`} style={{ width: size, height: size, minWidth: size, minHeight: size, '--cosmetic-color': color } as CSSProperties} aria-hidden="true">{face}<AvatarArtwork kind={kind} /></span>;
+  return <span slot={slot} className={`avatar-frame decoration-${kind}${animate ? ' is-animated' : ''}`} style={{ width: size, height: size, minWidth: size, minHeight: size, '--cosmetic-color': color } as CSSProperties} aria-hidden="true"><AvatarArtwork kind={kind} layer="back" />{face}<AvatarArtwork kind={kind} /></span>;
 }

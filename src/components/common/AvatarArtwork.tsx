@@ -1,23 +1,14 @@
 import type { AvatarDecoration } from '../../lib/profileCosmetics';
+import HatArtwork from './HatArtwork';
 
 /** Original local vector artwork; no downloads, filters, or external animation runtime. */
-export default function AvatarArtwork({ kind }: { kind: AvatarDecoration }) {
+export default function AvatarArtwork({ kind, layer = 'front' }: { kind: AvatarDecoration; layer?: 'back' | 'front' }) {
+  if (kind === 'hat' || kind === 'hat-rain') return <HatArtwork rain={kind === 'hat-rain'} layer={layer} />;
+  if (layer === 'back') return null;
   if (kind === 'prism') return <svg className="avatar-artwork prism-artwork" viewBox="0 0 120 120" aria-hidden="true">
     <path d="M60 3L109 31V89L60 117L11 89V31Z" fill="none" stroke="var(--cosmetic-color)" strokeWidth="3" strokeLinejoin="round" />
     <path d="M11 31L60 3L109 31M11 89L60 117L109 89" fill="none" stroke="#c9eee4" strokeWidth="1.5" strokeLinejoin="round" />
     <path d="M58 2L60 8L62 2M108 87L102 89L108 91M12 29L18 31L12 33" fill="none" stroke="#f4f1cc" strokeWidth="2" />
-  </svg>;
-  if (kind === 'hat') return <svg className="avatar-artwork hat-artwork" viewBox="0 0 120 120" aria-hidden="true">
-    <g className="hat-crown">
-      <path d="M8 28Q32 15 60 2Q86 15 112 28Q103 39 60 40Q20 39 8 28Z" fill="#93692d" />
-      <path d="M8 28L60 2L112 28Q64 43 8 28Z" fill="#e7c47e" />
-      <path d="M60 2L112 28Q91 34 65 35Z" fill="#c79b50" />
-      <path d="M60 2L8 28Q31 33 46 33Z" fill="#f1d99a" />
-      <path d="M14 26Q60 38 107 26M23 22Q60 32 99 22M33 17Q60 25 87 17M43 12Q60 18 77 12" fill="none" stroke="#a57b39" strokeWidth="1.1" opacity=".65" />
-      <path d="M60 3L21 28M60 3L38 32M60 3L56 34M60 3L75 32M60 3L95 29" stroke="#fff0ba" strokeWidth="1" opacity=".65" />
-      <path d="M8 28Q60 45 112 28" fill="none" stroke="#805823" strokeWidth="2.5" />
-      <path d="M12 27L59 2" stroke="#fff2c1" strokeWidth="1.4" fill="none" />
-    </g>
   </svg>;
   if (kind === 'dragon') return <svg className="avatar-artwork dragon-artwork" viewBox="0 0 120 120" aria-hidden="true">
     <g className="dragon-body">

@@ -87,3 +87,20 @@ it.each(['jade-lotus', 'heavenly-tribulation', 'jade-petals', 'spirit-embers'] a
   rerender(<ProfileEffect effect="none" color="#3d9b84" placement="banner" />);
   expect(container.querySelector('.profile-effect')).toBeNull();
 });
+
+it('layers both reference hats around the face without external assets and keeps receipt avatars plain', () => {
+  const { container, rerender } = render(<Avatar name="User" color="#3d9b84" decoration="hat-rain" size={80} animate />);
+  const frame = container.querySelector('.avatar-frame')!;
+  expect(frame.children[0].classList.contains('hat-back-artwork')).toBe(true);
+  expect(frame.children[1].classList.contains('avatar')).toBe(true);
+  expect(frame.children[2].classList.contains('hat-artwork')).toBe(true);
+  expect(container.querySelector('.hat-cords')).not.toBeNull();
+  expect(container.querySelector('.hat-rain-back')).not.toBeNull();
+  expect(container.querySelector('.hat-rain-front')).not.toBeNull();
+  expect(container.querySelector('image, animate, filter')).toBeNull();
+  rerender(<Avatar name="User" color="#3d9b84" decoration="hat" size={80} />);
+  expect(container.querySelector('.hat-cords')).not.toBeNull();
+  expect(container.querySelector('.hat-rain-front')).toBeNull();
+  rerender(<Avatar name="User" color="#3d9b84" decoration="hat-rain" size={18} />);
+  expect(container.querySelector('.avatar-frame')).toBeNull();
+});

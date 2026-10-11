@@ -4,6 +4,7 @@ export const AVATAR_DECORATIONS = [
   { id: 'laurel', label: 'إكليل' },
   { id: 'prism', label: 'منشور' },
   { id: 'hat', label: 'قبعة الخيزران' },
+  { id: 'hat-rain', label: 'قبعة المطر' },
   { id: 'dragon', label: 'التنين' },
 ] as const;
 export const PROFILE_EFFECTS = [
