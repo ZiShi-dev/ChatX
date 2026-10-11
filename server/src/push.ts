@@ -25,6 +25,8 @@ function base64Url(input: string | Buffer) {
   return Buffer.from(input).toString('base64url');
 }
 
+export function pushConfigured() { return pushEnv() !== null; }
+
 async function accessToken(env: PushEnv) {
   const now = Date.now();
   if (cachedToken && tokenUntil > now + 60_000) return cachedToken;
@@ -125,7 +127,7 @@ export async function sendMessagePush(deps: Deps, message: RoomMessage & { hints
     const data = {
       conversationId: message.roomId,
       messageId: message.id,
-      kind,
+      kind: String(kind),
     };
     for (const token of tokens) {
       void sendToken(env, token, title, body, data);

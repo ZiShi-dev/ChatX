@@ -1,3 +1,4 @@
+import { pushConfigured } from './push.ts';
 import { compressJson } from './compression.ts';
 import { createRequestBudget } from './requestBudget.ts';
 import { handleTransfer } from './transfer.ts';
@@ -374,7 +375,7 @@ async function route(deps: Deps, request: Request) {
   if (request.method === 'POST' && path === '/api/push/register') {
     const result = await registerPushToken(deps, typeof body.token === 'string' ? body.token : undefined, typeof body.platform === 'string' ? body.platform : undefined, readCookie(request.headers.get('cookie'), 'chatx_session'));
     if (!result.ok) return failure(deps, result.error);
-    return json({ ok: true });
+    return json({ ok: true, pushEnabled: pushConfigured() });
   }
   if (request.method === 'POST' && path === '/api/push/unregister') {
     const result = await unregisterPushToken(deps, typeof body.token === 'string' ? body.token : undefined, readCookie(request.headers.get('cookie'), 'chatx_session'));

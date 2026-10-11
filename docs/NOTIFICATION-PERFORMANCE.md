@@ -4,8 +4,8 @@
 
 - **App au premier plan** : la synchronisation inbox actuelle (polling adaptatif, bandeau live) reste inchangée.
 - **App en arrière-plan ou fermée** : le serveur envoie une alerte via **Firebase Cloud Messaging** ; Google affiche la notification Android (canal `chatx-messages`).
-- L’enregistrement du token FCM se fait au démarrage (`useFcmPush` + `pushRegister.ts`). Tant qu’aucun token n’est enregistré, le **repli natif** (alarmes `InboxWatch`) continue de fonctionner.
-- Une fois le token actif, les alarmes inbox natives et les notifications locales en arrière-plan sont désactivées pour éviter les doublons.
+- L’enregistrement du token FCM se fait au démarrage (`useFcmPush` + `pushRegister.ts`). Le client n’active FCM qu’après une réponse `pushEnabled: true` du VPS (Firebase configuré côté serveur). Tant que ce n’est pas le cas, le **repli natif** (alarmes `InboxWatch`) continue de fonctionner, avec nouvelles tentatives en cas d’erreur réseau.
+- Une fois le token confirmé, les alarmes inbox natives et les notifications locales en arrière-plan sont désactivées pour éviter les doublons. Un push reçu ou une reprise d’app déclenche un rafraîchissement léger de l’inbox (débounce 200 ms).
 
 Configuration requise :
 

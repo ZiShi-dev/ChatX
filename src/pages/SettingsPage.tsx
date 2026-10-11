@@ -24,6 +24,13 @@ const videoChoices: Array<{ value: VideoQuality; label: string; hint: string }> 
 
 type SettingsPageProps = { embedded?: boolean };
 
+const colorFields: Array<{ key: 'accent' | 'link' | 'bg' | 'frame'; label: string; aria: string }> = [
+  { key: 'accent', label: 'التمييز', aria: 'لون التمييز' },
+  { key: 'link', label: 'الروابط', aria: 'لون الروابط' },
+  { key: 'bg', label: 'الخلفية', aria: 'لون الخلفية' },
+  { key: 'frame', label: 'الإطار', aria: 'لون الإطار' },
+];
+
 function AppearanceSettings() {
   const appearance = useSettingsStore((state) => state.appearance);
   const setAppearance = useSettingsStore((state) => state.setAppearance);
@@ -33,60 +40,87 @@ function AppearanceSettings() {
   const [logoError, setLogoError] = useState('');
   const [wallpaperError, setWallpaperError] = useState('');
   const opacity = Math.round(appearance.wallpaperOpacity * 100);
+  const title = appearance.name.trim() || 'ChatX';
 
   return (
-    <section className="settings-block">
+    <section className="settings-block settings-appearance">
       <h2>المظهر</h2>
-      <p className="settings-lead">يبقى على هذا الجهاز فقط. لون الكتابة يتبع إضاءة الخلفية.</p>
-      <article className="setting-card column">
-        <strong>اسم التطبيق</strong>
-        <input
-          className="look-name"
-          dir="auto"
-          maxLength={24}
-          value={appearance.name}
-          aria-label="اسم التطبيق"
-          placeholder="ChatX"
-          onChange={(event) => setAppearance({ name: event.target.value })}
-        />
-        <div className="look-logo">
-          <img src={appearance.logo || DEFAULT_LOGO} alt="" width="48" height="48" decoding="async" />
-          <div className="look-actions">
-            <button type="button" onClick={() => logoRef.current?.click()}>تغيير الشعار</button>
-            {appearance.logo ? <button type="button" onClick={() => { setLogoError(''); setAppearance({ logo: '' }); }}>إزالة الشعار</button> : null}
-          </div>
-          <input
-            ref={logoRef}
-            type="file"
-            accept="image/*"
-            hidden
-            aria-label="اختيار الشعار"
-            onChange={(event) => {
-              const file = event.target.files?.[0];
-              event.target.value = '';
-              if (!file) return;
-              void logoFromFile(file).then(
-                (logo) => {
-                  setLogoError('');
-                  setAppearance({ logo });
-                },
-                () => setLogoError('تعذر استخدام هذه الصورة. اختر صورة أصغر.'),
-              );
-            }}
+      <p className="settings-lead">يُحفظ على هذا الجهاز فقط. لون الكتابة يتبع إضاءة الخلفية تلقائيًا.</p>
+      <div className="appearance-stack">
+        <div className="appearance-preview" aria-label="معاينة مظهر التطبيق">
+          <div
+            className="appearance-preview-wall"
+            style={appearance.wallpaper ? { backgroundImage: `url(${appearance.wallpaper})`, opacity: appearance.wallpaperOpacity } : undefined}
           />
+          <div className="appearance-preview-bar" style={{ background: appearance.bg, borderColor: appearance.frame }}>
+            <img src={appearance.logo || DEFAULT_LOGO} alt="" width="40" height="40" decoding="async" />
+            <span className="appearance-preview-title" dir="auto">{title}</span>
+            <span className="appearance-preview-accent" style={{ background: appearance.accent }} aria-hidden="true" />
+          </div>
         </div>
-        {logoError ? <p className="form-error">{logoError}</p> : null}
-      </article>
-      <article className="setting-card column">
-        <strong>صورة الخلفية</strong>
-        <div className="look-preview">
-          {appearance.wallpaper
-            ? <img src={appearance.wallpaper} alt="" decoding="async" style={{ opacity: appearance.wallpaperOpacity }} />
-            : <span>بدون صورة</span>}
-        </div>
-        <div className="look-actions">
-          <button type="button" onClick={() => wallpaperRef.current?.click()}>{appearance.wallpaper ? 'تغيير الصورة' : 'اختيار صورة'}</button>
-          {appearance.wallpaper ? <button type="button" onClick={() => { setWallpaperError(''); setAppearance({ wallpaper: '' }); }}>إزالة الصورة</button> : null}
+
+        <section className="profile-editor-section">
+          <h3>هوية التطبيق</h3>
+          <p className="profile-style-hint">الاسم والشعار يظهران في الصفحة الرئيسية وشاشة البدء.</p>
+          <label className="group-name">
+            <span>اسم التطبيق</span>
+            <input
+              className="look-name"
+              dir="auto"
+              maxLength={24}
+              value={appearance.name}
+              aria-label="اسم التطبيق"
+              placeholder="ChatX"
+              onChange={(event) => setAppearance({ name: event.target.value })}
+            />
+          </label>
+          <div className="appearance-logo-row">
+            <img src={appearance.logo || DEFAULT_LOGO} alt="" width="56" height="56" decoding="async" />
+            <div className="profile-media-actions appearance-logo-actions">
+              <button type="button" className="profile-photo-action" onClick={() => logoRef.current?.click()}>تغيير الشعار</button>
+              {appearance.logo ? (
+                <button type="button" className="profile-photo-action" onClick={() => { setLogoError(''); setAppearance({ logo: '' }); }}>إزالة</button>
+              ) : null}
+            </div>
+            <input
+              ref={logoRef}
+              type="file"
+              accept="image/*"
+              hidden
+              aria-label="اختيار الشعار"
+              onChange={(event) => {
+                const file = event.target.files?.[0];
+                event.target.value = '';
+                if (!file) return;
+                void logoFromFile(file).then(
+                  (logo) => {
+                    setLogoError('');
+                    setAppearance({ logo });
+                  },
+                  () => setLogoError('تعذر استخدام هذه الصورة. اختر صورة أصغر.'),
+                );
+              }}
+            />
+          </div>
+          {logoError ? <p className="form-error">{logoError}</p> : null}
+        </section>
+
+        <section className="profile-editor-section">
+          <h3>خلفية المحادثات</h3>
+          <p className="profile-style-hint">صورة خفيفة خلف فقاعات الرسائل. اتركها فارغة لاستخدام اللون فقط.</p>
+          <div className="appearance-wall-banner">
+            {appearance.wallpaper
+              ? <img src={appearance.wallpaper} alt="" decoding="async" style={{ opacity: appearance.wallpaperOpacity }} />
+              : <span>بدون صورة</span>}
+          </div>
+          <div className="profile-media-actions">
+            <button type="button" className="profile-photo-action" onClick={() => wallpaperRef.current?.click()}>
+              {appearance.wallpaper ? 'تغيير الصورة' : 'اختيار صورة'}
+            </button>
+            {appearance.wallpaper ? (
+              <button type="button" className="profile-photo-action" onClick={() => { setWallpaperError(''); setAppearance({ wallpaper: '' }); }}>إزالة</button>
+            ) : null}
+          </div>
           <input
             ref={wallpaperRef}
             type="file"
@@ -106,56 +140,79 @@ function AppearanceSettings() {
               );
             }}
           />
-        </div>
-        {appearance.wallpaper ? (
-          <label className="look-opacity">
-            <span>الشفافية <b dir="ltr">{opacity}%</b></span>
-            <input
-              type="range"
-              min={15}
-              max={80}
-              step={5}
-              value={opacity}
-              aria-label="شفافية الخلفية"
-              onChange={(event) => setAppearance({ wallpaperOpacity: Number(event.target.value) / 100 })}
-            />
-          </label>
-        ) : null}
-        {wallpaperError ? <p className="form-error">{wallpaperError}</p> : null}
-      </article>
-      <article className="setting-card column">
-        <strong>الألوان</strong>
-        <div className="setting-choices look-presets" role="radiogroup" aria-label="أنماط جاهزة">
-          {APPEARANCE_PRESETS.map((preset) => {
-            const selected = appearance.accent === preset.look.accent && appearance.bg === preset.look.bg && appearance.frame === preset.look.frame;
-            return (
-              <button
-                key={preset.id}
-                type="button"
-                role="radio"
-                dir="auto"
-                aria-checked={selected}
-                className={selected ? 'is-on' : ''}
-                onClick={() => setAppearance(preset.look)}
-              >
-                <span className="look-swatch" style={{ background: preset.look.bg, borderColor: preset.look.frame }}>
-                  <span style={{ background: preset.look.accent }} />
-                </span>
-                {preset.label}
-              </button>
-            );
-          })}
-        </div>
-        <div className="look-colors">
-          <label className="look-color">التمييز <span className="look-chip" style={{ background: appearance.accent }}><input type="color" aria-label="لون التمييز" value={appearance.accent} onChange={(event) => setAppearance({ accent: event.target.value })} /></span></label>
-          <label className="look-color">الروابط <span className="look-chip" style={{ background: appearance.link }}><input type="color" aria-label="لون الروابط" value={appearance.link} onChange={(event) => setAppearance({ link: event.target.value })} /></span></label>
-          <label className="look-color">الخلفية <span className="look-chip" style={{ background: appearance.bg }}><input type="color" aria-label="لون الخلفية" value={appearance.bg} onChange={(event) => setAppearance({ bg: event.target.value, surface: event.target.value })} /></span></label>
-          <label className="look-color">الإطار <span className="look-chip" style={{ background: appearance.frame }}><input type="color" aria-label="لون الإطار" value={appearance.frame} onChange={(event) => setAppearance({ frame: event.target.value })} /></span></label>
-        </div>
-        <button type="button" className="storage-clear" onClick={() => { setLogoError(''); setWallpaperError(''); resetAppearance(); }}>
-          استعادة المظهر
-        </button>
-      </article>
+          {appearance.wallpaper ? (
+            <label className="look-opacity">
+              <span>الشفافية <b dir="ltr">{opacity}%</b></span>
+              <input
+                type="range"
+                min={15}
+                max={80}
+                step={5}
+                value={opacity}
+                aria-label="شفافية الخلفية"
+                onChange={(event) => setAppearance({ wallpaperOpacity: Number(event.target.value) / 100 })}
+              />
+            </label>
+          ) : null}
+          {wallpaperError ? <p className="form-error">{wallpaperError}</p> : null}
+        </section>
+
+        <section className="profile-editor-section">
+          <h3>الألوان</h3>
+          <p className="profile-style-hint">اختر نمطًا جاهزًا أو عدّل الألوان يدويًا.</p>
+          <div className="setting-choices look-presets appearance-presets" role="radiogroup" aria-label="أنماط جاهزة">
+            {APPEARANCE_PRESETS.map((preset) => {
+              const selected = appearance.accent === preset.look.accent && appearance.bg === preset.look.bg && appearance.frame === preset.look.frame;
+              return (
+                <button
+                  key={preset.id}
+                  type="button"
+                  role="radio"
+                  dir="auto"
+                  aria-checked={selected}
+                  className={selected ? 'is-on' : ''}
+                  onClick={() => setAppearance(preset.look)}
+                >
+                  <span className="look-swatch" style={{ background: preset.look.bg, borderColor: preset.look.frame }}>
+                    <span style={{ background: preset.look.accent }} />
+                  </span>
+                  {preset.label}
+                </button>
+              );
+            })}
+          </div>
+          <div className="profile-style-block">
+            <span className="profile-style-title">تخصيص الألوان</span>
+            <div className="appearance-color-grid">
+              {colorFields.map((field) => {
+                const value = appearance[field.key];
+                return (
+                  <label key={field.key} className="look-color">
+                    {field.label}
+                    <span className="look-chip" style={{ background: value }}>
+                      <input
+                        type="color"
+                        aria-label={field.aria}
+                        value={value}
+                        onChange={(event) => {
+                          const next = event.target.value;
+                          if (field.key === 'bg') setAppearance({ bg: next, surface: next });
+                          else if (field.key === 'accent') setAppearance({ accent: next });
+                          else if (field.key === 'link') setAppearance({ link: next });
+                          else setAppearance({ frame: next });
+                        }}
+                      />
+                    </span>
+                  </label>
+                );
+              })}
+            </div>
+          </div>
+          <button type="button" className="storage-clear appearance-reset" onClick={() => { setLogoError(''); setWallpaperError(''); resetAppearance(); }}>
+            استعادة المظهر الافتراضي
+          </button>
+        </section>
+      </div>
     </section>
   );
 }
@@ -191,7 +248,7 @@ export default function SettingsPage({ embedded = false }: SettingsPageProps) {
   const setShowTyping = useSettingsStore((state) => state.setShowTyping);
 
   const body = (
-    <>
+    <div className="settings-shell profile-frame">
         <AppearanceSettings />
         <section className="settings-block">
           <h2>الخصوصية</h2>
@@ -209,7 +266,7 @@ export default function SettingsPage({ embedded = false }: SettingsPageProps) {
         </section>
         <section className="settings-block">
           <h2>الإشعارات</h2>
-          <p className="settings-lead">نفس الإذن لأندرويد، سواء كانت الرسالة في مجموعة أو في محادثة خاصة.</p>
+          <p className="settings-lead">تظهر اللافتات وإشعارات الهاتف للإشارات والردود والرسائل الخاصة فقط. رسائل المجموعات العادية والتفاعلات والأحداث تبقى في صفحة الإشعارات. عند قراءة الرسالة يزول التنبيه.</p>
           <NotificationPermissionCard />
           <div className="notify-types" role="group" aria-label="أنواع الإشعارات">
             {(Object.keys(notifyTypes) as InboxKind[]).map((kind) => {
@@ -218,7 +275,7 @@ export default function SettingsPage({ embedded = false }: SettingsPageProps) {
                 <article key={kind} className="setting-card">
                   <div>
                     <strong dir={look.ltr ? 'ltr' : undefined}>{look.label}</strong>
-                    <p>{notifyTypes[kind] ? 'مفعل' : 'مكتوم'}</p>
+                    <p>{!notifyTypes[kind] ? 'التنبيه مكتوم، وتبقى الرسالة في الإشعارات' : kind === 'message' ? 'لافتات للرسائل الخاصة؛ رسائل المجموعات داخل التطبيق فقط' : kind === 'reaction' || kind === 'signal' ? 'داخل صفحة الإشعارات فقط، بدون لافتة أو تنبيه للهاتف' : 'لافتة داخل التطبيق وإشعار للهاتف في الخلفية'}</p>
                   </div>
                   <IonToggle
                     checked={notifyTypes[kind]}
@@ -340,12 +397,12 @@ export default function SettingsPage({ embedded = false }: SettingsPageProps) {
             </button>
           </article>
         </section>
-        <section className="settings-block">
+        <section className="settings-block settings-block-tail">
           <h2>حقوق الإيموجي</h2>
           <p className="settings-lead" dir="ltr">Fluent Emoji © Microsoft Corporation · MIT</p>
           <a href="https://github.com/microsoft/fluentui-emoji" target="_blank" rel="noreferrer">مصدر الرسومات وترخيصها</a>
         </section>
-    </>
+    </div>
   );
 
   if (embedded) return body;

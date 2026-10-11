@@ -9,6 +9,7 @@ const config: CapacitorConfig = {
   appName: 'ChatX',
   webDir: 'dist',
   plugins: {
+    PushNotifications: { presentationOptions: [] },
     Keyboard: {
       resize: 'native',
       resizeOnFullScreen: true,

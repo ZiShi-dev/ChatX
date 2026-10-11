@@ -489,8 +489,143 @@ ion-page > ion-content.inbox-page {
   --background: var(--chatx-bg);
 }
 
+.settings-shell {
+  width: min(440px, 100%);
+  margin-inline: auto;
+  padding-bottom: calc(24px + var(--chatx-nav-bottom, var(--ion-safe-area-bottom, 0px)));
+}
+
 .settings-block {
   padding: 16px 16px 4px;
+}
+
+.settings-block-tail {
+  padding-bottom: 20px;
+}
+
+.settings-appearance {
+  padding-top: 8px;
+}
+
+.appearance-stack {
+  display: grid;
+  gap: 14px;
+}
+
+.appearance-preview {
+  overflow: hidden;
+  border: 1px solid var(--chatx-frame);
+  border-radius: 18px;
+  background: var(--chatx-surface);
+}
+
+.appearance-preview-wall {
+  height: 96px;
+  background:
+    radial-gradient(90% 80% at 100% 0%, var(--chatx-accent) 0%, transparent 58%),
+    radial-gradient(70% 80% at 0% 80%, var(--chatx-accent) 0%, transparent 55%),
+    var(--chatx-bg);
+  background-size: cover;
+  background-position: center;
+}
+
+.appearance-preview-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 14px;
+  border-top: 1px solid;
+  color: var(--chatx-text);
+}
+
+.appearance-preview-bar img {
+  flex: none;
+  width: 40px;
+  height: 40px;
+  border: 1px solid var(--chatx-frame);
+  border-radius: 12px;
+  object-fit: cover;
+}
+
+.appearance-preview-title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  font-size: 16px;
+  font-weight: 800;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.appearance-preview-accent {
+  flex: none;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+}
+
+.appearance-logo-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 8px;
+}
+
+.appearance-logo-row > img {
+  flex: none;
+  width: 56px;
+  height: 56px;
+  border: 1px solid var(--chatx-frame);
+  border-radius: 16px;
+  object-fit: cover;
+}
+
+.appearance-logo-actions {
+  flex: 1;
+  min-width: 0;
+}
+
+.appearance-wall-banner {
+  display: grid;
+  place-items: center;
+  height: 140px;
+  overflow: hidden;
+  border: 1px solid var(--chatx-frame);
+  border-radius: 16px;
+  background: var(--chatx-bg);
+  color: var(--chatx-muted);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.appearance-wall-banner img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.appearance-presets {
+  margin-top: 4px;
+  gap: 10px;
+}
+
+.appearance-color-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.appearance-reset {
+  width: 100%;
+  margin-top: 16px;
+}
+
+.settings-appearance .profile-editor-section {
+  margin: 0;
+}
+
+.settings-appearance .profile-editor-section .profile-media-actions {
+  margin-top: 12px;
 }
 
 .settings-block h2 {

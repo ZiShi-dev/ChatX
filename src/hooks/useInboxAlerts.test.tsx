@@ -82,7 +82,7 @@ it('does not replay history or banner the chat already on screen', () => {
   expect(useLiveInbox.getState().notices).toHaveLength(0);
   act(() => useChatStore.setState({ serverInbox: [item('new'), item('history')] }));
   expect(useLiveInbox.getState().notices).toHaveLength(0);
-  act(() => useChatStore.setState({ serverInbox: [{ ...item('other'), conversationId: 'cccccccc-cccc-4ccc-8ccc-cccccccccccc' }, item('new'), item('history')] }));
+  act(() => useChatStore.setState({ serverInbox: [{ ...item('other'), conversationId: 'cccccccc-cccc-4ccc-8ccc-cccccccccccc', unread: true, unreadCount: 1 }, item('new'), item('history')] }));
   expect(useLiveInbox.getState().notices[0]?.messageId).toBe('other');
 });
 it('delivers background unread notifications to the system and honors disabled types', () => {

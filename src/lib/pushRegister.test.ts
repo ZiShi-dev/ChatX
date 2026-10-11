@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { PushNotifications } from '@capacitor/push-notifications';
+import { adminFetch } from './adminApi';
 import { fcmEnabled } from './fcmEnabled';
 import {
   fcmPushAlertsActive,
@@ -20,11 +21,12 @@ vi.mock('@capacitor/push-notifications', () => ({
     addListener: vi.fn(async () => ({ remove: async () => undefined })),
     register: vi.fn(async () => undefined),
     removeAllListeners: vi.fn(async () => undefined),
+    createChannel: vi.fn(async () => undefined),
   },
 }));
 
 vi.mock('./adminApi', () => ({
-  adminFetch: vi.fn(async () => ({})),
+  adminFetch: vi.fn(async () => ({ pushEnabled: true })),
 }));
 
 vi.mock('./fcmEnabled', () => ({
@@ -61,5 +63,17 @@ describe('pushRegister', () => {
     vi.mocked(fcmEnabled).mockReturnValue(false);
     await startPushRegistration('11111111-1111-4111-8111-111111111111');
     expect(PushNotifications.register).not.toHaveBeenCalled();
+  });
+
+  it('keeps inbox fallback until the server confirms FCM', async () => {
+    vi.mocked(adminFetch).mockResolvedValue({ pushEnabled: false });
+    await startPushRegistration('11111111-1111-4111-8111-111111111111');
+    const calls = vi.mocked(PushNotifications.addListener).mock.calls as unknown as Array<
+      [string, (event: { value: string }) => void | Promise<void>]
+    >;
+    await calls.find((call) => call[0] === 'registration')![1]({ value: 'device-token-12345678901234567890' });
+    await vi.waitFor(() => expect(vi.mocked(adminFetch)).toHaveBeenCalled());
+    expect(hasFcmToken()).toBe(false);
+    expect(fcmPushAlertsActive()).toBe(false);
   });
 });

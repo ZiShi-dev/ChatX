@@ -5,12 +5,19 @@ import LiveInboxBanner from './LiveInboxBanner';
 import { useLiveInbox } from '../../lib/liveInbox';
 import { useMuteStore } from '../../stores/muteStore';
 import { useSettingsStore } from '../../stores/settingsStore';
-import { DEFAULT_NOTIFY_TYPES } from '../../lib/inbox';
-afterEach(() => { cleanup(); useLiveInbox.getState().clear(); useMuteStore.setState({ mutes: [] }); useSettingsStore.setState({ notifyTypes: { ...DEFAULT_NOTIFY_TYPES } }); vi.useRealTimers(); });
-const notice = { key: 'one', conversationId: 'group', messageId: 'one', kind: 'message' as const, title: 'Group', body: 'New message' };
+import { useChatStore } from '../../stores/chatStore';
+import { DEFAULT_NOTIFY_TYPES, type InboxItem } from '../../lib/inbox';
+afterEach(() => { cleanup(); useLiveInbox.getState().clear(); useChatStore.setState({ serverInbox: [] }); useMuteStore.setState({ mutes: [] }); useSettingsStore.setState({ notifyTypes: { ...DEFAULT_NOTIFY_TYPES } }); vi.useRealTimers(); });
+const room = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
+const inboxRow = (id: string): InboxItem => ({ id, ids: [id], count: 1, conversationId: room, conversationType: 'private', senderId: 'sender', kind: 'message', createdAt: '2026-10-10T00:00:00.000Z', preview: id, unread: true, unreadCount: 1, suppressed: false });
+const notice = { key: 'one', conversationId: room, conversationType: 'private' as const, messageId: 'one', kind: 'message' as const, title: 'خاص', body: 'New message' };
+function primeInbox(id = 'one') {
+  useChatStore.setState({ serverInbox: [inboxRow(id)] });
+}
 it('hides the banner of the chat already open and shows one from another chat', () => {
+  primeInbox();
   useLiveInbox.getState().push(notice);
-  const here = render(<MemoryRouter initialEntries={['/chat/group']}><LiveInboxBanner /></MemoryRouter>);
+  const here = render(<MemoryRouter initialEntries={[`/chat/${room}`]}><LiveInboxBanner /></MemoryRouter>);
   expect(screen.queryByRole('status')).toBeNull();
   here.unmount();
   useLiveInbox.getState().push(notice);
@@ -27,7 +34,10 @@ it('respects disabled types and room mute without replaying disabled notificatio
 });
 it('shows every queued alert in arrival order, including more than three alerts', async () => {
   vi.useFakeTimers();
-  for (let i = 0; i < 5; i++) useLiveInbox.getState().push({ ...notice, key: `${i}`, body: `Message ${i}` });
+  for (let i = 0; i < 5; i++) {
+    useChatStore.setState({ serverInbox: [inboxRow(`${i}`)] });
+    useLiveInbox.getState().push({ ...notice, key: `${i}`, messageId: `${i}`, body: `Message ${i}` });
+  }
   render(<MemoryRouter><LiveInboxBanner /></MemoryRouter>);
   for (let i = 0; i < 5; i++) { expect(screen.getByRole('status')).toHaveTextContent(`Message ${i}`); fireEvent.click(screen.getByRole('button', { name: 'إخفاء الإشعار' })); }
   expect(screen.queryByRole('status')).toBeNull();
