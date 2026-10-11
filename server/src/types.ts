@@ -110,7 +110,7 @@ export interface AuthRepository {
   notifyRoomMessage(message: RoomMessage): Promise<void>;
   listRoomNoticeMembers(roomId: string, exceptUserId: string): Promise<Array<{ id: string; username: string }>>;
   findRoomMessage(roomId: string, messageId: string): Promise<RoomMessage | null>;
-  readRoomLabel(roomId: string): Promise<{ name: string | null } | null>;
+  readRoomLabel(roomId: string): Promise<{ name: string | null; kind: RoomKind } | null>;
   savePushToken(userId: string, token: string, platform: string): Promise<void>;
   deletePushToken(userId: string, token: string): Promise<void>;
   listPushTokens(userId: string): Promise<string[]>;
@@ -179,6 +179,7 @@ export type RoomMessage = {
 };
 
 export type InboxNotice = {
+  conversationType?: RoomKind;
   messageId: string;
   roomId: string;
   conversationName: string;

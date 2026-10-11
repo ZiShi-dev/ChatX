@@ -20,7 +20,7 @@ vi.mock('../lib/pushRegister', () => ({
 const owner = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
 const room = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
 const initialAuth = useAuthStore.getState();
-const item = (id: string): InboxItem => ({ id, ids: [id], count: 1, conversationId: room, senderId: 'sender', kind: 'message', createdAt: '2026-10-10T00:00:00.000Z', preview: id, unread: false, unreadCount: 0, suppressed: false });
+const item = (id: string): InboxItem => ({ id, ids: [id], count: 1, conversationId: room, conversationType: 'private', senderId: 'sender', kind: 'message', createdAt: '2026-10-10T00:00:00.000Z', preview: id, unread: false, unreadCount: 0, suppressed: false });
 afterEach(() => { cleanup(); useLiveInbox.getState().clear(); useChatStore.setState({ serverInbox: [] }); useAuthStore.setState(initialAuth); useMuteStore.setState({ mutes: [] }); useSettingsStore.setState({ notifyTypes: { ...DEFAULT_NOTIFY_TYPES } }); vi.restoreAllMocks(); notify.mockClear(); });
 function mount() {
   useAuthStore.setState({ activated: true, currentUser: { ...initialAuth.currentUser, id: owner } });
@@ -28,6 +28,15 @@ function mount() {
   renderHook(useInboxAlerts);
   act(() => useChatStore.setState({ serverInbox: [item('history')] }));
 }
+it.each(['visible', 'hidden'])('keeps normal group messages in the inbox without a banner while %s', (visibility) => {
+  vi.spyOn(document, 'visibilityState', 'get').mockReturnValue(visibility as DocumentVisibilityState);
+  mount();
+  const incoming = { ...item('ordinary-group'), conversationType: 'group' as const, unread: true, unreadCount: 1 };
+  act(() => useChatStore.setState({ serverInbox: [incoming] }));
+  expect(notify).not.toHaveBeenCalled();
+  expect(useLiveInbox.getState().notices).toHaveLength(0);
+  expect(useChatStore.getState().serverInbox[0].unread).toBe(true);
+});
 it.each(['mention', 'everyone', 'message', 'reply'] as const)('sends a system banner for an unread %s while outside the app', (kind) => {
   vi.spyOn(document, 'visibilityState', 'get').mockReturnValue('hidden');
   mount();
@@ -89,7 +98,7 @@ it.each([
   ['private', 'group', 'Friends group'],
 ])('shows a %s-to-%s banner without changing the open chat', (openRoom, incomingRoom, conversationName) => {
   window.history.replaceState({}, '', `/chat/${openRoom}`); mount();
-  const incoming = { ...item('cross-chat'), conversationId: incomingRoom, conversationName, senderName: 'Bob', unread: true, unreadCount: 1 };
+  const incoming = { ...item('cross-chat'), conversationId: incomingRoom, conversationType: incomingRoom as 'private' | 'group', kind: incomingRoom === 'group' ? 'mention' as const : 'message' as const, conversationName, senderName: 'Bob', unread: true, unreadCount: 1 };
   act(() => useChatStore.setState({ serverInbox: [incoming] }));
   expect(useLiveInbox.getState().notices[0]).toMatchObject({ conversationId: incomingRoom, messageId: 'cross-chat', title: conversationName ?? 'Bob' });
   expect(window.location.pathname).toBe(`/chat/${openRoom}`);

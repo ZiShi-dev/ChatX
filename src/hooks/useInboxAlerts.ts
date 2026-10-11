@@ -87,6 +87,8 @@ export function useInboxAlerts() {
       const users = useUserStore.getState().users;
       const hidden = !phoneActive || document.visibilityState === 'hidden';
       fresh.reverse().forEach((item) => {
+        const roomType = item.conversationType ?? useChatStore.getState().conversations.find(room => room.id === item.conversationId)?.type;
+        if (item.kind === 'message' && roomType !== 'private') return;
         if (hidden && !item.unread) return;
         if (!hidden && watching(item.conversationId)) {
           notified.add(item.id);

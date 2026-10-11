@@ -61,6 +61,7 @@ export function inboxView(notice: InboxNotice) {
     id: notice.messageId,
     conversationId: notice.roomId,
     conversationName: notice.conversationName,
+    conversationType: notice.conversationType,
     senderId: notice.senderId,
     senderName: notice.senderName,
     kind: notice.kind,

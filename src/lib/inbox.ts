@@ -29,6 +29,7 @@ export type InboxItem = {
   senderId: string;
   senderName?: string;
   conversationName?: string;
+  conversationType?: Conversation['type'];
   kind: InboxKind;
   createdAt: string;
   preview: string;
@@ -239,6 +240,7 @@ export function readInboxPayload(payload: unknown): InboxItem[] | null {
       senderId: row.senderId,
       ...(typeof row.senderName === 'string' ? { senderName: row.senderName } : {}),
       ...(typeof row.conversationName === 'string' ? { conversationName: row.conversationName } : {}),
+      ...(row.conversationType === 'private' || row.conversationType === 'group' || row.conversationType === 'global' ? { conversationType: row.conversationType } : {}),
       kind,
       createdAt: row.createdAt,
       preview: row.preview,

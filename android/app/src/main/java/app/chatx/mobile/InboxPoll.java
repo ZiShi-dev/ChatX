@@ -73,6 +73,7 @@ final class InboxPoll {
                 String conversationId = row.optString("conversationId", "");
                 String kind = row.optString("kind", "");
                 if (id.isEmpty() || conversationId.isEmpty()) continue;
+                if ("message".equals(kind) && !"private".equals(row.optString("conversationType"))) { seen.add(id); continue; }
                 if (already.contains(id) || InboxWatch.suppressed(prefs, conversationId, kind)) {
                     seen.add(id);
                     continue;

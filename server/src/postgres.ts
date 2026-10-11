@@ -619,8 +619,8 @@ export function createPostgresRepository(pool: pg.Pool, store: MediaStore): Auth
       }
     },
     async listNotifications(userId, limit, before) {
-      const result = await pool.query<{ message_id: string; room_id: string; conversation_name: string; sender_id: string; sender_name: string; kind: InboxNotice['kind']; body: string; created_at: Date; read: boolean; deleted: boolean }>(
-        `SELECT n.message_id, n.room_id,
+      const result = await pool.query<{ message_id: string; room_id: string; conversation_name: string; conversation_type: RoomKind; sender_id: string; sender_name: string; kind: InboxNotice['kind']; body: string; created_at: Date; read: boolean; deleted: boolean }>(
+        `SELECT n.message_id, n.room_id, r.kind AS conversation_type,
                 CASE
                   WHEN r.kind = 'private' THEN COALESCE((
                     SELECT ou.display_name FROM room_members om
@@ -661,6 +661,7 @@ export function createPostgresRepository(pool: pg.Pool, store: MediaStore): Auth
         messageId: row.message_id,
         roomId: row.room_id,
         conversationName: row.conversation_name,
+        conversationType: row.conversation_type,
         senderId: row.sender_id,
         senderName: row.sender_name,
         kind: row.kind,
@@ -1006,7 +1007,7 @@ export function createPostgresRepository(pool: pg.Pool, store: MediaStore): Auth
       };
     },
     async readRoomLabel(roomId) {
-      const result = await pool.query<{ name: string | null }>('SELECT name FROM rooms WHERE id = $1', [roomId]);
+      const result = await pool.query<{ name: string | null; kind: RoomKind }>('SELECT name, kind FROM rooms WHERE id = $1', [roomId]);
       return result.rows[0] ?? null;
     },
     async savePushToken(userId, token, platform) {

@@ -540,6 +540,7 @@ export function createMemoryRepository(): AuthRepository {
             text: message?.deleted ? '' : notice.kind === 'reaction' ? notice.text : message?.imageSize ? 'صورة'
               : message && isSealed(message.text) ? message.text : message?.fileName ? message.fileName : notice.text,
             deleted: Boolean(message?.deleted),
+            conversationType: room?.kind,
             conversationName: room?.kind === 'private' ? (other?.displayName || 'محادثة خاصة') : (room?.name || 'ChatX'),
           };
         });
@@ -739,7 +740,7 @@ export function createMemoryRepository(): AuthRepository {
     },
     async readRoomLabel(roomId) {
       const room = rooms.get(roomId);
-      return room ? { name: room.name } : null;
+      return room ? { name: room.name, kind: room.kind } : null;
     },
     async savePushToken(userId, token, platform) {
       pushTokens.set(`${userId}:${token}`, { userId, token, platform });
