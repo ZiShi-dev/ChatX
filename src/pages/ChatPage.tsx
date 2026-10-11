@@ -815,6 +815,7 @@ export default function ChatPage() {
     <IonPage>
       <IonHeader>
         <NetworkStatusBanner />
+        <div className="chat-navigation-slot">
         <PageNav
           quiet
           fallback="/home"
@@ -884,6 +885,8 @@ export default function ChatPage() {
             </div>
           }
         />
+        <div className="message-actions-host" />
+        </div>
         {searchOpen && <MessageSearch value={searchQuery} onChange={setSearchQuery} />}
       </IonHeader>
       <IonContent ref={contentRef} className="chat-scroll">

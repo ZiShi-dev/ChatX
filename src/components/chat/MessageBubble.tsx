@@ -1,3 +1,4 @@
+import MessageActionBar from './MessageActionBar';
 import MediaViewer from './MediaViewer';
 import './MessageMedia.css';
 import './MentionGesture.css';
@@ -428,6 +429,7 @@ function MessageBubble({ message, mine, showAuthor, group = false, direct = fals
     if (!canOpenMenu) return;
     suppressClick.current = true;
     setMoreOpen(false);
+    window.dispatchEvent(new Event('chatx-message-selection'));
     setMenuOpen(true);
   };
 
@@ -485,9 +487,7 @@ function MessageBubble({ message, mine, showAuthor, group = false, direct = fals
 
   const menu = menuOpen
     ? createPortal(
-        <div className="app-scrim sheet" onClick={() => setMenuOpen(false)}>
-          <div className="app-sheet" role="menu" onClick={(event) => event.stopPropagation()}>
-            <span className="app-handle" />
+        <MessageActionBar onClose={() => setMenuOpen(false)}>
             <div className="reaction-bar" role="group" aria-label="تفاعل">
               {QUICK_REACTIONS.map((emoji) => (
                 <button
@@ -568,10 +568,8 @@ function MessageBubble({ message, mine, showAuthor, group = false, direct = fals
                 <IonIcon icon={checkmarkDoneOutline} />
               </button>
             )}
-            <button type="button" className="cancel" onClick={() => setMenuOpen(false)}>إلغاء</button>
-          </div>
-        </div>,
-        document.body,
+          </MessageActionBar>,
+        stackRef.current?.closest('ion-page')?.querySelector('.message-actions-host') ?? document.body,
       )
     : null;
 
