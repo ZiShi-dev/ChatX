@@ -107,7 +107,7 @@ try {
   await repo.addRoomMessage({ id: '33333333-3333-4333-8333-333333333333', roomId, senderId: alice.id, text: 'Profile decoration fixture', createdAt: new Date(), deleted: false });
   const viewer = await account(bob, `/chat/${roomId}`);
   await viewer.getByText('Profile decoration fixture', { exact: true }).waitFor();
-  assert.equal(await viewer.locator('.decoration-hat.is-animated').count(), 0);
+  await viewer.locator('.bubble-person .decoration-hat.is-animated').first().waitFor();
   await viewer.getByRole('button', { name: 'Alice', exact: true }).first().click();
   await viewer.locator('.member-sheet .decoration-hat').waitFor();
   assert.equal(await viewer.locator('.member-sheet .user-card-banner .effect-stars').count(), 1);
@@ -125,6 +125,7 @@ try {
   assert.ok(Math.abs(headerFrame.width - headerFrame.height) < 1, 'Header decoration must remain square');
   await viewer.locator('.startup-screen').waitFor({ state: 'detached' });
   await viewer.screenshot({ path: 'docs/profile-chat-avatar-mobile.png' });
+  await viewer.locator('.chat-nav-main .decoration-hat.is-animated').waitFor();
   await viewer.getByRole('button', { name: 'ملف Alice', exact: true }).click();
   await viewer.locator('.member-sheet').waitFor();
   assert.equal(await viewer.locator('#member-sheet-name').innerText(), 'Alice');
@@ -135,6 +136,10 @@ try {
   await viewer.screenshot({ path: 'docs/profile-private-user-mobile.png' });
   await viewer.getByRole('button', { name: 'وسائط المحادثة', exact: true }).click();
   await viewer.waitForURL('**/chat/' + privateId + '/media');
+  await viewer.goto(origin + '/home');
+  await viewer.locator('.startup-screen').waitFor({ state: 'detached' });
+  await viewer.locator('.home-list .decoration-hat.is-animated').first().waitFor();
+  await viewer.screenshot({ path: 'docs/profile-home-animated-avatars.png' });
   await page.getByRole('button', { name: 'تعديل الملف', exact: true }).click();
   await page.getByRole('dialog').getByRole('tab', { name: 'الاسم والألوان', exact: true }).click();
   await page.getByRole('dialog').getByRole('tab', { name: 'الاسم والألوان', exact: true }).press('ArrowLeft');

@@ -141,6 +141,7 @@ export default function HomePage() {
         title={conversationTitle(conversation, currentUser.id, users)}
         color={other?.color ?? '#8ea099'}
         photo={conversation.type === 'private' ? other?.avatarUrl : conversation.avatarUrl}
+        decoration={other?.avatarDecoration}
         preview={gone ? 'لا يمكن مراسلته بعد الآن' : messagePreview(last, last?.senderId === currentUser.id)}
         deleted={Boolean(last?.deletedForEveryone)}
         time={last ? formatConversationTime(last.createdAt) : undefined}

@@ -2,6 +2,7 @@ import { useRef } from 'react';
 import { IonIcon } from '@ionic/react';
 import { banOutline, notificationsOffOutline, personRemoveOutline, trashOutline } from 'ionicons/icons';
 import Avatar from '../common/Avatar';
+import type { AvatarDecoration } from '../../lib/profileCosmetics';
 import EmojiText from '../common/EmojiText';
 import type { ConversationType } from '../../types/conversation';
 
@@ -14,6 +15,7 @@ type ConversationItemProps = {
   unread: number;
   type: ConversationType;
   photo?: string;
+  decoration?: AvatarDecoration;
   muted?: string;
   detail?: string;
   gone?: boolean;
@@ -31,6 +33,7 @@ export default function ConversationItem({
   unread,
   type,
   photo,
+  decoration,
   muted,
   detail,
   gone = false,
@@ -50,7 +53,7 @@ export default function ConversationItem({
       {gone ? (
         <span className="gone-avatar" aria-hidden="true"><IonIcon icon={personRemoveOutline} /></span>
       ) : (
-        <Avatar name={title} color={color} size={52} src={photo} />
+        <Avatar name={title} color={color} size={52} src={photo} decoration={decoration} />
       )}
       <span className="conversation-copy">
         <span className="conversation-top">

@@ -5,14 +5,41 @@ import ProfileEffect from './ProfileEffect';
 import { useSettingsStore } from '../../stores/settingsStore';
 
 const saver = useSettingsStore.getState().dataSaver;
-afterEach(() => { cleanup(); useSettingsStore.setState({ dataSaver: saver }); vi.restoreAllMocks(); });
+afterEach(() => { cleanup(); useSettingsStore.setState({ dataSaver: saver }); vi.restoreAllMocks(); vi.unstubAllGlobals(); });
 it('preserves the plain avatar and shows an optional removable hat without fetching media', () => {
+  vi.spyOn(navigator, 'hardwareConcurrency', 'get').mockReturnValue(8);
+  useSettingsStore.setState({ dataSaver: false });
   const { container, rerender } = render(<Avatar name="User" color="#3d9b84" decoration="hat" animate />);
   expect(container.querySelector('.decoration-hat.is-animated')).not.toBeNull();
   expect(container.querySelector('img')).toBeNull();
   rerender(<Avatar name="User" color="#3d9b84" decoration="none" />);
   expect(container.querySelector('.avatar-frame')).toBeNull();
   expect(container.querySelector('.avatar')).not.toBeNull();
+});
+
+it('shares one observer and only animates visible avatars outside economy mode', () => {
+  vi.spyOn(navigator, 'hardwareConcurrency', 'get').mockReturnValue(8);
+  useSettingsStore.setState({ dataSaver: false });
+  let callback: IntersectionObserverCallback;
+  let created = 0;
+  const disconnect = vi.fn();
+  vi.stubGlobal('IntersectionObserver', class {
+    constructor(fn: IntersectionObserverCallback) { callback = fn; created++; }
+    observe = vi.fn();
+    unobserve = vi.fn();
+    disconnect = disconnect;
+  });
+  const { container } = render(<><Avatar name="A" color="#3d9b84" decoration="hat" /><Avatar name="B" color="#3d9b84" decoration="hat-rain" /></>);
+  const frames = [...container.querySelectorAll('.avatar-frame')];
+  expect(created).toBe(1);
+  expect(container.querySelector('.is-animated')).toBeNull();
+  act(() => callback([{ target: frames[0], isIntersecting: true }, { target: frames[1], isIntersecting: false }] as IntersectionObserverEntry[], {} as IntersectionObserver));
+  expect(frames[0].classList.contains('is-animated')).toBe(true);
+  expect(frames[1].classList.contains('is-animated')).toBe(false);
+  act(() => callback([{ target: frames[0], isIntersecting: false }] as IntersectionObserverEntry[], {} as IntersectionObserver));
+  expect(container.querySelector('.is-animated')).toBeNull();
+  act(() => useSettingsStore.setState({ dataSaver: true }));
+  expect(disconnect).toHaveBeenCalledOnce();
 });
 it('keeps profile effects static in economy mode and on constrained phones', () => {
   vi.spyOn(navigator, 'hardwareConcurrency', 'get').mockReturnValue(8);

@@ -1,5 +1,7 @@
 import { initials } from '../../lib/conversation';
-import type { CSSProperties } from 'react';
+import { useRef, type CSSProperties } from 'react';
+import { useProfileMotion } from '../../hooks/useProfileMotion';
+import { useVisibleAvatar } from '../../hooks/useVisibleAvatar';
 import { avatarDecoration, type AvatarDecoration } from '../../lib/profileCosmetics';
 import AvatarArtwork from './AvatarArtwork';
 import './ProfileCosmetics.css';
@@ -14,8 +16,11 @@ type AvatarProps = {
   animate?: boolean;
 };
 
-export default function Avatar({ name, color, size = 44, slot, src, decoration, animate = false }: AvatarProps) {
+export default function Avatar({ name, color, size = 44, slot, src, decoration, animate = true }: AvatarProps) {
   const kind = size <= 24 ? 'none' : avatarDecoration(decoration);
+  const frame = useRef<HTMLSpanElement>(null);
+  const allowed = useProfileMotion();
+  const moving = useVisibleAvatar(frame, animate && allowed && kind !== 'none');
   const faceSize = kind === 'none' ? size : Math.round(size * ((kind === 'hat' || kind === 'hat-rain') ? 0.78 : kind === 'dragon' ? 0.74 : 0.82));
   const face = (
     <span
@@ -28,5 +33,5 @@ export default function Avatar({ name, color, size = 44, slot, src, decoration, 
     </span>
   );
   if (kind === 'none') return face;
-  return <span slot={slot} className={`avatar-frame decoration-${kind}${animate ? ' is-animated' : ''}`} style={{ width: size, height: size, minWidth: size, minHeight: size, '--cosmetic-color': color } as CSSProperties} aria-hidden="true"><AvatarArtwork kind={kind} layer="back" />{face}<AvatarArtwork kind={kind} /></span>;
+  return <span ref={frame} slot={slot} className={`avatar-frame decoration-${kind}${moving ? ' is-animated' : ''}`} style={{ width: size, height: size, minWidth: size, minHeight: size, '--cosmetic-color': color } as CSSProperties} aria-hidden="true"><AvatarArtwork kind={kind} layer="back" />{face}<AvatarArtwork kind={kind} /></span>;
 }
