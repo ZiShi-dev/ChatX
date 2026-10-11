@@ -20,3 +20,18 @@ export function emojiParts(text: string) {
   if (end < text.length) parts.push({ text: text.slice(end), asset: null });
   return parts;
 }
+
+/** How many emoji a message contains when it has no other text. Zero means keep the inline size. */
+export function emojiOnlyCount(text: string) {
+  const source = text.trim();
+  if (!source) return 0;
+  let count = 0;
+  let end = 0;
+  for (const match of source.matchAll(EMOJI_SEQUENCE)) {
+    if (source.slice(end, match.index).trim()) return 0;
+    count += 1;
+    end = match.index + match[0].length;
+  }
+  if (!count || source.slice(end).trim()) return 0;
+  return count;
+}

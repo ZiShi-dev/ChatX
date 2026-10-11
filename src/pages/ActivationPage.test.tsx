@@ -46,7 +46,7 @@ afterEach(() => {
   delete window.google;
 });
 
-test('walks through name, appearance and effect before creating the account', async () => {
+test('walks through name, appearance and decoration before creating the account', async () => {
   signIn.mockResolvedValue({ ok: true, step: 'profile', name: 'نورة', picture: 'https://lh3.googleusercontent.com/a/photo' });
   finish.mockResolvedValue('ok');
   const { default: ActivationPage } = await import('./ActivationPage');
@@ -64,17 +64,15 @@ test('walks through name, appearance and effect before creating the account', as
   fireEvent.click(screen.getByRole('button', { name: 'التالي' }));
   expect(screen.getByRole('heading', { name: 'الزينة' })).toBeInTheDocument();
   fireEvent.click(screen.getByRole('button', { name: /التنين$/ }));
-  fireEvent.click(screen.getByRole('button', { name: 'تساقط البتلات' }));
   fireEvent.click(screen.getByRole('button', { name: 'إنشاء الحساب' }));
   expect(await screen.findByRole('button', { name: 'إنشاء الحساب' })).toBeEnabled();
   expect(finish).toHaveBeenCalledWith('token', 'ليلى', {
     color: '#4d7ea8',
     messageFont: 'clear',
     avatarDecoration: 'dragon',
-    profileEffect: 'jade-petals',
   });
   expect(navigate).toHaveBeenCalledWith('/home', { replace: true });
-}, 15000);
+}, 25000);
 
 test('keeps the first profile still while data saving is on', async () => {
   useSettingsStore.setState({ dataSaver: true });

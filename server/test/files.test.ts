@@ -62,6 +62,12 @@ describe('chat files', () => {
     }));
     assert.equal(opened.status, 200);
     const roomId = ((await opened.json()) as { conversation: { id: string } }).conversation.id;
+    assert.equal((await handle(new Request('http://127.0.0.1/api/friends', {
+      method: 'POST', headers: headers(noraToken), body: JSON.stringify({ userId: layla.id, action: 'ask' }),
+    }))).status, 200);
+    assert.equal((await handle(new Request('http://127.0.0.1/api/friends', {
+      method: 'POST', headers: headers(laylaToken), body: JSON.stringify({ userId: nora.id, action: 'accept' }),
+    }))).status, 200);
     const messageId = '55555555-5555-4555-8555-555555555555';
 
     const rejected = await handle(new Request(`http://127.0.0.1/api/rooms/${roomId}/messages`, {

@@ -58,61 +58,6 @@
 @keyframes profile-orbit { to { transform:rotate(360deg); } }
 @keyframes profile-prism { 50% { transform:rotate(6deg); opacity:.7; } }
 .profile-frame, .member-sheet, .profile-editor-preview, .account-hero { position:relative; isolation:isolate; }
-.profile-effect { position:absolute; inset:0; border-radius:inherit; overflow:hidden; pointer-events:none; z-index:-1; }
-.profile-frame > .profile-effect, .member-sheet > .profile-effect { border-radius:24px; opacity:.65; }
-.profile-effect > .cultivation-scene { position:absolute; width:100%; height:clamp(200px,46%,320px); right:0; bottom:4%; opacity:.46; }
-.profile-effect > .cultivation-scene .cultivation-aura, .profile-effect > .cultivation-scene .storm-orbit { display:none; }
-.profile-effect > .cultivation-scene .cultivation-smoke { opacity:.28; }
-.profile-effect > .atmosphere-artwork { position:absolute; inset:0; opacity:.45; }
-.profile-frame > .profile-effect::after, .member-sheet > .profile-effect::after { content:''; position:absolute; inset:0; background:linear-gradient(180deg,transparent 15%,var(--chatx-bg,#0e1714) 42%,transparent 76%); opacity:.5; }
-.profile-editor-preview > .profile-effect > .cultivation-scene, .account-hero > .profile-effect > .cultivation-scene { height:60%; bottom:0; opacity:.4; }
-.profile-effect i { position:absolute; display:block; }
-.atmosphere-artwork { width:100%; height:100%; display:block; }
-.is-animated .atmosphere-veil { animation:atmosphere-curtain 14s ease-in-out infinite alternate; transform-origin:center; }
-.is-animated .veil-1 { animation-duration:18s; animation-delay:-8s; }
-.is-animated .veil-2 { animation-duration:21s; animation-delay:-12s; opacity:.65; }
-.is-animated .atmosphere-star { animation:atmosphere-twinkle 6s ease-in-out infinite; }
-.is-animated .star-1 { animation-duration:8s; animation-delay:-3s; }
-.is-animated .star-2 { animation-duration:11s; animation-delay:-7s; }
-.is-animated .atmosphere-meteor { animation:atmosphere-shoot 9s ease-out infinite; }
-.is-animated .meteor-1 { animation-delay:-3.2s; animation-duration:11s; }
-.is-animated .meteor-2 { animation-delay:-6.4s; animation-duration:13s; }
-.is-animated .sword-tassel { animation:sword-tassel-wave 3.7s ease-in-out infinite; transform-origin:0 63px; }
-@keyframes atmosphere-curtain { 0% { transform:translate(-16px,6px) skewX(-3deg) scaleY(.94); opacity:.6; } 100% { transform:translate(18px,-9px) skewX(4deg) scaleY(1.08); opacity:1; } }
-@keyframes atmosphere-twinkle { 0%,100% { opacity:.25; } 40% { opacity:.9; } 65% { opacity:.5; } }
-@keyframes atmosphere-shoot { 0%,8%,100% { opacity:0; transform:translateX(-30px); } 12% { opacity:1; } 30% { transform:translateX(180px); opacity:0; } }
-@keyframes sword-tassel-wave { 50% { transform:rotate(12deg) skewX(-4deg); } }
-@media (prefers-reduced-motion:reduce) { .profile-effect.is-animated .atmosphere-artwork *, .profile-effect.is-animated .sword-tassel { animation:none; } }
-.effect-aurora i { width:70%; height:65%; border-radius:50%; background:radial-gradient(ellipse,var(--cosmetic-color),transparent 70%); opacity:.16; left:-20%; top:30%; }
-.effect-aurora i:nth-child(2) { width:54%; height:48%; left:58%; top:-6%; opacity:.12; }
-.effect-aurora i:nth-child(3) { width:42%; height:36%; left:24%; top:52%; opacity:.1; }
-.effect-aurora i:nth-child(n+4) { display:none; }
-.effect-aurora.is-animated i { animation:profile-aurora 14s ease-in-out infinite alternate; }
-.effect-aurora.is-animated i:nth-child(2) { animation-duration:18s; animation-delay:-7s; }
-.effect-aurora.is-animated i:nth-child(3) { animation-duration:11s; animation-delay:-3s; }
-.effect-stars i { width:5px; height:5px; background:var(--cosmetic-color); border-radius:50%; opacity:.35; top:22%; left:12%; }
-.effect-stars i:nth-child(2) { top:14%; left:78%; width:3px; height:3px; }
-.effect-stars i:nth-child(3) { top:62%; left:88%; }
-.effect-stars i:nth-child(4) { top:75%; left:18%; width:3px; height:3px; opacity:.22; }
-.effect-stars i:nth-child(5) { top:45%; left:50%; width:4px; height:4px; }
-.effect-stars i:nth-child(6) { top:30%; left:34%; width:3px; height:3px; opacity:.25; }
-.effect-stars i:nth-child(7) { top:58%; left:62%; width:4px; height:4px; }
-.effect-stars i:nth-child(8) { top:18%; left:48%; width:2px; height:2px; opacity:.2; }
-.effect-stars.is-animated i { animation:profile-star 5.2s ease-in-out infinite alternate; }
-.effect-stars.is-animated i:nth-child(3n+2) { animation-duration:6.8s; }
-.effect-stars.is-animated i:nth-child(3n) { animation-duration:4.4s; }
-.effect-stars i:nth-child(2n) { animation-delay:-2s; }
-.effect-stars i:nth-child(3n) { animation-delay:-4s; }
-.effect-meteors i { height:2px; width:64px; background:linear-gradient(90deg,transparent,var(--cosmetic-color)); opacity:.35; top:18%; left:8%; }
-.effect-meteors i:nth-child(2) { top:58%; left:62%; width:48px; }
-.effect-meteors i:nth-child(3) { top:82%; left:16%; width:40px; }
-.effect-meteors i:nth-child(n+4) { display:none; }
-.effect-meteors.is-animated i { animation:profile-meteor 8s ease-in infinite; }
-.effect-meteors.is-animated i:nth-child(2) { animation-delay:-3.2s; animation-duration:9.5s; }
-.effect-meteors.is-animated i:nth-child(3) { animation-delay:-6s; animation-duration:7.2s; }
-@keyframes profile-aurora { to { transform:translate(10%,14%); opacity:.28; } }
-@keyframes profile-star { to { opacity:.82; transform:translate(3px,-10px) scale(1.35); } }
-@keyframes profile-meteor { 0%,100% { opacity:0; transform:translate(-28px,18px) rotate(-32deg); } 12% { opacity:.15; } 24% { opacity:.75; } 48% { opacity:0; transform:translate(72px,-46px) rotate(-32deg); } }
 .cosmetic-preview { padding:16px; border:1px solid var(--chatx-frame); border-radius:18px; display:flex; align-items:center; gap:20px; overflow:hidden; min-height:112px; background:var(--chatx-raised); }
 .cosmetic-preview strong { min-width:0; overflow-wrap:anywhere; font-size:20px; }
 .cosmetic-options { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px; margin:12px 0; }
@@ -129,10 +74,16 @@
 .profile-editor-fields .profile-editor-section { margin:16px 0; }
 .profile-editor-fields [hidden] { display:none; }
 .profile-editor .profile-editor-footer { position:static; flex:none; padding:12px 20px max(12px,env(safe-area-inset-bottom)); margin:0; border-top:1px solid var(--chatx-frame); background:var(--chatx-surface); }
-.profile-pop .user-card-banner + .avatar-frame { margin-top:-36px; position:relative; }
+.profile-pop .user-card-banner + .avatar-frame { margin-top:-42px; position:relative; align-self:flex-start; }
+.profile-editor-preview { margin:0 -20px 8px; }
+.profile-editor-banner { height:100px; overflow:hidden; background:var(--banner, var(--chatx-accent)); }
+.profile-editor-banner img { display:block; width:100%; height:100%; object-fit:cover; }
+.profile-editor-preview .cosmetic-preview { position:relative; margin:-40px 16px 0; padding:0; min-height:0; border:0; border-radius:0; background:transparent; align-items:flex-end; gap:12px; }
+.profile-editor-preview .cosmetic-preview .avatar,
+.profile-editor-preview .cosmetic-preview .avatar-frame { box-shadow:0 0 0 4px var(--chatx-raised); }
 @media (min-width:760px) { .profile-editor-tabs button { font-size:14px; } .profile-editor-fields { max-height:48vh; } }
 @media (max-height:550px) { .profile-editor-header { padding-top:4px; } .profile-editor-header h2 { margin:0 0 4px; font-size:16px; } .profile-editor-header .cosmetic-preview { min-height:72px; padding:8px 12px; } .profile-editor-header .avatar-frame, .profile-editor-header .avatar { transform:scale(.8); margin:-8px; } }
-@media (prefers-reduced-motion:reduce) { .profile-effect.is-animated i, .avatar-frame.is-animated::after, .avatar-frame.is-animated .avatar-artwork, .avatar-frame.is-animated .dragon-spark { animation:none; } }
+@media (prefers-reduced-motion:reduce) { .avatar-frame.is-animated::after, .avatar-frame.is-animated .avatar-artwork, .avatar-frame.is-animated .dragon-spark { animation:none; } }
 
 .cosmetic-options[aria-label="زينة الصورة"] button { display:flex; flex-direction:column; align-items:center; justify-content:center; gap:10px; min-height:100px; }
 
@@ -143,83 +94,7 @@
 
 .decoration-prism::after { display:none; }
 .decoration-prism.is-animated .prism-artwork { animation:profile-prism 6s ease-in-out infinite; }
-/* Banner photographs remain above the profile-wide atmosphere. */
+/* Banner stays above the name. */
 .user-card-banner, .profile-editor-banner { position:relative; isolation:isolate; }
 .profile-banner .banner-actions { z-index:4; }
-.cultivation-scene { display:block; width:100%; height:100%; }
-.cultivation-halo { opacity:.85; }
-.is-animated .cultivation-halo { animation:spirit-halo 7s ease-in-out infinite; }
-.is-animated .cultivation-mist { animation:spirit-mist 12s ease-in-out infinite alternate; }
-.is-animated .celestial-dragon-body { animation:celestial-dragon 9s ease-in-out infinite; transform-origin:320px 112px; }
-.is-animated .celestial-dragon-head { animation:dragon-head 5.5s ease-in-out infinite; transform-origin:455px 88px; }
-.is-animated .dragon-whiskers { animation:dragon-whiskers 3.4s ease-in-out infinite; transform-origin:480px 96px; }
-.is-animated .sword-seal, .is-animated .time-seal { animation:spirit-seal 32s linear infinite; transform-origin:320px 118px; }
-.is-animated .time-seal { transform-origin:320px 112px; animation-direction:reverse; }
-.is-animated .immortal-sword { animation:immortal-sword 4.8s ease-in-out infinite; transform-box:fill-box; transform-origin:center 82%; }
-.is-animated .sword-0, .is-animated .sword-5 { animation-duration:5.6s; }
-.is-animated .sword-1, .is-animated .sword-4 { animation-delay:-1.5s; }
-.is-animated .sword-2, .is-animated .sword-3 { animation-delay:-3s; }
-.is-animated .gu-cicada { animation:cicada-hover 6s ease-in-out infinite; }
-.is-animated .wing-left { animation:cicada-left 3.2s ease-in-out infinite; transform-origin:315px 108px; }
-.is-animated .wing-right { animation:cicada-right 3.2s ease-in-out infinite; transform-origin:325px 108px; }
-.is-animated .spirit-mote { animation:mote-drift 8s ease-in-out infinite; }
-.is-animated .mote-1, .is-animated .mote-5 { animation-duration:6.4s; animation-delay:-2s; }
-.is-animated .mote-2, .is-animated .mote-6 { animation-duration:10s; animation-delay:-4.5s; }
-.is-animated .mote-3 { animation-duration:7.2s; animation-delay:-1s; }
-.is-animated .mote-4, .is-animated .mote-7 { animation-duration:9s; animation-delay:-6s; }
-@keyframes spirit-halo { 50% { opacity:.55; } }
-@keyframes spirit-mist { to { transform:translateX(14px); opacity:.5; } }
-@keyframes celestial-dragon { 30% { transform:translate(-10px,-8px) rotate(-1.5deg); } 68% { transform:translate(8px,3px) rotate(1.2deg); } }
-@keyframes dragon-head { 40% { transform:translate(4px,-5px) rotate(-2.5deg); } 75% { transform:translate(-3px,2px) rotate(1.5deg); } }
-@keyframes dragon-whiskers { 50% { transform:rotate(-7deg); } }
-@keyframes spirit-seal { to { transform:rotate(360deg); } }
-@keyframes immortal-sword { 50% { transform:translateY(-12px) rotate(-3deg); } }
-@keyframes cicada-hover { 50% { transform:translateY(-8px); } }
-@keyframes cicada-left { 0%,100% { transform:rotate(0deg); } 28% { transform:rotate(-12deg); } 55% { transform:rotate(-2deg); } }
-@keyframes cicada-right { 0%,100% { transform:rotate(0deg); } 28% { transform:rotate(12deg); } 55% { transform:rotate(2deg); } }
-@keyframes mote-drift { 0%,100% { transform:translate(0,0); opacity:.3; } 50% { transform:translate(6px,-16px); opacity:.95; } }
-.profile-editor-preview { border:1px solid var(--chatx-frame); border-radius:18px; overflow:hidden; }
-.profile-editor-banner { height:100px; overflow:hidden; background:radial-gradient(ellipse at 80% 0,var(--banner),transparent 85%),var(--chatx-bg); }
-.profile-editor-banner > img { width:100%; height:100%; object-fit:cover; display:block; }
-.profile-editor-preview .cosmetic-preview { margin-top:-28px; min-height:100px; border:0; border-radius:0; background:transparent; }
-@media (max-height:600px) { .profile-editor-banner { height:64px; } .profile-editor-preview .cosmetic-preview { min-height:72px; } }
-@media (prefers-reduced-motion:reduce) { .profile-effect.is-animated .cultivation-scene * { animation:none; } }
-/* Transparent atmosphere leaves the uploaded banner visible underneath. */
-.is-animated .smoke-ribbon { animation:cultivation-smoke 10s ease-in-out infinite; transform-box:fill-box; transform-origin:center; }
-.is-animated .smoke-right { animation-name:cultivation-smoke-reverse; animation-delay:-5s; }
-.is-animated .smoke-high { animation-duration:14s; animation-delay:-7s; }
-.is-animated .cultivation-aura { animation:cultivation-aura 6s ease-in-out infinite; transform-origin:320px 174px; }
-@keyframes cultivation-smoke { 0%,100% { transform:translate(-12px,9px) scale(.97); opacity:.35; } 50% { transform:translate(18px,-13px) scale(1.07); opacity:.9; } }
-@keyframes cultivation-smoke-reverse { 0%,100% { transform:translate(12px,7px) scale(1.02); opacity:.4; } 50% { transform:translate(-18px,-16px) scale(.97); opacity:.85; } }
-@keyframes cultivation-aura { 50% { transform:scale(1.08,.85); opacity:.45; } }
-@media (prefers-reduced-motion:reduce) { .profile-effect.is-animated .cultivation-scene * { animation:none; } }
-
-/* Petals open from the base. Lightning rests, then flashes once. */
-.is-animated .lotus-petal { animation:lotus-breathe 7s ease-in-out infinite; transform-origin:320px 158px; }
-.is-animated .petal-1, .is-animated .petal-5 { animation-delay:-2s; }
-.is-animated .petal-2, .is-animated .petal-4 { animation-delay:-4s; }
-.is-animated .lotus-pearl { animation:lotus-pearl 6s ease-in-out infinite; }
-.is-animated .tribulation-bolt { animation:tribulation-glow 9s ease-in-out infinite; }
-.is-animated .bolt-1 { animation-delay:-3.4s; }
-.is-animated .bolt-2 { animation-delay:-6.2s; }
-.is-animated .tribulation-core { animation:tribulation-core 9s ease-in-out infinite; transform-origin:320px 108px; }
-.is-animated .storm-clouds { animation:storm-drift 11s ease-in-out infinite alternate; }
-.is-animated .storm-orbit { animation:cultivation-aura 8s ease-in-out infinite; transform-origin:320px 172px; }
-.is-animated .drift-petal { animation:petal-fall 9s linear infinite; transform-box:fill-box; transform-origin:center; }
-.is-animated .drift-petal.petal-1, .is-animated .drift-petal.petal-5 { animation-duration:11s; animation-delay:-3s; }
-.is-animated .drift-petal.petal-2, .is-animated .drift-petal.petal-6 { animation-duration:8s; animation-delay:-5s; }
-.is-animated .drift-petal.petal-3, .is-animated .drift-petal.petal-7 { animation-duration:12s; animation-delay:-1.5s; }
-.is-animated .ember { animation:ember-rise 7.5s ease-in infinite; }
-.is-animated .ember-1, .is-animated .ember-5 { animation-duration:9s; animation-delay:-2.4s; }
-.is-animated .ember-2, .is-animated .ember-6 { animation-duration:6.2s; animation-delay:-4s; }
-.is-animated .ember-3, .is-animated .ember-7 { animation-duration:8.4s; animation-delay:-1s; }
-@keyframes lotus-breathe { 50% { transform:scale(1.06,1.12); opacity:.95; } }
-@keyframes lotus-pearl { 50% { transform:translateY(-8px); opacity:.7; } }
-@keyframes tribulation-glow { 0%,64%,100% { opacity:.2; transform:translateY(0); } 70% { opacity:1; transform:translateY(-2px); } 76% { opacity:.28; } 82% { opacity:.8; } 88% { opacity:.2; } }
-@keyframes tribulation-core { 50% { transform:scale(1.12); opacity:.5; } 72% { transform:scale(1.2); opacity:.85; } }
-@keyframes storm-drift { to { transform:translateX(14px); opacity:.6; } }
-@keyframes petal-fall { 0% { transform:translateY(-16px) rotate(-10deg); opacity:0; } 14% { opacity:.9; } 100% { transform:translateY(86px) rotate(28deg); opacity:0; } }
-@keyframes ember-rise { 0% { transform:translate(0,8px); opacity:0; } 16% { opacity:.9; } 100% { transform:translate(8px,-72px); opacity:0; } }
-@media (prefers-reduced-motion:reduce) { .profile-effect.is-animated .cultivation-scene * { animation:none; } }
-
 @media (prefers-reduced-motion:reduce) { .avatar-frame.is-animated .hat-rain-back, .avatar-frame.is-animated .hat-rain-front { animation:none; } }

@@ -231,6 +231,14 @@ describe('inbox', () => {
       body: JSON.stringify({ kind: 'private', userId: layla.id }),
     }));
     const room = await opened.json() as { conversation: { id: string } };
+    assert.equal((await handle(new Request('http://127.0.0.1/api/friends', {
+      method: 'POST', headers: noraHeaders, body: JSON.stringify({ userId: layla.id, action: 'ask' }),
+    }))).status, 200);
+    assert.equal((await handle(new Request('http://127.0.0.1/api/friends', {
+      method: 'POST',
+      headers: { cookie: `chatx_session=${laylaToken}`, 'content-type': 'application/json', 'x-chatx-request': '1' },
+      body: JSON.stringify({ userId: nora.id, action: 'accept' }),
+    }))).status, 200);
     const firstId = '44444444-4444-4444-8444-444444444444';
     await handle(new Request(`http://127.0.0.1/api/rooms/${room.conversation.id}/messages`, {
       method: 'POST',

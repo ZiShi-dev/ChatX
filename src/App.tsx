@@ -63,7 +63,7 @@ function NativeChrome() {
     if (!Capacitor.isNativePlatform()) return;
     void StatusBar.setStyle({ style: Style.Light }).catch(() => undefined);
     void StatusBar.setBackgroundColor({ color: '#121a18' }).catch(() => undefined);
-    const opened = listenForChatNotificationOpens((conversationId) => openNotificationChat(navigate, `/chat/${conversationId}`));
+    const opened = listenForChatNotificationOpens((conversationId, messageId) => openNotificationChat(navigate, messageId ? `/chat/${conversationId}?at=${messageId}` : `/chat/${conversationId}`));
     const inboxOpen = Capacitor.isNativePlatform()
       ? InboxWatch.addListener('open', (event) => {
           if (!event.conversationId) return;

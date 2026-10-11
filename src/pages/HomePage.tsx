@@ -32,6 +32,7 @@ import {
 } from '../lib/conversation';
 import { formatInboxBadge, groupNotifications, inboxBadgeCount } from '../lib/inbox';
 import { connectionLabel, getUserPresence } from '../lib/presence';
+import { isIncomingRequest } from '../lib/friends';
 import { isServerId } from '../lib/home';
 import { startPolling } from '../lib/poll';
 import { brandName, textDirection } from '../lib/appearance';
@@ -102,7 +103,7 @@ export default function HomePage() {
     };
   }, [loadHome, serverAccount]);
 
-  const globalChat = conversations.find((conversation) => isGlobalConversation(conversation));
+  const globalChat = conversations.find((conversation) => isGlobalConversation(conversation) && conversation.participantIds.includes(currentUser.id));
   const visible = useMemo(() => {
     const list = conversations.filter((conversation) => {
       if (isGlobalConversation(conversation)) return false;
@@ -114,6 +115,18 @@ export default function HomePage() {
     return [...sorted.filter((conversation) => isSelfChat(conversation)), ...sorted.filter((conversation) => !isSelfChat(conversation))];
   }, [conversations, filter, messages]);
   const showGlobal = Boolean(globalChat) && filter !== 'private';
+  const requestChat = (conversation: Conversation) => (
+    isIncomingRequest(conversation, messages, currentUser.id)
+    && !deletedPrivatePeer(conversation, currentUser.id, users)
+  );
+  const requests = useMemo(
+    () => visible.filter(requestChat),
+    [messages, currentUser.id, users, visible],
+  );
+  const listed = useMemo(
+    () => visible.filter((conversation) => !requestChat(conversation)),
+    [messages, currentUser.id, users, visible],
+  );
   const inboxClearedAt = useChatStore((state) => state.inboxClearedAt);
   const inboxReadIds = useChatStore((state) => state.inboxReadIds);
   const notifyTypes = useSettingsStore((state) => state.notifyTypes);
@@ -147,7 +160,7 @@ export default function HomePage() {
         time={last ? formatConversationTime(last.createdAt) : undefined}
         unread={gone ? 0 : conversation.unreadCount}
         type={conversation.type}
-        detail={self ? 'رسائلك' : people.length > 0 ? roomSummary(people.length, online) : undefined}
+        detail={self ? 'رسائلك' : conversation.friend === 'outgoing' ? 'بانتظار القبول' : people.length > 0 ? roomSummary(people.length, online) : undefined}
         muted={gone ? undefined : muteHint(conversation.id, mutes)}
         gone={gone}
         onRemove={gone ? () => setRemoveTarget(conversation) : undefined}
@@ -198,13 +211,21 @@ export default function HomePage() {
               {renderConversation(globalChat)}
             </section>
           )}
-          {visible.length === 0 && !showGlobal ? (
+          {requests.length > 0 && (
+            <section className="home-section">
+              <h2>الطلبات</h2>
+              <div className="home-list">
+                {requests.map((conversation) => renderConversation(conversation))}
+              </div>
+            </section>
+          )}
+          {listed.length === 0 && requests.length === 0 && !showGlobal ? (
             <EmptyState title="لا توجد محادثات حتى الآن" />
-          ) : visible.length > 0 ? (
+          ) : listed.length > 0 ? (
             <section className="home-section">
               {showGlobal && <h2>المحادثات الأخيرة</h2>}
               <div className="home-list">
-                {visible.map((conversation) => renderConversation(conversation))}
+                {listed.map((conversation) => renderConversation(conversation))}
               </div>
             </section>
           ) : null}

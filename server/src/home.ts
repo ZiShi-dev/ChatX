@@ -6,6 +6,7 @@ import type { AuthUser, HomeRoom, RoomMessage, StoredReaction } from './types.ts
 import { GROUP_TURN_MS, groupTurnNotice } from './groupTurn.ts';
 import { sendMessagePush } from './push.ts';
 import { wakeRoom } from './roomLive.ts';
+import { ERASE_OPERATOR_EMAIL } from './eraseMember.ts';
 import { cleanBio, cleanAvatar, cleanBanner } from './profile.ts';
 import { cleanHints, cleanSealed, FILE_BYTES_MAX, IMAGE_BYTES_MAX, isSealed, isVideoFileName, SEALED_FILE_NAME, SEALED_OVERHEAD, SEALED_VIDEO_NAME, VIDEO_BYTES_MAX } from './sealed.ts';
 
@@ -71,7 +72,6 @@ function memberView(user: AuthUser) {
     ...(user.accentColor ? { color: user.accentColor } : {}),
     ...(user.messageFont && user.messageFont !== 'system' ? { messageFont: user.messageFont } : {}),
     avatarDecoration: user.avatarDecoration ?? 'none',
-    profileEffect: user.profileEffect ?? 'none',
     ...(user.customRoleLabel && user.customRoleColors
       ? { customRoleLabel: user.customRoleLabel, customRoleColors: user.customRoleColors.split(',') }
       : {}),
@@ -93,6 +93,8 @@ function roomView(room: HomeRoom) {
     ...(room.bannerUrl ? { bannerUrl: room.bannerUrl } : {}),
     ...(room.kind !== 'private' && room.turnUserId ? { turnUserId: room.turnUserId } : {}),
     ...(room.kind !== 'private' && room.turnOpensAt ? { turnOpensAt: room.turnOpensAt.toISOString() } : {}),
+    ...(room.kind === 'global' && room.closed ? { closed: true } : {}),
+    ...(room.friend ? { friend: room.friend } : {}),
     ...(room.lastMessage
       ? {
           lastMessage: {
@@ -162,6 +164,58 @@ function cleanEmoji(value: unknown) {
 async function sessionUser(deps: Deps, token: string) {
   if (!token) return null;
   return deps.repo.findSessionUser(hashSession(token), new Date(deps.now()));
+}
+
+function managesRooms(user: AuthUser) {
+  return user.role === 'admin' || user.role === 'creator' || user.email.toLowerCase() === ERASE_OPERATOR_EMAIL;
+}
+
+export async function listRoomOutsiders(deps: Deps, token: string, roomId: string) {
+  const user = await sessionUser(deps, token);
+  if (!user) return { ok: false as const, error: 'invalid_credentials' as const };
+  if (!managesRooms(user) || !ROOM_ID.test(roomId)) return { ok: false as const, error: 'forbidden' as const };
+  const gate = await deps.repo.roomGate(roomId);
+  if (!gate || (gate.kind !== 'group' && gate.kind !== 'global')) return { ok: false as const, error: 'not_found' as const };
+  const inside = new Set(gate.memberIds);
+  const users = (await deps.repo.listUsers()).filter((item) => (
+    (item.role === 'member' || item.role === 'admin' || item.role === 'creator') && !inside.has(item.id)
+  ));
+  return { ok: true as const, users: users.map(memberView) };
+}
+
+export async function changeRoomMember(deps: Deps, input: { token: string; roomId: string; userId: unknown; present: unknown }) {
+  const user = await sessionUser(deps, input.token);
+  if (!user) return { ok: false as const, error: 'invalid_credentials' as const };
+  if (!managesRooms(user)) return { ok: false as const, error: 'forbidden' as const };
+  if (!ROOM_ID.test(input.roomId) || typeof input.userId !== 'string' || !ROOM_ID.test(input.userId) || typeof input.present !== 'boolean') {
+    return { ok: false as const, error: 'invalid_credentials' as const };
+  }
+  if (!input.present && input.userId === user.id) return { ok: false as const, error: 'forbidden' as const };
+  const result = await deps.repo.setRoomMember(input.roomId, input.userId, input.present);
+  if (result === 'ok') return { ok: true as const };
+  return { ok: false as const, error: result === 'forbidden' ? 'forbidden' as const : 'not_found' as const };
+}
+
+export async function setMainRoomOpen(deps: Deps, input: { token: string; open: unknown }) {
+  const user = await sessionUser(deps, input.token);
+  if (!user) return { ok: false as const, error: 'invalid_credentials' as const };
+  if (typeof input.open !== 'boolean') return { ok: false as const, error: 'invalid_credentials' as const };
+  if (!managesRooms(user)) return { ok: false as const, error: 'forbidden' as const };
+  await deps.repo.setMainRoomOpen(input.open);
+  return { ok: true as const };
+}
+
+export async function removeCreatedGroup(deps: Deps, input: { token: string; roomId: string }) {
+  const user = await sessionUser(deps, input.token);
+  if (!user) return { ok: false as const, error: 'invalid_credentials' as const };
+  if (!ROOM_ID.test(input.roomId)) return { ok: false as const, error: 'not_found' as const };
+  const gate = await deps.repo.roomGate(input.roomId);
+  if (!gate) return { ok: false as const, error: 'not_found' as const };
+  if (gate.kind !== 'group') return { ok: false as const, error: 'not_group' as const };
+  if (!managesRooms(user) && gate.adminId !== user.id) return { ok: false as const, error: 'forbidden' as const };
+  const result = await deps.repo.deleteCreatedGroup(input.roomId);
+  if (result === 'ok') return { ok: true as const };
+  return { ok: false as const, error: result === 'forbidden' ? 'forbidden' as const : 'not_found' as const };
 }
 
 async function publishTurnNotices(deps: Deps, userId: string) {
@@ -268,8 +322,15 @@ export async function markRoomSeen(deps: Deps, input: { token: string; roomId: s
   const user = await sessionUser(deps, input.token);
   if (!user || user.role !== 'member') return { ok: false as const, error: 'invalid_credentials' as const };
   if (!ROOM_ID.test(input.roomId) || typeof input.messageId !== 'string' || !ROOM_ID.test(input.messageId)) return { ok: false as const, error: 'not_found' as const };
-  const ok = await deps.repo.markRoomRead(input.roomId, user.id, new Date(deps.now()), input.messageId);
-  if (!ok) return { ok: false as const, error: 'not_found' as const };
+  const gate = await deps.repo.privateSendGate(input.roomId, user.id);
+  if (gate === 'missing') return { ok: false as const, error: 'not_found' as const };
+  if (gate === 'locked') {
+    const found = await deps.repo.listRoomMessages(input.roomId, user.id, 1, { aroundId: input.messageId });
+    if (!found?.some((message) => message.id === input.messageId)) return { ok: false as const, error: 'not_found' as const };
+  } else {
+    const ok = await deps.repo.markRoomRead(input.roomId, user.id, new Date(deps.now()), input.messageId);
+    if (!ok) return { ok: false as const, error: 'not_found' as const };
+  }
   wakeRoom(input.roomId);
   const [rooms, unreadNotifications] = await Promise.all([deps.repo.listHome(user.id, new Date(deps.now())), deps.repo.countUnreadNotifications(user.id)]);
   return { ok: true as const, unreadCount: rooms.find((room) => room.id === input.roomId)?.unreadCount ?? 0, unreadNotifications };
@@ -461,6 +522,11 @@ export async function postRoomMessage(deps: Deps, input: { token: string; roomId
   const user = await sessionUser(deps, input.token);
   if (!user || user.role !== 'member') return { ok: false as const, error: 'invalid_credentials' as const };
   await deps.repo.ensureHome(user.id);
+  const gate = await deps.repo.privateSendGate(input.roomId, user.id);
+  if (gate === 'missing') return { ok: false as const, error: 'not_found' as const };
+  if (gate === 'locked' || (gate === 'intro' && (image || file || input.sealedMedia))) {
+    return { ok: false as const, error: 'forbidden' as const };
+  }
   const saved = await deps.repo.addRoomMessage({
     id: input.id,
     roomId: input.roomId,
@@ -482,4 +548,45 @@ export async function postRoomMessage(deps: Deps, input: { token: string; roomId
     void sendMessagePush(deps, payload);
   }
   return { ok: true as const, message: messageView(saved) };
+}
+
+export async function changeFriend(deps: Deps, input: { token: string; userId: unknown; action: unknown }) {
+  const user = await sessionUser(deps, input.token);
+  if (!user || user.role !== 'member') return { ok: false as const, error: 'invalid_credentials' as const };
+  if (typeof input.userId !== 'string' || !ROOM_ID.test(input.userId) || input.userId === user.id) {
+    return { ok: false as const, error: 'invalid_credentials' as const };
+  }
+  if (input.action !== 'ask' && input.action !== 'accept' && input.action !== 'decline') {
+    return { ok: false as const, error: 'invalid_credentials' as const };
+  }
+  const at = new Date(deps.now());
+  const result = await deps.repo.changeFriend(user.id, input.userId, input.action, at);
+  if (result === 'missing') return { ok: false as const, error: 'not_found' as const };
+  if (result === 'forbidden') return { ok: false as const, error: 'forbidden' as const };
+  if (result === 'created' || result === 'accepted') {
+    const roomId = await deps.repo.createRoom({
+      id: randomUUID(),
+      kind: 'private',
+      name: null,
+      creatorId: user.id,
+      memberIds: [input.userId],
+      at,
+    });
+    if (roomId !== 'invalid') {
+      const saved = await deps.repo.addRoomMessage({
+        id: randomUUID(),
+        roomId,
+        senderId: user.id,
+        text: result === 'created' ? 'طلب صداقة' : 'تم قبول الصداقة',
+        createdAt: at,
+        deleted: false,
+        event: true,
+      });
+      if (saved !== 'missing' && saved !== 'invalid') {
+        await deps.repo.notifyRoomMessage(saved);
+        wakeRoom(roomId);
+      }
+    }
+  }
+  return { ok: true as const };
 }

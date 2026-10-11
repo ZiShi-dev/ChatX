@@ -3,12 +3,11 @@ import { IonContent, IonIcon, IonPage } from '@ionic/react';
 import { cameraOutline } from 'ionicons/icons';
 import { useNavigate } from 'react-router-dom';
 import Avatar from '../components/common/Avatar';
-import ProfileEffect from '../components/common/ProfileEffect';
 import { useDataSaver } from '../hooks/useDataSaver';
 import { useProfileMotion } from '../hooks/useProfileMotion';
 import { brandName, DEFAULT_LOGO } from '../lib/appearance';
 import { readBanner, readPhoto } from '../lib/photo';
-import { AVATAR_DECORATIONS, PROFILE_EFFECTS, type AvatarDecoration, type ProfileEffectId } from '../lib/profileCosmetics';
+import { AVATAR_DECORATIONS, type AvatarDecoration } from '../lib/profileCosmetics';
 import { displayNameFontClass, displayNameStyleForUser, MESSAGE_FONT_OPTIONS, normalizeUserColorInput, sanitizeUserColor } from '../lib/userStyle';
 import type { MessageFontId } from '../types/user';
 import { useAuthStore } from '../stores/authStore';
@@ -74,7 +73,6 @@ export default function ActivationPage() {
   const [colorInput, setColorInput] = useState(() => sanitizeUserColor(currentUser.color));
   const [font, setFont] = useState<MessageFontId>('system');
   const [decoration, setDecoration] = useState<AvatarDecoration>('none');
-  const [effect, setEffect] = useState<ProfileEffectId>('none');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const colorValid = /^#[0-9a-f]{6}$/.test(color);
@@ -229,7 +227,6 @@ export default function ActivationPage() {
       color,
       messageFont: font,
       avatarDecoration: decoration,
-      profileEffect: effect,
     });
     setSaving(false);
     if (result !== 'ok') {
@@ -284,9 +281,8 @@ export default function ActivationPage() {
             ) : (
               <div key="profile-step" className="account-setup">
                 <h1>{part === 'details' ? 'حسابك' : part === 'look' ? 'مظهر الاسم' : 'الزينة'}</h1>
-                <p className="muted">{part === 'details' ? 'أكّد اسمك، ثم أضف صورة وغلافًا ونبذة إن شئت.' : part === 'look' ? 'اللون والخط يظهران لاسمك في المجموعات.' : 'اختر إطار الصورة وتأثير الملف. يمكن تغييرهما لاحقًا.'}</p>
+                <p className="muted">{part === 'details' ? 'أكّد اسمك، ثم أضف صورة وغلافًا ونبذة إن شئت.' : part === 'look' ? 'اللون والخط يظهران لاسمك في المجموعات.' : 'اختر زينة الصورة. يمكن تغييرها لاحقًا.'}</p>
                 <div className="account-hero">
-                  <ProfileEffect effect={effect} color={color} />
                   {part === 'details' ? (
                     <button type="button" className={banner ? 'account-cover is-photo' : 'account-cover'} style={{ '--banner': color } as CSSProperties} aria-label="اختيار الغلاف" onClick={() => bannerRef.current?.click()}>
                       {banner ? <img src={banner} alt="" /> : <span>إضافة غلاف</span>}
@@ -373,10 +369,6 @@ export default function ActivationPage() {
                     <p className="profile-style-hint">الحركة تتوقف في وضع التوفير وعلى الأجهزة الضعيفة.</p>
                     <div className="cosmetic-options" role="group" aria-label="زينة الصورة">
                       {AVATAR_DECORATIONS.map((item) => <button key={item.id} type="button" aria-pressed={decoration === item.id} className={decoration === item.id ? 'is-on' : ''} onClick={() => setDecoration(item.id)}><Avatar name={name || '؟'} color={color} size={48} src={photo || undefined} decoration={item.id} /><span>{item.label}</span></button>)}
-                    </div>
-                    <span className="profile-style-title">تأثير الملف</span>
-                    <div className="cosmetic-options" role="group" aria-label="تأثير الملف">
-                      {PROFILE_EFFECTS.map((item) => <button key={item.id} type="button" aria-pressed={effect === item.id} className={effect === item.id ? 'is-on' : ''} onClick={() => setEffect(item.id)}>{item.label}</button>)}
                     </div>
                   </div>
                 ) : null}

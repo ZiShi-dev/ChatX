@@ -8,9 +8,8 @@ import PageNav from '../components/common/PageNav';
 import Avatar from '../components/common/Avatar';
 import CustomRoleBadge from '../components/common/CustomRoleBadge';
 import NameColorField from '../components/common/NameColorField';
-import ProfileEffect from '../components/common/ProfileEffect';
 import { useProfileMotion } from '../hooks/useProfileMotion';
-import { AVATAR_DECORATIONS, PROFILE_EFFECTS, type AvatarDecoration, type ProfileEffectId } from '../lib/profileCosmetics';
+import { AVATAR_DECORATIONS, type AvatarDecoration } from '../lib/profileCosmetics';
 import { connectionLabel, getUserPresence } from '../lib/presence';
 import { roleLabel } from '../lib/roles';
 import { readBanner, readPhoto } from '../lib/photo';
@@ -53,7 +52,6 @@ export default function ProfilePage({ embedded = false, onShowSettings, scrollHo
   const chooseColor = (color: string) => { setDraftColor(color); setColorInput(color); };
   const [draftFont, setDraftFont] = useState<MessageFontId>(currentUser.messageFont ?? 'system');
   const [draftDecoration, setDraftDecoration] = useState<AvatarDecoration>(currentUser.avatarDecoration ?? 'none');
-  const [draftEffect, setDraftEffect] = useState<ProfileEffectId>(currentUser.profileEffect ?? 'none');
   const [draftRoleLabel, setDraftRoleLabel] = useState(currentUser.customRoleLabel ?? '');
   const [draftRoleColors, setDraftRoleColors] = useState<string[]>(() => (
     currentUser.customRoleColors?.length ? [...currentUser.customRoleColors] : [currentUser.color || '#3d9b84']
@@ -89,7 +87,6 @@ export default function ProfilePage({ embedded = false, onShowSettings, scrollHo
     chooseColor(currentUser.color);
     setDraftFont(currentUser.messageFont ?? 'system');
     setDraftDecoration(currentUser.avatarDecoration ?? 'none');
-    setDraftEffect(currentUser.profileEffect ?? 'none');
     setDraftRoleLabel(currentUser.customRoleLabel ?? '');
     setDraftRoleColors(currentUser.customRoleColors?.length ? [...currentUser.customRoleColors] : [currentUser.color || '#3d9b84']);
     setSaveError('');
@@ -152,7 +149,6 @@ export default function ProfilePage({ embedded = false, onShowSettings, scrollHo
       color: draftColor,
       messageFont: draftFont,
       avatarDecoration: draftDecoration,
-      profileEffect: draftEffect,
       customRoleLabel: roleLabel || null,
       customRoleColors: roleLabel ? roleColors : null,
     }).then((saved) => {
@@ -168,7 +164,6 @@ export default function ProfilePage({ embedded = false, onShowSettings, scrollHo
   const body = (
     <>
       <div className="profile-frame">
-        <ProfileEffect effect={currentUser.profileEffect} color={currentUser.color} />
         <section className="profile-hero">
           <div
             className={currentUser.bannerUrl ? 'profile-banner is-photo' : 'profile-banner'}
@@ -260,7 +255,6 @@ export default function ProfilePage({ embedded = false, onShowSettings, scrollHo
               <div className="profile-editor-header"><span className="app-handle" />
               <h2>تعديل الملف</h2>
               <div className="profile-editor-preview">
-                <ProfileEffect effect={draftEffect} color={draftColor} />
                 <div className="profile-editor-banner" style={{ '--banner': draftColor } as CSSProperties}>
                   {currentUser.bannerUrl ? <img src={currentUser.bannerUrl} alt="" /> : null}
                 </div>
@@ -277,7 +271,7 @@ export default function ProfilePage({ embedded = false, onShowSettings, scrollHo
                 event.preventDefault(); setEditorTab(tabs[next]); editorFields.current?.scrollTo(0, 0);
                 document.getElementById('profile-tab-' + tabs[next])?.focus();
               }}>
-                {([{ id: 'details', label: 'المعلومات' }, { id: 'name', label: 'الاسم والألوان' }, { id: 'effects', label: 'الزينة والتأثيرات' }] as const).map(tab => <button type="button" key={tab.id} id={'profile-tab-' + tab.id} role="tab" aria-selected={editorTab === tab.id} aria-controls={'profile-panel-' + tab.id} tabIndex={editorTab === tab.id ? 0 : -1} onClick={() => { setEditorTab(tab.id); editorFields.current?.scrollTo(0, 0); }}>{tab.label}</button>)}
+                {([{ id: 'details', label: 'المعلومات' }, { id: 'name', label: 'الاسم والألوان' }, { id: 'effects', label: 'الزينة' }] as const).map(tab => <button type="button" key={tab.id} id={'profile-tab-' + tab.id} role="tab" aria-selected={editorTab === tab.id} aria-controls={'profile-panel-' + tab.id} tabIndex={editorTab === tab.id ? 0 : -1} onClick={() => { setEditorTab(tab.id); editorFields.current?.scrollTo(0, 0); }}>{tab.label}</button>)}
               </div>
               <div className="profile-editor-fields" ref={editorFields}>
               <section id="profile-panel-details" role="tabpanel" aria-labelledby="profile-tab-details" hidden={editorTab !== 'details'} className="profile-editor-section"><h3>المعلومات الشخصية</h3>
@@ -376,16 +370,12 @@ export default function ProfilePage({ embedded = false, onShowSettings, scrollHo
                 </div>
               </div>
               </section>
-              <section id="profile-panel-effects" role="tabpanel" aria-labelledby="profile-tab-effects" hidden={editorTab !== 'effects'} className="profile-editor-section"><h3>الزينة والتأثيرات</h3>
+              <section id="profile-panel-effects" role="tabpanel" aria-labelledby="profile-tab-effects" hidden={editorTab !== 'effects'} className="profile-editor-section"><h3>الزينة</h3>
               <div className="profile-style-block">
                 <span className="profile-style-title">زينة الصورة</span>
-                <p className="profile-style-hint">اختر زينة للصورة وتأثيرًا للملف. المعاينة تبقى أمامك، والحركة تتوقف في وضع التوفير وعلى الأجهزة الضعيفة.</p>
+                <p className="profile-style-hint">المعاينة تبقى أمامك، والحركة تتوقف في وضع التوفير وعلى الأجهزة الضعيفة.</p>
                 <div className="cosmetic-options" role="group" aria-label="زينة الصورة">
                   {AVATAR_DECORATIONS.map(item => <button key={item.id} type="button" aria-pressed={draftDecoration === item.id} className={draftDecoration === item.id ? 'is-on' : ''} onClick={() => setDraftDecoration(item.id)}><Avatar name={displayName || currentUser.displayName} color={draftColor} size={48} src={currentUser.avatarUrl} decoration={item.id} /><span>{item.label}</span></button>)}
-                </div>
-                <span className="profile-style-title">تأثير الملف</span>
-                <div className="cosmetic-options" role="group" aria-label="تأثير الملف">
-                  {PROFILE_EFFECTS.map(item => <button key={item.id} type="button" aria-pressed={draftEffect === item.id} className={draftEffect === item.id ? 'is-on' : ''} onClick={() => setDraftEffect(item.id)}>{item.label}</button>)}
                 </div>
               </div>
               </section>

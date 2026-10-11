@@ -8,11 +8,14 @@ import { useSettingsStore } from '../stores/settingsStore';
 
 let token = '';
 let started = false;
+let registrationUserId = '';
 let candidate = '';
 let generation = 0;
 let retryTimer: ReturnType<typeof setTimeout> | undefined;
 let retryCount = 0;
+let prefsRetry = 0;
 let syncing: Promise<void> | undefined;
+let prefsSyncing: Promise<void> | undefined;
 const registrationHandles: Array<{ remove: () => Promise<void> }> = [];
 const tokenListeners = new Set<() => void>();
 
@@ -47,17 +50,51 @@ function pushPrefs() {
 
 async function syncPrefs() {
   if (!token) return;
-  await adminFetch('/api/push/prefs', { method: 'POST', body: JSON.stringify(pushPrefs()) });
+  await persistPrefs();
+}
+
+function persistPrefs() {
+  if (prefsSyncing) return prefsSyncing;
+  const lease = generation;
+  const pending = (async () => {
+    while (started && lease === generation) {
+      const body = JSON.stringify(pushPrefs());
+      await adminFetch('/api/push/prefs', { method: 'POST', body });
+      if (body === JSON.stringify(pushPrefs())) return;
+    }
+  })();
+  prefsSyncing = pending;
+  void pending.finally(() => { if (prefsSyncing === pending) prefsSyncing = undefined; }).catch(() => undefined);
+  return pending;
+}
+
+function schedulePrefsRetry() {
+  clearTimeout(retryTimer);
+  const lease = generation;
+  retryTimer = setTimeout(() => {
+    if (lease !== generation || !started || !token) return;
+    void syncPrefs().catch(() => { if (lease === generation && started && token) schedulePrefsRetry(); });
+  }, Math.min(60_000, 5000 * 2 ** Math.min(prefsRetry++, 4)));
 }
 
 async function syncToken(value: string) {
   const lease = generation;
   const response = await adminFetch('/api/push/register', { method: 'POST', body: JSON.stringify({ token: value, platform: Capacitor.getPlatform() }) }) as { pushEnabled?: boolean };
-  await adminFetch('/api/push/prefs', { method: 'POST', body: JSON.stringify(pushPrefs()) });
   if (!started || generation !== lease || candidate !== value) return;
   token = response.pushEnabled === true ? value : '';
   retryCount = 0;
+  prefsRetry = 0;
   emitTokenChange();
+  if (!token) {
+    retryTimer = setTimeout(retrySync, 60_000);
+    return;
+  }
+  try {
+    await persistPrefs();
+  } catch {
+    if (!started || generation !== lease || candidate !== value) return;
+    schedulePrefsRetry();
+  }
 }
 
 function retrySync() {
@@ -79,8 +116,11 @@ function retrySync() {
 
 export async function startPushRegistration(userId: string) {
   if (!fcmEnabled() || !Capacitor.isNativePlatform() || !isServerId(userId) || started) return;
+  registrationUserId = userId;
+  clearTimeout(retryTimer);
   started = true;
   const lease = ++generation;
+  try {
   const own = (handle: { remove: () => Promise<void> }) => {
     if (lease !== generation) void handle.remove();
     else registrationHandles.push(handle);
@@ -99,7 +139,10 @@ export async function startPushRegistration(userId: string) {
   own(await PushNotifications.addListener('registrationError', () => {
     if (lease !== generation) return;
     token = '';
+    candidate = '';
     emitTokenChange();
+    clearTimeout(retryTimer);
+    retryTimer = setTimeout(syncPushPrefs, Math.min(60_000, 5000 * 2 ** Math.min(retryCount++, 4)));
   }));
   own(await PushNotifications.addListener('pushNotificationActionPerformed', (event) => {
     if (lease !== generation) return;
@@ -122,22 +165,44 @@ export async function startPushRegistration(userId: string) {
   }
   window.addEventListener('online', syncPushPrefs);
   await PushNotifications.register();
+  } catch (error) {
+    if (lease !== generation) return;
+    started = false;
+    token = '';
+    emitTokenChange();
+    window.removeEventListener('online', syncPushPrefs);
+    const handles = registrationHandles.splice(0);
+    await Promise.allSettled(handles.map(handle => handle.remove()));
+    if (lease === generation) retryTimer = setTimeout(() => {
+      if (lease === generation) void startPushRegistration(userId).catch(() => undefined);
+    }, Math.min(60_000, 5000 * 2 ** Math.min(retryCount++, 4)));
+    throw error;
+  }
 }
 
 export function syncPushPrefs() {
-  if (started && !candidate) void PushNotifications.register().catch(() => undefined);
+  if (!started && registrationUserId) {
+    const userId = registrationUserId;
+    void PushNotifications.checkPermissions().then(permission => {
+      if (permission.receive === 'granted' && registrationUserId === userId) return startPushRegistration(userId);
+    }).catch(() => undefined);
+  }
+  else if (started && !candidate) void PushNotifications.register().catch(() => undefined);
   else if (!token && candidate) retrySync();
-  else void syncPrefs().catch(() => { token = ''; emitTokenChange(); retrySync(); });
+  else void syncPrefs().catch(() => { if (started && token) schedulePrefsRetry(); });
 }
 
 export function resetPushRegistrationForTests() {
   token = '';
   started = false;
+  registrationUserId = '';
   candidate = '';
   generation++;
   clearTimeout(retryTimer);
   syncing = undefined;
+  prefsSyncing = undefined;
   retryCount = 0;
+  prefsRetry = 0;
   window.removeEventListener('online', syncPushPrefs);
   registrationHandles.splice(0);
   tokenListeners.clear();
@@ -148,15 +213,19 @@ export async function stopPushRegistration() {
   const handles = registrationHandles.splice(0);
   token = '';
   started = false;
+  registrationUserId = '';
   candidate = '';
   generation++;
   clearTimeout(retryTimer);
   syncing = undefined;
+  prefsSyncing = undefined;
   window.removeEventListener('online', syncPushPrefs);
   emitTokenChange();
-  await Promise.allSettled(handles.map(handle => handle.remove()));
-  if (current) {
-    await adminFetch('/api/push/unregister', { method: 'POST', body: JSON.stringify({ token: current }) }).catch(() => undefined);
-    emitTokenChange();
-  }
+  // Capture the old session before awaiting native listener removal or a new login.
+  const unregister = current ? adminFetch('/api/push/unregister', { method: 'POST', body: JSON.stringify({ token: current }) }) : Promise.resolve();
+  await Promise.allSettled([
+    ...handles.map(handle => handle.remove()),
+    PushNotifications.removeAllDeliveredNotifications(),
+    unregister,
+  ]);
 }

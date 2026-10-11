@@ -15,10 +15,11 @@ export function createMemoryRepository(): AuthRepository {
   const journals = new Map<string, { epoch: string; revision: number; signatures: Map<string, string>; changes: Array<{ revision: number; messageId?: string; readerId?: string }> }>();
   const users = new Map<string, AuthUser>();
   const sessions = new Map<string, { userId: string; expiresAt: number; lastSeenAt: number; presence: 'online' | 'away' }>();
-  const rooms = new Map<string, { id: string; kind: 'global' | 'group' | 'private'; name: string | null; createdAt: number; pairKey: string | null; adminId?: string; bio?: string; avatarUrl?: string | null; bannerUrl?: string | null; turnUserId?: string; turnOpensAt?: number; turnRound?: number; turnNoticeFor?: string }>();
+  const rooms = new Map<string, { id: string; kind: 'global' | 'group' | 'private'; name: string | null; createdAt: number; pairKey: string | null; adminId?: string; bio?: string; avatarUrl?: string | null; bannerUrl?: string | null; turnUserId?: string; turnOpensAt?: number; turnRound?: number; turnNoticeFor?: string; closed?: boolean }>();
   const passed = new Map<string, Set<string>>();
   const saved = new Map<string, number>();
   const members = new Map<string, { roomId: string; userId: string; lastReadAt: number | null; lastReadMessageId: string | null }>();
+  const friendships = new Map<string, { requestedBy: string; status: 'pending' | 'accepted' }>();
   const messages: RoomMessage[] = [];
   const images = new Map<string, Uint8Array>();
   const files = new Map<string, { name: string; bytes: Uint8Array }>();
@@ -35,6 +36,14 @@ export function createMemoryRepository(): AuthRepository {
   const pushTokens = new Map<string, { userId: string; token: string; platform: string }>();
   const pushPrefs = new Map<string, { quiet: string; hiddenKinds: string }>();
   const memberKey = (roomId: string, userId: string) => `${roomId}:${userId}`;
+  const friendKey = (left: string, right: string) => left < right ? `${left}:${right}` : `${right}:${left}`;
+  const friendLink = (userId: string, otherId: string | undefined): 'outgoing' | 'incoming' | 'friends' | undefined => {
+    if (!otherId || otherId === userId) return undefined;
+    const row = friendships.get(friendKey(userId, otherId));
+    if (!row) return undefined;
+    if (row.status === 'accepted') return 'friends';
+    return row.requestedBy === userId ? 'outgoing' : 'incoming';
+  };
   const syncTurn = (roomId: string, at: number) => {
     const room = rooms.get(roomId);
     if (!room || (room.kind !== 'group' && room.kind !== 'global')) return null;
@@ -209,7 +218,6 @@ export function createMemoryRepository(): AuthRepository {
         target.avatarUrl = null;
         target.bannerUrl = null;
         target.avatarDecoration = 'none';
-        target.profileEffect = 'none';
       }
       if (choices.account) {
         for (const room of rooms.values()) {
@@ -309,7 +317,6 @@ export function createMemoryRepository(): AuthRepository {
         ...(patch.color !== undefined ? { accentColor: patch.color } : {}),
         ...(patch.messageFont !== undefined ? { messageFont: patch.messageFont } : {}),
         ...(patch.avatarDecoration !== undefined ? { avatarDecoration: patch.avatarDecoration } : {}),
-        ...(patch.profileEffect !== undefined ? { profileEffect: patch.profileEffect } : {}),
         ...(patch.customRoleLabel !== undefined ? { customRoleLabel: patch.customRoleLabel } : {}),
         ...(patch.customRoleColors !== undefined ? { customRoleColors: patch.customRoleColors } : {}),
       });
@@ -342,13 +349,16 @@ export function createMemoryRepository(): AuthRepository {
       if (!rooms.has(GLOBAL_ROOM_ID)) {
         rooms.set(GLOBAL_ROOM_ID, { id: GLOBAL_ROOM_ID, kind: 'global', name: 'ChatX', createdAt: Date.parse('2026-01-01T00:00:00.000Z'), pairKey: null });
       }
-      for (const user of users.values()) {
-        if (user.role !== 'member') continue;
-        const key = memberKey(GLOBAL_ROOM_ID, user.id);
-        if (!members.has(key)) members.set(key, { roomId: GLOBAL_ROOM_ID, userId: user.id, lastReadAt: null, lastReadMessageId: null });
-      }
-      if (users.get(userId)?.role === 'member' && !members.has(memberKey(GLOBAL_ROOM_ID, userId))) {
-        members.set(memberKey(GLOBAL_ROOM_ID, userId), { roomId: GLOBAL_ROOM_ID, userId, lastReadAt: null, lastReadMessageId: null });
+      const room = rooms.get(GLOBAL_ROOM_ID);
+      if (!room || room.closed) return;
+      const person = users.get(userId);
+      const joinable = (role: string) => role === 'member' || role === 'admin' || role === 'creator';
+      if (person && joinable(person.role)) {
+        for (const user of users.values()) {
+          if (!joinable(user.role)) continue;
+          const key = memberKey(GLOBAL_ROOM_ID, user.id);
+          if (!members.has(key)) members.set(key, { roomId: GLOBAL_ROOM_ID, userId: user.id, lastReadAt: null, lastReadMessageId: null });
+        }
       }
     },
     async readGroupTurn(roomId, userId, at) {
@@ -384,8 +394,14 @@ export function createMemoryRepository(): AuthRepository {
           createdAt: new Date(room.createdAt),
           unreadCount,
           participantIds: [...members.values()].filter((item) => item.roomId === room.id).map((item) => item.userId).sort(),
+          ...(room.kind === 'global' && room.closed ? { closed: true } : {}),
           lastMessage,
           ...(room.pairKey === `${userId}:${userId}` ? { self: true } : {}),
+          ...(() => {
+            if (room.kind !== 'private' || room.pairKey === `${userId}:${userId}`) return {};
+            const link = friendLink(userId, [...members.values()].find((item) => item.roomId === room.id && item.userId !== userId)?.userId);
+            return link ? { friend: link } : {};
+          })(),
         });
       }
       return home.sort((a, b) => (a.kind === 'global' ? -1 : b.kind === 'global' ? 1 : (b.lastMessage?.createdAt.getTime() ?? b.createdAt.getTime()) - (a.lastMessage?.createdAt.getTime() ?? a.createdAt.getTime())));
@@ -666,6 +682,104 @@ export function createMemoryRepository(): AuthRepository {
       }
       return id;
     },
+    async roomGate(roomId) {
+      const room = rooms.get(roomId);
+      if (!room) return null;
+      return {
+        kind: room.kind,
+        adminId: room.adminId ?? null,
+        closed: room.closed === true,
+        memberIds: [...members.values()].filter((item) => item.roomId === roomId).map((item) => item.userId),
+      };
+    },
+    async setRoomMember(roomId, userId, present) {
+      const room = rooms.get(roomId);
+      const person = users.get(userId);
+      if (!room || (room.kind !== 'group' && room.kind !== 'global')) return 'forbidden';
+      if (!person || (person.role !== 'member' && person.role !== 'admin' && person.role !== 'creator')) return 'missing';
+      const key = memberKey(roomId, userId);
+      if (present) {
+        const count = [...members.values()].filter((item) => item.roomId === roomId).length;
+        if (room.kind === 'group' && !members.has(key) && count >= 21) return 'forbidden';
+        if (!members.has(key)) members.set(key, { roomId, userId, lastReadAt: null, lastReadMessageId: null });
+        return 'ok';
+      }
+      members.delete(key);
+      for (let index = notices.length - 1; index >= 0; index -= 1) {
+        if (notices[index]?.roomId === roomId && notices[index]?.userId === userId) notices.splice(index, 1);
+      }
+      if (room.kind === 'global') room.closed = true;
+      return 'ok';
+    },
+    async setMainRoomOpen(open) {
+      if (!rooms.has(GLOBAL_ROOM_ID)) {
+        rooms.set(GLOBAL_ROOM_ID, { id: GLOBAL_ROOM_ID, kind: 'global', name: 'ChatX', createdAt: Date.parse('2026-01-01T00:00:00.000Z'), pairKey: null, closed: !open });
+      }
+      const room = rooms.get(GLOBAL_ROOM_ID);
+      if (!room) return 'ok';
+      room.closed = !open;
+      if (!open) return 'ok';
+      for (const user of users.values()) {
+        if (user.role !== 'member' && user.role !== 'admin' && user.role !== 'creator') continue;
+        const key = memberKey(GLOBAL_ROOM_ID, user.id);
+        if (!members.has(key)) members.set(key, { roomId: GLOBAL_ROOM_ID, userId: user.id, lastReadAt: null, lastReadMessageId: null });
+      }
+      return 'ok';
+    },
+    async deleteCreatedGroup(roomId) {
+      const room = rooms.get(roomId);
+      if (!room) return 'missing';
+      if (room.kind !== 'group') return 'forbidden';
+      const ids = new Set(messages.filter((message) => message.roomId === roomId).map((message) => message.id));
+      for (let index = messages.length - 1; index >= 0; index -= 1) if (ids.has(messages[index]!.id)) messages.splice(index, 1);
+      for (const id of ids) {
+        images.delete(id);
+        files.delete(id);
+      }
+      for (const [key, reaction] of reactions) if (ids.has(reaction.messageId)) reactions.delete(key);
+      for (let index = notices.length - 1; index >= 0; index -= 1) if (notices[index]?.roomId === roomId) notices.splice(index, 1);
+      for (const key of saved.keys()) {
+        const messageId = key.split(':')[1];
+        if (messageId && ids.has(messageId)) saved.delete(key);
+      }
+      rooms.delete(roomId);
+      journals.delete(roomId);
+      for (const [key, member] of members) if (member.roomId === roomId) members.delete(key);
+      for (const key of passed.keys()) if (key.startsWith(`${roomId}:`)) passed.delete(key);
+      for (const [id, upload] of uploads) if (upload.roomId === roomId) uploads.delete(id);
+      for (const [key, row] of roomKeys) if (row.roomId === roomId) roomKeys.delete(key);
+      return 'ok';
+    },
+    async privateSendGate(roomId, userId) {
+      const room = rooms.get(roomId);
+      if (!room || !members.has(memberKey(roomId, userId))) return 'missing';
+      if (room.kind !== 'private' || room.pairKey === `${userId}:${userId}`) return 'open';
+      const otherId = [...members.values()].find((item) => item.roomId === roomId && item.userId !== userId)?.userId;
+      if (friendLink(userId, otherId) === 'friends') return 'open';
+      const started = messages.some((message) => message.roomId === roomId && !message.deleted && !message.event);
+      return started ? 'locked' : 'intro';
+    },
+    async changeFriend(userId, otherId, action, at) {
+      const other = users.get(otherId);
+      if (userId === otherId) return 'forbidden';
+      if (!other || (other.role !== 'member' && other.role !== 'admin' && other.role !== 'creator')) return 'missing';
+      const key = friendKey(userId, otherId);
+      const current = friendships.get(key);
+      if (action === 'ask') {
+        if (current) return 'ok';
+        friendships.set(key, { requestedBy: userId, status: 'pending' });
+        void at;
+        return 'created';
+      }
+      if (action === 'accept') {
+        if (!current || current.status !== 'pending' || current.requestedBy === userId) return 'forbidden';
+        current.status = 'accepted';
+        return 'accepted';
+      }
+      if (!current || current.status !== 'pending') return 'forbidden';
+      friendships.delete(key);
+      return 'ok';
+    },
     async listSaved(userId, limit, beforeId): Promise<SavedItem[]> {
       const items: SavedItem[] = [];
       for (const [key, savedAt] of saved) {
@@ -751,6 +865,7 @@ export function createMemoryRepository(): AuthRepository {
       return room ? { name: room.name, kind: room.kind } : null;
     },
     async savePushToken(userId, token, platform) {
+      for (const [key, value] of pushTokens) if (value.token === token) pushTokens.delete(key);
       pushTokens.set(`${userId}:${token}`, { userId, token, platform });
     },
     async deletePushToken(userId, token) {

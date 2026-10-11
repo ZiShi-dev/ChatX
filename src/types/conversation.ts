@@ -14,6 +14,10 @@ export interface Conversation {
   lastMessageId?: string;
   unreadCount: number;
   createdAt?: string;
+  /** Main room only. People outside the member list no longer see it. */
+  closed?: boolean;
+  /** Private chat only. Absent means no friendship yet. */
+  friend?: 'outgoing' | 'incoming' | 'friends';
   /** Notes privées avec soi-même, comme « Message yourself ». */
   self?: boolean;
 }

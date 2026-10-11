@@ -18,8 +18,11 @@ export function observeComposerViewport(scroller: HTMLElement, following: { curr
       resize();
       return;
     }
-    anchor = scroller.scrollTop;
-    following.current = scroller.scrollHeight - scroller.scrollTop - scroller.clientHeight < 96;
+    const nextTop = scroller.scrollTop;
+    const movedUp = nextTop < anchor - 8;
+    anchor = nextTop;
+    if (!movedUp && following.current) return;
+    following.current = scroller.scrollHeight - nextTop - scroller.clientHeight < 96;
   };
   scroller.addEventListener('scroll', scroll, { capture: true, passive: true });
   let frame = 0;

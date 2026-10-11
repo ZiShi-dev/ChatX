@@ -15,7 +15,6 @@ export type AuthUser = {
   accentColor?: string | null;
   messageFont?: string | null;
   avatarDecoration?: string;
-  profileEffect?: string;
   customRoleLabel?: string | null;
   customRoleColors?: string | null;
 };
@@ -28,7 +27,6 @@ export type ProfilePatch = {
   color?: string | null;
   messageFont?: string | null;
   avatarDecoration?: string;
-  profileEffect?: string;
   customRoleLabel?: string | null;
   customRoleColors?: string | null;
 };
@@ -127,6 +125,12 @@ export interface AuthRepository {
   listReactions(roomId: string, messageIds?: string[]): Promise<StoredReaction[]>;
   listReaders(roomId: string): Promise<RoomReader[]>;
   createRoom(input: { id: string; kind: 'private' | 'group'; name: string | null; creatorId: string; memberIds: string[]; at: Date }): Promise<string | 'invalid'>;
+  roomGate(roomId: string): Promise<{ kind: RoomKind; adminId: string | null; closed: boolean; memberIds: string[] } | null>;
+  setRoomMember(roomId: string, userId: string, present: boolean): Promise<'ok' | 'missing' | 'forbidden'>;
+  setMainRoomOpen(open: boolean): Promise<'ok'>;
+  deleteCreatedGroup(roomId: string): Promise<'ok' | 'missing' | 'forbidden'>;
+  privateSendGate(roomId: string, userId: string): Promise<'open' | 'intro' | 'locked' | 'missing'>;
+  changeFriend(userId: string, otherId: string, action: 'ask' | 'accept' | 'decline', at: Date): Promise<'created' | 'accepted' | 'ok' | 'missing' | 'forbidden'>;
   dropOrphanPrivate(roomId: string, userId: string): Promise<'ok' | 'missing' | 'forbidden'>;
   listSaved(userId: string, limit: number, beforeId?: string): Promise<SavedItem[]>;
   setSaved(userId: string, messageId: string, saved: boolean, at: Date): Promise<'ok' | 'missing'>;
@@ -198,6 +202,8 @@ export type HomeRoom = {
   name: string | null;
   createdAt: Date;
   unreadCount: number;
+  /** Main room only. When set, people who are not members stay out. */
+  closed?: boolean;
   participantIds: string[];
   lastMessage: RoomMessage | null;
   /** Private notes to oneself; told apart from a private chat whose peer was deleted. */
@@ -208,4 +214,5 @@ export type HomeRoom = {
   bannerUrl?: string | null;
   turnUserId?: string | null;
   turnOpensAt?: Date | null;
+  friend?: 'outgoing' | 'incoming' | 'friends';
 };

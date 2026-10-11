@@ -1,7 +1,7 @@
 import { expect, it } from 'vitest';
 import { existsSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { emojiAsset, emojiParts } from './emoji';
+import { emojiAsset, emojiOnlyCount, emojiParts } from './emoji';
 import { EMOJI_GROUPS } from './emojiCatalog';
 import { EMOJI_ASSET_KEYS } from './emojiAssets';
 
@@ -19,6 +19,14 @@ it('keeps text, hearts with ZWJ, skin tones and unknown family sequences intact'
   expect(parts.find((part) => part.text === '👨‍👩‍👧‍👦')).toEqual({ text: '👨‍👩‍👧‍👦', asset: null });
   expect(parts.find((part) => part.text === '🇫🇷')).toEqual({ text: '🇫🇷', asset: null });
   expect(parts.find((part) => part.text === '1️⃣')?.text).toBe('1️⃣');
+});
+
+it('counts a message made only of emoji', () => {
+  expect(emojiOnlyCount('😀')).toBe(1);
+  expect(emojiOnlyCount('😀 👍🏽')).toBe(2);
+  expect(emojiOnlyCount('مرحبا 😀')).toBe(0);
+  expect(emojiOnlyCount('😀!')).toBe(0);
+  expect(emojiOnlyCount('   ')).toBe(0);
 });
 
 it('honors text presentation and keeps a toned handshake as one picture', () => {

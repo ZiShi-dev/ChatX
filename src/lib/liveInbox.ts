@@ -1,6 +1,19 @@
 import { create } from 'zustand';
 import type { InboxKind } from './inbox';
-export type LiveInboxNotice = { key: string; kind?: InboxKind; conversationType?: 'private' | 'group' | 'global'; conversationId: string; messageId: string; title: string; body: string };
+export type LiveInboxNotice = {
+  key: string;
+  kind?: InboxKind;
+  conversationType?: 'private' | 'group' | 'global';
+  conversationId: string;
+  messageId: string;
+  title: string;
+  body: string;
+  senderName?: string;
+  context?: string;
+  preview?: string;
+  avatarUrl?: string;
+  color?: string;
+};
 export const useLiveInbox = create<{ notices: LiveInboxNotice[]; push: (notice: LiveInboxNotice) => void; dismiss: (key: string) => void; clear: () => void }>(set => ({
   notices: [],
   push: notice => set(state => ({ notices: [...state.notices.filter(item => item.key !== notice.key), notice].slice(-100) })),

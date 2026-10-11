@@ -98,12 +98,28 @@ export function useInboxAlerts() {
         const sender = users.find((user) => user.id === item.senderId);
         const alert = liveAlertText(item, sender?.displayName);
         if (!hidden) {
-          useLiveInbox.getState().push({ key: inboxAlertKey(item), conversationId: item.conversationId, conversationType: roomType, messageId: item.id, kind: item.kind, title: alert.title, body: alert.body });
+          const person = item.senderName || sender?.displayName;
+          const roomLabel = item.conversationName?.trim();
+          useLiveInbox.getState().push({
+            key: inboxAlertKey(item),
+            conversationId: item.conversationId,
+            conversationType: roomType,
+            messageId: item.id,
+            kind: item.kind,
+            title: alert.title,
+            body: alert.body,
+            preview: item.preview,
+            ...(person ? { senderName: person } : {}),
+            ...(roomType !== 'private' && roomLabel ? { context: roomLabel } : {}),
+            ...(sender?.avatarUrl ? { avatarUrl: sender.avatarUrl } : {}),
+            ...(sender?.color ? { color: sender.color } : {}),
+          });
           return;
         }
         if (fcmPushAlertsActive()) return;
         void notifyChatMessage({
           conversationId: item.conversationId,
+          messageId: item.id,
           kind: roomType === 'private' ? 'private' : 'group',
           title: alert.title,
           body: alert.body,

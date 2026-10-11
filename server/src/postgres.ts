@@ -45,12 +45,11 @@ type UserRow = {
   accent_color: string | null;
   message_font: string | null;
   avatar_decoration: string;
-  profile_effect: string;
   custom_role_label: string | null;
   custom_role_colors: string | null;
 };
 
-const USER_COLUMNS = 'id, email, display_name, username, role, bio, banner, avatar, google_sub, accent_color, message_font, avatar_decoration, profile_effect, custom_role_label, custom_role_colors';
+const USER_COLUMNS = 'id, email, display_name, username, role, bio, banner, avatar, google_sub, accent_color, message_font, avatar_decoration, custom_role_label, custom_role_colors';
 
 function byteSizeOf(value: unknown, max: number) {
   const size = typeof value === 'number' ? value : typeof value === 'string' ? Number(value) : NaN;
@@ -103,7 +102,6 @@ function mapUser(row: UserRow): AuthUser {
     accentColor: row.accent_color,
     messageFont: row.message_font,
     avatarDecoration: row.avatar_decoration,
-    profileEffect: row.profile_effect,
     customRoleLabel: row.custom_role_label,
     customRoleColors: row.custom_role_colors,
   };
@@ -215,9 +213,8 @@ export function createPostgresRepository(pool: pg.Pool, store: MediaStore): Auth
                accent_color = CASE WHEN $10::bool THEN $11 ELSE accent_color END,
                message_font = CASE WHEN $12::bool THEN $13 ELSE message_font END,
                avatar_decoration = CASE WHEN $14::bool THEN $15 ELSE avatar_decoration END,
-               profile_effect = CASE WHEN $16::bool THEN $17 ELSE profile_effect END,
-               custom_role_label = CASE WHEN $18::bool THEN $19 ELSE custom_role_label END,
-               custom_role_colors = CASE WHEN $20::bool THEN $21 ELSE custom_role_colors END
+               custom_role_label = CASE WHEN $16::bool THEN $17 ELSE custom_role_label END,
+               custom_role_colors = CASE WHEN $18::bool THEN $19 ELSE custom_role_colors END
            WHERE id = $1 AND role = 'member'`,
           [
             id,
@@ -235,8 +232,6 @@ export function createPostgresRepository(pool: pg.Pool, store: MediaStore): Auth
             patch.messageFont ?? null,
             patch.avatarDecoration !== undefined,
             patch.avatarDecoration ?? 'none',
-            patch.profileEffect !== undefined,
-            patch.profileEffect ?? 'none',
             patch.customRoleLabel !== undefined,
             patch.customRoleLabel ?? null,
             patch.customRoleColors !== undefined,
@@ -288,15 +283,20 @@ export function createPostgresRepository(pool: pg.Pool, store: MediaStore): Auth
       );
       await pool.query(
         `INSERT INTO room_members (room_id, user_id)
-         SELECT $1, id FROM users WHERE role = 'member'
+         SELECT $1, id FROM users
+         WHERE role IN ('member', 'admin', 'creator')
+           AND id = $2
+           AND EXISTS (SELECT 1 FROM rooms WHERE id = $1 AND NOT closed)
          ON CONFLICT DO NOTHING`,
-        [GLOBAL_ROOM_ID],
+        [GLOBAL_ROOM_ID, userId],
       );
       await pool.query(
         `INSERT INTO room_members (room_id, user_id)
-         SELECT $1, $2 WHERE EXISTS (SELECT 1 FROM users WHERE id = $2 AND role = 'member')
+         SELECT $1, id FROM users
+         WHERE role IN ('member', 'admin', 'creator')
+           AND EXISTS (SELECT 1 FROM rooms WHERE id = $1 AND NOT closed)
          ON CONFLICT DO NOTHING`,
-        [GLOBAL_ROOM_ID, userId],
+        [GLOBAL_ROOM_ID],
       );
     },
     async readGroupTurn(roomId, userId, at) {
@@ -323,6 +323,7 @@ export function createPostgresRepository(pool: pg.Pool, store: MediaStore): Auth
         banner_url: string | null;
         turn_user_id: string | null;
         turn_opens_at: Date | null;
+        closed: boolean;
         created_at: Date;
         unread_count: number;
         participant_ids: string[];
@@ -336,8 +337,9 @@ export function createPostgresRepository(pool: pg.Pool, store: MediaStore): Auth
         last_file_name: string | null;
         last_file_size: number | null;
         self_room: boolean;
+        friend_link: 'outgoing' | 'incoming' | 'friends' | null;
       }>(
-        `SELECT r.id, r.kind, r.name, r.created_at, r.admin_id, r.bio, r.avatar_url, r.banner_url, r.turn_user_id, r.turn_opens_at,
+        `SELECT r.id, r.kind, r.name, r.created_at, r.admin_id, r.bio, r.avatar_url, r.banner_url, r.turn_user_id, r.turn_opens_at, r.closed,
                 COALESCE(r.pair_key = rm.user_id::text || ':' || rm.user_id::text, false) AS self_room,
                 (
                   SELECT COUNT(*)::int FROM room_messages m
@@ -357,7 +359,18 @@ export function createPostgresRepository(pool: pg.Pool, store: MediaStore): Auth
                 last.event AS last_event,
                 (SELECT ${IMAGE_BYTES_SQL} FROM message_images i WHERE i.message_id = last.id) AS last_image_size,
                 (SELECT f.name FROM message_files f WHERE f.message_id = last.id) AS last_file_name,
-                (SELECT ${FILE_BYTES_SQL} FROM message_files f WHERE f.message_id = last.id) AS last_file_size
+                (SELECT ${FILE_BYTES_SQL} FROM message_files f WHERE f.message_id = last.id) AS last_file_size,
+                (
+                  SELECT CASE
+                    WHEN bond.status = 'accepted' THEN 'friends'
+                    WHEN bond.requested_by = $1 THEN 'outgoing'
+                    ELSE 'incoming'
+                  END
+                  FROM friendships bond
+                  WHERE r.kind = 'private'
+                    AND bond.user_low = LEAST($1::uuid, (SELECT om.user_id FROM room_members om WHERE om.room_id = r.id AND om.user_id <> $1 LIMIT 1))
+                    AND bond.user_high = GREATEST($1::uuid, (SELECT om.user_id FROM room_members om WHERE om.room_id = r.id AND om.user_id <> $1 LIMIT 1))
+                ) AS friend_link
          FROM rooms r
          JOIN room_members rm ON rm.room_id = r.id AND rm.user_id = $1
          LEFT JOIN LATERAL (
@@ -380,10 +393,12 @@ export function createPostgresRepository(pool: pg.Pool, store: MediaStore): Auth
         bannerUrl: row.banner_url,
         turnUserId: row.turn_user_id,
         turnOpensAt: row.turn_opens_at,
+        ...(row.kind === 'global' && row.closed ? { closed: true } : {}),
         createdAt: row.created_at,
         unreadCount: row.unread_count,
         participantIds: row.participant_ids ?? [],
         ...(row.self_room ? { self: true } : {}),
+        ...(row.friend_link ? { friend: row.friend_link } : {}),
         lastMessage: row.last_id && row.last_sender_id && row.last_body !== null && row.last_created_at
           ? {
               id: row.last_id,
@@ -903,6 +918,191 @@ export function createPostgresRepository(pool: pg.Pool, store: MediaStore): Auth
       } catch (error) { await client.query('ROLLBACK'); throw error; }
       finally { client.release(); }
     },
+    async roomGate(roomId) {
+      const result = await pool.query<{ kind: RoomKind; admin_id: string | null; closed: boolean; member_ids: string[] }>(
+        `SELECT r.kind, r.admin_id, r.closed,
+                COALESCE((SELECT array_agg(m.user_id) FROM room_members m WHERE m.room_id = r.id), '{}') AS member_ids
+         FROM rooms r WHERE r.id = $1`,
+        [roomId],
+      );
+      const row = result.rows[0];
+      if (!row) return null;
+      return { kind: row.kind, adminId: row.admin_id, closed: row.closed, memberIds: row.member_ids ?? [] };
+    },
+    async setRoomMember(roomId, userId, present) {
+      const client = await pool.connect();
+      try {
+        await client.query('BEGIN');
+        const room = await client.query<{ kind: string }>("SELECT kind FROM rooms WHERE id = $1 FOR UPDATE", [roomId]);
+        const kind = room.rows[0]?.kind;
+        if (kind !== 'group' && kind !== 'global') {
+          await client.query('ROLLBACK');
+          return kind ? 'forbidden' : 'missing';
+        }
+        const person = await client.query(
+          "SELECT id FROM users WHERE id = $1 AND role IN ('member', 'admin', 'creator')",
+          [userId],
+        );
+        if (!person.rowCount) {
+          await client.query('ROLLBACK');
+          return 'missing';
+        }
+        if (present) {
+          if (kind === 'group') {
+            const count = await client.query<{ n: number }>(
+              'SELECT count(*)::int AS n FROM room_members WHERE room_id = $1 AND user_id <> $2',
+              [roomId, userId],
+            );
+            if ((count.rows[0]?.n ?? 0) >= 21) {
+              await client.query('ROLLBACK');
+              return 'forbidden';
+            }
+          }
+          await client.query(
+            'INSERT INTO room_members (room_id, user_id) VALUES ($1, $2) ON CONFLICT DO NOTHING',
+            [roomId, userId],
+          );
+        } else {
+          await client.query('DELETE FROM room_members WHERE room_id = $1 AND user_id = $2', [roomId, userId]);
+          await client.query('DELETE FROM notifications WHERE room_id = $1 AND user_id = $2', [roomId, userId]);
+          if (kind === 'global') await client.query('UPDATE rooms SET closed = true WHERE id = $1', [roomId]);
+        }
+        await client.query('COMMIT');
+        return 'ok';
+      } catch (error) {
+        await client.query('ROLLBACK');
+        throw error;
+      } finally {
+        client.release();
+      }
+    },
+    async setMainRoomOpen(open) {
+      await pool.query(
+        `INSERT INTO rooms (id, kind, name, created_at)
+         VALUES ($1, 'global', 'ChatX', '2026-01-01T00:00:00Z')
+         ON CONFLICT (id) DO NOTHING`,
+        [GLOBAL_ROOM_ID],
+      );
+      await pool.query('UPDATE rooms SET closed = $2 WHERE id = $1', [GLOBAL_ROOM_ID, !open]);
+      if (open) {
+        await pool.query(
+          `INSERT INTO room_members (room_id, user_id)
+           SELECT $1, id FROM users WHERE role IN ('member', 'admin', 'creator')
+           ON CONFLICT DO NOTHING`,
+          [GLOBAL_ROOM_ID],
+        );
+      }
+      return 'ok';
+    },
+    async deleteCreatedGroup(roomId) {
+      const client = await pool.connect();
+      try {
+        await client.query('BEGIN');
+        await client.query('UPDATE room_members SET last_read_message_id = NULL WHERE room_id = $1', [roomId]);
+        const removed = await client.query("DELETE FROM rooms WHERE id = $1 AND kind = 'group'", [roomId]);
+        if ((removed.rowCount ?? 0) > 0) {
+          await client.query('COMMIT');
+          return 'ok';
+        }
+        const found = await client.query('SELECT kind FROM rooms WHERE id = $1', [roomId]);
+        await client.query('COMMIT');
+        return found.rowCount ? 'forbidden' : 'missing';
+      } catch (error) {
+        await client.query('ROLLBACK');
+        throw error;
+      } finally {
+        client.release();
+      }
+    },
+    async privateSendGate(roomId, userId) {
+      const room = await pool.query<{ kind: string; pair_key: string | null }>(
+        `SELECT r.kind, r.pair_key
+         FROM rooms r
+         JOIN room_members me ON me.room_id = r.id AND me.user_id = $2
+         WHERE r.id = $1`,
+        [roomId, userId],
+      );
+      const row = room.rows[0];
+      if (!row) return 'missing';
+      if (row.kind !== 'private' || row.pair_key === `${userId}:${userId}`) return 'open';
+      const bond = await pool.query<{ status: string }>(
+        `SELECT bond.status
+         FROM friendships bond
+         WHERE bond.user_low = LEAST($1::uuid, (SELECT om.user_id FROM room_members om WHERE om.room_id = $2 AND om.user_id <> $1 LIMIT 1))
+           AND bond.user_high = GREATEST($1::uuid, (SELECT om.user_id FROM room_members om WHERE om.room_id = $2 AND om.user_id <> $1 LIMIT 1))`,
+        [userId, roomId],
+      );
+      if (bond.rows[0]?.status === 'accepted') return 'open';
+      const started = await pool.query(
+        'SELECT 1 FROM room_messages WHERE room_id = $1 AND NOT deleted AND NOT event LIMIT 1',
+        [roomId],
+      );
+      return started.rowCount ? 'locked' : 'intro';
+    },
+    async changeFriend(userId, otherId, action, at) {
+      if (userId === otherId) return 'forbidden';
+      const client = await pool.connect();
+      try {
+        await client.query('BEGIN');
+        const person = await client.query(
+          "SELECT id FROM users WHERE id = $1 AND role IN ('member', 'admin', 'creator')",
+          [otherId],
+        );
+        if (!person.rowCount) {
+          await client.query('ROLLBACK');
+          return 'missing';
+        }
+        const current = await client.query<{ status: string; requested_by: string }>(
+          `SELECT status, requested_by FROM friendships
+           WHERE user_low = LEAST($1::uuid, $2::uuid) AND user_high = GREATEST($1::uuid, $2::uuid)
+           FOR UPDATE`,
+          [userId, otherId],
+        );
+        const row = current.rows[0];
+        if (action === 'ask') {
+          if (row) {
+            await client.query('COMMIT');
+            return 'ok';
+          }
+          await client.query(
+            `INSERT INTO friendships (user_low, user_high, requested_by, status, created_at)
+             VALUES (LEAST($1::uuid, $2::uuid), GREATEST($1::uuid, $2::uuid), $1, 'pending', $3)`,
+            [userId, otherId, at],
+          );
+          await client.query('COMMIT');
+          return 'created';
+        }
+        if (action === 'accept') {
+          if (!row || row.status !== 'pending' || row.requested_by === userId) {
+            await client.query('ROLLBACK');
+            return 'forbidden';
+          }
+          await client.query(
+            `UPDATE friendships SET status = 'accepted'
+             WHERE user_low = LEAST($1::uuid, $2::uuid) AND user_high = GREATEST($1::uuid, $2::uuid)`,
+            [userId, otherId],
+          );
+          await client.query('COMMIT');
+          return 'accepted';
+        }
+        if (!row || row.status !== 'pending') {
+          await client.query('ROLLBACK');
+          return 'forbidden';
+        }
+        await client.query(
+          `DELETE FROM friendships
+           WHERE user_low = LEAST($1::uuid, $2::uuid) AND user_high = GREATEST($1::uuid, $2::uuid)`,
+          [userId, otherId],
+        );
+        await client.query('COMMIT');
+        return 'ok';
+      } catch (error) {
+        await client.query('ROLLBACK');
+        throw error;
+      } finally {
+        client.release();
+      }
+    },
     async listSaved(userId, limit, beforeId) {
       const result = await pool.query<{
         message_id: string;
@@ -1032,7 +1232,7 @@ export function createPostgresRepository(pool: pg.Pool, store: MediaStore): Auth
     },
     async savePushToken(userId, token, platform) {
       await pool.query(
-        'INSERT INTO push_tokens (user_id, token, platform, updated_at) VALUES ($1, $2, $3, now()) ON CONFLICT (user_id, token) DO UPDATE SET platform = EXCLUDED.platform, updated_at = now()',
+        'INSERT INTO push_tokens (user_id, token, platform, updated_at) VALUES ($1, $2, $3, now()) ON CONFLICT (token) DO UPDATE SET user_id = EXCLUDED.user_id, platform = EXCLUDED.platform, updated_at = now()',
         [userId, token, platform],
       );
     },

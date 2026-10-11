@@ -10,7 +10,8 @@ import NetworkStatusBanner from '../components/common/NetworkBanner';
 import PageNav from '../components/common/PageNav';
 import { membersOf } from '../lib/conversation';
 import { connectionLabel } from '../lib/presence';
-import { canEditRoom, canTakeGroupTurn, roleLabel } from '../lib/roles';
+import { canEditRoom, canTakeGroupTurn, hasAdminAccess, roleLabel } from '../lib/roles';
+import { adminFetch } from '../lib/adminApi';
 import { isServerId } from '../lib/home';
 import { startPolling } from '../lib/poll';
 import { serverNow } from '../lib/serverClock';
@@ -21,6 +22,7 @@ import { useChatStore } from '../stores/chatStore';
 import { useSettingsStore } from '../stores/settingsStore';
 import RoomNotifyPanel from '../components/conversations/RoomNotifyPanel';
 import { useUserStore } from '../stores/userStore';
+import type { User } from '../types/user';
 
 type GroupTab = 'members' | 'notify' | 'photos' | 'videos' | 'links';
 
@@ -41,6 +43,10 @@ export default function GroupProfilePage() {
   const conversation = useChatStore((state) => state.conversations.find((item) => item.id === id));
   const openPrivate = useChatStore((state) => state.openPrivate);
   const updateGroup = useChatStore((state) => state.updateGroup);
+  const setRoomMember = useChatStore((state) => state.setRoomMember);
+  const setMainOpen = useChatStore((state) => state.setMainOpen);
+  const deleteGroup = useChatStore((state) => state.deleteGroup);
+  const listOutsiders = useChatStore((state) => state.listOutsiders);
   const allMessages = useChatStore((state) => state.messages);
   const photoRef = useRef<HTMLInputElement>(null);
   const bannerRef = useRef<HTMLInputElement>(null);
@@ -48,6 +54,21 @@ export default function GroupProfilePage() {
   const [draftName, setDraftName] = useState('');
   const [draftBio, setDraftBio] = useState('');
   const [tab, setTab] = useState<GroupTab>('members');
+  const [adding, setAdding] = useState(false);
+  const [outsiders, setOutsiders] = useState<User[]>([]);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [manageNote, setManageNote] = useState('');
+  const [owner, setOwner] = useState(false);
+  useEffect(() => {
+    if (!isServerId(currentUser.id)) return;
+    let alive = true;
+    void adminFetch('/api/owner/members').then(() => {
+      if (alive) setOwner(true);
+    }).catch(() => {
+      if (alive) setOwner(false);
+    });
+    return () => { alive = false; };
+  }, [currentUser.id]);
   const [now, setNow] = useState(serverNow);
   const [turnRefresh, setTurnRefresh] = useState<TurnRefresh>('loading');
   const pendingTurn = useRef<ReturnType<ReturnType<typeof useChatStore.getState>['loadGroupTurn']> | undefined>(undefined);
@@ -96,6 +117,8 @@ export default function GroupProfilePage() {
   };
 
   const isRoom = conversation?.type === 'group' || conversation?.type === 'global';
+  const canManageMembers = Boolean(conversation && isRoom && (owner || hasAdminAccess(currentUser.role)));
+  const canDeleteGroup = Boolean(conversation?.type === 'group' && (canManageMembers || conversation.adminId === currentUser.id));
   const serverRoom = Boolean(conversation && isRoom && isServerId(conversation.id));
   const canEdit = conversation && serverRoom
     ? canTakeGroupTurn(currentUser.id, conversation, now)
@@ -252,34 +275,68 @@ export default function GroupProfilePage() {
             )}
             {tab === 'members' && (
               <section className="member-section" role="tabpanel">
+                {canManageMembers && (
+                  <div className="group-manage">
+                    {manageNote ? <p className="owner-done" role="status">{manageNote}</p> : null}
+                    <button type="button" className="group-edit" onClick={() => {
+                      setManageNote('');
+                      void listOutsiders(conversation.id).then((people) => {
+                        setOutsiders(people);
+                        setAdding(true);
+                      });
+                    }}>إضافة عضو</button>
+                    {conversation.type === 'global' && (
+                      <button type="button" className="group-edit" onClick={() => {
+                        const open = conversation.closed === true;
+                        void setMainOpen(open).then((ok) => setManageNote(ok ? (open ? 'ظهرت لكل الحسابات.' : 'أُخفيت عن غير الأعضاء.') : 'تعذر تعديل الظهور.'));
+                      }}>{conversation.closed ? 'إظهار للجميع' : 'إخفاء عن غير الأعضاء'}</button>
+                    )}
+                  </div>
+                )}
                 {members.map((user) => {
                   const self = user.id === currentUser.id;
                   const presence = self ? currentUser : user;
                   return (
-                    <button
-                      key={user.id}
-                      type="button"
-                      className="group-profile-card"
-                      aria-label={self ? 'رسائلك' : `محادثة مع ${user.displayName}`}
-                      onClick={() => messageUser(user.id)}
-                    >
-                      <Avatar name={user.displayName} color={user.color} size={48} src={user.avatarUrl} decoration={user.avatarDecoration} />
-                      <span className="group-profile-copy">
-                        <strong>
-                          <span className="group-profile-name" dir="auto">{user.displayName}</span>
-                          {self && <span className="role-badge">أنت</span>}
-                          {roleLabel(user.role) && <span className="role-badge">{roleLabel(user.role)}</span>}
-                          {user.role === 'member' && user.id === conversation.adminId && <span className="role-badge">مشرف</span>}
-                        </strong>
-                        <span className="group-profile-meta">
-                          <small dir="auto">@{user.username}</small>
-                          <span className={`status-dot ${presence.status}`}>{connectionLabel(presence, { self })}</span>
+                    <div key={user.id} className="group-profile-card">
+                      <button
+                        type="button"
+                        className="group-profile-open"
+                        aria-label={self ? 'رسائلك' : `محادثة مع ${user.displayName}`}
+                        onClick={() => messageUser(user.id)}
+                      >
+                        <Avatar name={user.displayName} color={user.color} size={48} src={user.avatarUrl} decoration={user.avatarDecoration} />
+                        <span className="group-profile-copy">
+                          <strong>
+                            <span className="group-profile-name" dir="auto">{user.displayName}</span>
+                            {self && <span className="role-badge">أنت</span>}
+                            {roleLabel(user.role) && <span className="role-badge">{roleLabel(user.role)}</span>}
+                            {user.role === 'member' && user.id === conversation.adminId && <span className="role-badge">مشرف</span>}
+                          </strong>
+                          <span className="group-profile-meta">
+                            <small dir="auto">@{user.username}</small>
+                            <span className={`status-dot ${presence.status}`}>{connectionLabel(presence, { self })}</span>
+                          </span>
+                          {user.bio ? <p>{user.bio}</p> : null}
                         </span>
-                        {user.bio ? <p>{user.bio}</p> : null}
-                      </span>
-                    </button>
+                      </button>
+                      {canManageMembers && !self && (
+                        <button
+                          type="button"
+                          className="member-remove"
+                          aria-label={`إزالة ${user.displayName}`}
+                          onClick={() => {
+                            void setRoomMember(conversation.id, user.id, false).then((ok) => setManageNote(ok ? 'تمت الإزالة.' : 'تعذرت الإزالة.'));
+                          }}
+                        >إزالة</button>
+                      )}
+                    </div>
                   );
                 })}
+                {canDeleteGroup && (
+                  <div className="group-manage">
+                    <button type="button" className="group-edit is-danger" onClick={() => setConfirmDelete(true)}>حذف المجموعة</button>
+                  </div>
+                )}
               </section>
             )}
           </div>
@@ -309,6 +366,59 @@ export default function GroupProfilePage() {
               <div className="account-actions">
                 <button type="button" onClick={() => setEditing(false)}>إلغاء</button>
                 <button type="button" className="profile-save" onClick={saveProfile}>حفظ</button>
+              </div>
+            </div>
+          </div>,
+          document.body,
+        )}
+      {adding &&
+        createPortal(
+          <div className="app-scrim sheet" onClick={() => setAdding(false)}>
+            <div className="app-sheet profile-pop" role="dialog" aria-labelledby="group-add-title" onClick={(event) => event.stopPropagation()}>
+              <span className="app-handle" />
+              <h2 id="group-add-title">إضافة عضو</h2>
+              {outsiders.length === 0 ? <p className="owner-system-hint">لا يوجد حساب خارج المجموعة.</p> : outsiders.map((user) => (
+                <button
+                  key={user.id}
+                  type="button"
+                  className="group-profile-card group-add-person"
+                  onClick={() => {
+                    void setRoomMember(id, user.id, true).then((ok) => {
+                      setManageNote(ok ? 'تمت الإضافة.' : 'تعذرت الإضافة.');
+                      if (ok) setOutsiders((list) => list.filter((item) => item.id !== user.id));
+                    });
+                  }}
+                >
+                  <Avatar name={user.displayName} color={user.color} size={48} src={user.avatarUrl} decoration={user.avatarDecoration} />
+                  <span className="group-profile-copy">
+                    <strong dir="auto">{user.displayName}</strong>
+                    <small dir="auto">@{user.username}</small>
+                  </span>
+                </button>
+              ))}
+              <div className="account-actions">
+                <button type="button" onClick={() => setAdding(false)}>إغلاق</button>
+              </div>
+            </div>
+          </div>,
+          document.body,
+        )}
+      {confirmDelete &&
+        createPortal(
+          <div className="app-scrim sheet" onClick={() => setConfirmDelete(false)}>
+            <div className="app-sheet profile-pop" role="dialog" aria-labelledby="group-delete-title" onClick={(event) => event.stopPropagation()}>
+              <span className="app-handle" />
+              <h2 id="group-delete-title">حذف المجموعة</h2>
+              <p className="owner-system-hint">تختفي المجموعة ورسائلها عن كل الأعضاء. المجموعة الرئيسية لا تُحذف.</p>
+              <div className="account-actions">
+                <button type="button" onClick={() => setConfirmDelete(false)}>إلغاء</button>
+                <button type="button" className="danger" onClick={() => {
+                  void deleteGroup(id).then((ok) => {
+                    if (ok) navigate('/home', { replace: true });
+                    else setManageNote('تعذر حذف المجموعة.');
+                    setConfirmDelete(false);
+                  });
+                }}>حذف</button>
               </div>
             </div>
           </div>,

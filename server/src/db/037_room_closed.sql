@@ -1,0 +1,1 @@
+ALTER TABLE rooms ADD COLUMN IF NOT EXISTS closed boolean NOT NULL DEFAULT false;

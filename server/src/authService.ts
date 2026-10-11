@@ -67,7 +67,6 @@ function publicUser(user: AuthUser) {
     ...(user.accentColor ? { color: user.accentColor } : {}),
     ...(user.messageFont && user.messageFont !== 'system' ? { messageFont: user.messageFont } : {}),
     avatarDecoration: user.avatarDecoration ?? 'none',
-    profileEffect: user.profileEffect ?? 'none',
     ...(user.customRoleLabel && user.customRoleColors
       ? { customRoleLabel: user.customRoleLabel, customRoleColors: user.customRoleColors.split(',') }
       : {}),
@@ -211,9 +210,7 @@ export async function updateOwnProfile(deps: Deps, input: {
   color?: unknown;
   messageFont?: unknown;
   avatarDecoration?: unknown;
-  profileEffect?: unknown;
   hasAvatarDecoration?: boolean;
-  hasProfileEffect?: boolean;
   customRoleLabel?: unknown;
   customRoleColors?: unknown;
   hasCustomRoleLabel?: boolean;
@@ -222,7 +219,7 @@ export async function updateOwnProfile(deps: Deps, input: {
 }) {
   const limit = blocked(deps, input.ip);
   if (limit) return limit;
-  if (!input.token || (!input.hasDisplayName && !input.hasBio && !input.hasBanner && !input.hasAvatar && !input.hasColor && !input.hasMessageFont && !input.hasAvatarDecoration && !input.hasProfileEffect && !input.hasCustomRoleLabel && !input.hasCustomRoleColors)) {
+  if (!input.token || (!input.hasDisplayName && !input.hasBio && !input.hasBanner && !input.hasAvatar && !input.hasColor && !input.hasMessageFont && !input.hasAvatarDecoration && !input.hasCustomRoleLabel && !input.hasCustomRoleColors)) {
     return { ok: false as const, error: 'invalid_credentials' as const };
   }
   const user = await sessionUser(deps, input.token);
@@ -260,14 +257,9 @@ export async function updateOwnProfile(deps: Deps, input: {
     patch.messageFont = font.value;
   }
   if (input.hasAvatarDecoration) {
-    const value = cleanCosmetic(input.avatarDecoration, 'avatar');
+    const value = cleanCosmetic(input.avatarDecoration);
     if (!value.ok) return { ok: false as const, error: 'invalid_credentials' as const };
     patch.avatarDecoration = value.value;
-  }
-  if (input.hasProfileEffect) {
-    const value = cleanCosmetic(input.profileEffect, 'profile');
-    if (!value.ok) return { ok: false as const, error: 'invalid_credentials' as const };
-    patch.profileEffect = value.value;
   }
   if (input.hasCustomRoleLabel) {
     const label = cleanCustomRoleLabel(input.customRoleLabel);

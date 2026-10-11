@@ -18,7 +18,7 @@ import {
   updateOwnProfile,
   type Deps,
 } from './authService.ts';
-import { messageView, openRoom, postRoomMessage, readHome, readGroupTurn, readRoomFile, readRoomImage, readRoomMessages, setRoomReaction, markRoomSeen, changeMessage, updateRoomProfile, dropOrphanPrivate } from './home.ts';
+import { GLOBAL_ROOM_ID, messageView, openRoom, postRoomMessage, readHome, readGroupTurn, readRoomFile, readRoomImage, readRoomMessages, setRoomReaction, markRoomSeen, changeMessage, updateRoomProfile, dropOrphanPrivate, listRoomOutsiders, changeRoomMember, setMainRoomOpen, removeCreatedGroup, changeFriend } from './home.ts';
 import { keepMessage, readSaved } from './saved.ts';
 import { addRoomKeys, readKeys, readRoomKeys, saveKeys } from './keys.ts';
 import { clearInbox, markInboxRead, readInbox } from './inbox.ts';
@@ -380,7 +380,7 @@ async function route(deps: Deps, request: Request) {
   if (request.method === 'POST' && path === '/api/push/register') {
     const result = await registerPushToken(deps, typeof body.token === 'string' ? body.token : undefined, typeof body.platform === 'string' ? body.platform : undefined, readSessionToken(request));
     if (!result.ok) return failure(deps, result.error);
-    return json({ ok: true, pushEnabled: pushConfigured() });
+    return json({ ok: true, pushEnabled: await pushConfigured() });
   }
   if (request.method === 'POST' && path === '/api/push/unregister') {
     const result = await unregisterPushToken(deps, typeof body.token === 'string' ? body.token : undefined, readSessionToken(request));
@@ -392,9 +392,35 @@ async function route(deps: Deps, request: Request) {
     if (!result.ok) return failure(deps, result.error);
     return json({ ok: true });
   }
+  const roomMembers = path.match(/^\/api\/rooms\/([0-9a-f-]{36})\/members$/i);
+  if (roomMembers && request.method === 'GET') {
+    const result = await listRoomOutsiders(deps, readSessionToken(request), roomMembers[1]!);
+    return result.ok ? json({ users: result.users }) : failure(deps, result.error);
+  }
+  if (roomMembers && request.method === 'POST') {
+    const result = await changeRoomMember(deps, {
+      token: readSessionToken(request),
+      roomId: roomMembers[1]!,
+      userId: body.userId,
+      present: body.present,
+    });
+    return result.ok ? json({ ok: true }) : failure(deps, result.error);
+  }
+  const roomVisibility = path.match(/^\/api\/rooms\/([0-9a-f-]{36})\/visibility$/i);
+  if (roomVisibility && request.method === 'POST') {
+    if (roomVisibility[1] !== GLOBAL_ROOM_ID) return failure(deps, 'forbidden');
+    const result = await setMainRoomOpen(deps, { token: readSessionToken(request), open: body.open });
+    return result.ok ? json({ ok: true }) : failure(deps, result.error);
+  }
   const orphanRoom = path.match(/^\/api\/rooms\/([0-9a-f-]{36})$/i);
   if (orphanRoom && request.method === 'DELETE') {
+    const removed = await removeCreatedGroup(deps, { token: readSessionToken(request), roomId: orphanRoom[1]! });
+    if (removed.ok || removed.error !== 'not_group') return removed.ok ? json({ ok: true }) : failure(deps, removed.error);
     const result = await dropOrphanPrivate(deps, { token: readSessionToken(request), roomId: orphanRoom[1]! });
+    return result.ok ? json({ ok: true }) : failure(deps, result.error);
+  }
+  if (request.method === 'POST' && path === '/api/friends') {
+    const result = await changeFriend(deps, { token: readSessionToken(request), userId: body.userId, action: body.action });
     return result.ok ? json({ ok: true }) : failure(deps, result.error);
   }
   if (request.method === 'POST' && path === '/api/rooms') {
@@ -442,7 +468,6 @@ async function route(deps: Deps, request: Request) {
       color: body.color,
       messageFont: body.messageFont,
       avatarDecoration: body.avatarDecoration,
-      profileEffect: body.profileEffect,
       customRoleLabel: body.customRoleLabel,
       customRoleColors: body.customRoleColors,
       hasDisplayName: Object.prototype.hasOwnProperty.call(body, 'displayName'),
@@ -452,7 +477,6 @@ async function route(deps: Deps, request: Request) {
       hasColor: Object.prototype.hasOwnProperty.call(body, 'color'),
       hasMessageFont: Object.prototype.hasOwnProperty.call(body, 'messageFont'),
       hasAvatarDecoration: Object.prototype.hasOwnProperty.call(body, 'avatarDecoration'),
-      hasProfileEffect: Object.prototype.hasOwnProperty.call(body, 'profileEffect'),
       hasCustomRoleLabel: Object.prototype.hasOwnProperty.call(body, 'customRoleLabel'),
       hasCustomRoleColors: Object.prototype.hasOwnProperty.call(body, 'customRoleColors'),
       ip,

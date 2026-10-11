@@ -224,11 +224,12 @@ describe('home payload', () => {
     expect(home?.conversations.find((conversation) => conversation.type === 'private')?.self).toBe(true);
   });
 
-  it('rejects a list without the main room', () => {
-    expect(readHomePayload({
-      conversations: [{ id: room, type: 'private', participantIds: [user], unreadCount: 0, createdAt: '2026-01-01T00:00:00.000Z' }],
+  it('keeps a home that no longer includes the main room', () => {
+    const home = readHomePayload({
+      conversations: [{ id: '44444444-4444-4444-8444-444444444444', type: 'private', participantIds: [user], unreadCount: 0, createdAt: '2026-01-01T00:00:00.000Z' }],
       users: [],
-    })).toBeNull();
+    });
+    expect(home?.conversations.some((conversation) => conversation.type === 'global')).toBe(false);
   });
 
   it('keeps the group turn on the conversation', () => {

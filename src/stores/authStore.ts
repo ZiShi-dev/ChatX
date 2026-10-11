@@ -1,4 +1,4 @@
-import { avatarDecoration, profileEffect, type AvatarDecoration, type ProfileCosmetics, type ProfileEffectId } from '../lib/profileCosmetics';
+import { avatarDecoration, type AvatarDecoration, type ProfileCosmetics } from '../lib/profileCosmetics';
 import { create } from 'zustand';
 import { CURRENT_USER } from '../data/users';
 import { AdminApiError, adminFetch } from '../lib/adminApi';
@@ -48,7 +48,6 @@ function asUser(saved?: Partial<User>): User | undefined {
     bio: saved.bio ?? '',
     color: sanitizeUserColor(saved.color, '#4d7ea8'),
     avatarDecoration: avatarDecoration(saved.avatarDecoration),
-    profileEffect: profileEffect(saved.profileEffect),
     ...(saved.messageFont ? { messageFont: sanitizeMessageFont(saved.messageFont) } : {}),
     ...(saved.avatarUrl ? { avatarUrl: saved.avatarUrl } : {}),
     ...(saved.bannerUrl ? { bannerUrl: saved.bannerUrl } : {}),
@@ -86,7 +85,6 @@ function applyAccountPatch(user: User, patch: ProfileCosmetics & {
     ...(patch.bio !== undefined ? { bio: patch.bio } : {}),
     ...(patch.color !== undefined ? { color: sanitizeUserColor(patch.color, user.color) } : {}),
     ...(patch.avatarDecoration !== undefined ? { avatarDecoration: avatarDecoration(patch.avatarDecoration) } : {}),
-    ...(patch.profileEffect !== undefined ? { profileEffect: profileEffect(patch.profileEffect) } : {}),
     ...(patch.messageFont !== undefined ? { messageFont: sanitizeMessageFont(patch.messageFont) } : {}),
   };
   if (patch.customRoleLabel !== undefined) {
@@ -141,7 +139,7 @@ type AuthState = {
   finishGoogleProfile: (
     credential: string,
     displayName: string,
-    extra?: { avatarUrl?: string; bio?: string; bannerUrl?: string; color?: string; messageFont?: MessageFontId; avatarDecoration?: AvatarDecoration; profileEffect?: ProfileEffectId },
+    extra?: { avatarUrl?: string; bio?: string; bannerUrl?: string; color?: string; messageFont?: MessageFontId; avatarDecoration?: AvatarDecoration },
   ) => Promise<'ok' | 'invalid' | 'username_taken' | 'offline' | 'rate_limited' | 'profile'>;
 };
 
@@ -191,7 +189,6 @@ export const useAuthStore = create<AuthState>((set, get) => ({
           ...(patch.avatarUrl !== undefined ? { avatar: patch.avatarUrl } : {}),
           ...(patch.color !== undefined ? { color: patch.color } : {}),
           ...(patch.avatarDecoration !== undefined ? { avatarDecoration: patch.avatarDecoration } : {}),
-          ...(patch.profileEffect !== undefined ? { profileEffect: patch.profileEffect } : {}),
           ...(patch.messageFont !== undefined ? { messageFont: patch.messageFont } : {}),
           ...(patch.customRoleLabel !== undefined ? { customRoleLabel: patch.customRoleLabel } : {}),
           ...(patch.customRoleColors !== undefined ? { customRoleColors: patch.customRoleColors } : {}),
@@ -312,10 +309,9 @@ export const useAuthStore = create<AuthState>((set, get) => ({
           ...(extra?.color ? { color: extra.color } : {}),
           ...(extra?.messageFont ? { messageFont: extra.messageFont } : {}),
           ...(extra?.avatarDecoration ? { avatarDecoration: extra.avatarDecoration } : {}),
-          ...(extra?.profileEffect ? { profileEffect: extra.profileEffect } : {}),
         },
       );
-      if (bio || avatarUrl || bannerUrl || extra?.color || extra?.messageFont || extra?.avatarDecoration || extra?.profileEffect) {
+      if (bio || avatarUrl || bannerUrl || extra?.color || extra?.messageFont || extra?.avatarDecoration) {
         try {
           await adminFetch('/api/profile', {
             method: 'PATCH',
@@ -326,7 +322,6 @@ export const useAuthStore = create<AuthState>((set, get) => ({
               ...(extra?.color ? { color: extra.color } : {}),
               ...(extra?.messageFont ? { messageFont: extra.messageFont } : {}),
               ...(extra?.avatarDecoration ? { avatarDecoration: extra.avatarDecoration } : {}),
-              ...(extra?.profileEffect ? { profileEffect: extra.profileEffect } : {}),
             },
           });
         } catch (error) {

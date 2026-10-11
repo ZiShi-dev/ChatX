@@ -91,6 +91,7 @@ export async function requestChatNotificationPermission(): Promise<ChatNotificat
 
 export async function notifyChatMessage(input: {
   conversationId: string;
+  messageId?: string;
   kind: ChatKind;
   title: string;
   body: string;
@@ -117,6 +118,7 @@ export async function notifyChatMessage(input: {
           channelId: CHANNEL_ID,
           extra: {
             conversationId: input.conversationId,
+            ...(input.messageId ? { messageId: input.messageId } : {}),
             kind: input.kind,
           },
         },
@@ -129,25 +131,26 @@ export async function notifyChatMessage(input: {
   const registration = 'serviceWorker' in navigator ? await navigator.serviceWorker.getRegistration().catch(() => undefined) : undefined;
   if (blocked()) return;
   if (registration?.active) {
-    await registration.showNotification(input.title, { body: input.body, tag: input.tag || input.conversationId || 'chatx', data: { conversationId: input.conversationId } });
+    await registration.showNotification(input.title, { body: input.body, tag: input.tag || input.messageId || input.conversationId || 'chatx', data: { conversationId: input.conversationId, ...(input.messageId ? { messageId: input.messageId } : {}) } });
     return;
   }
   const notification = new Notification(input.title, {
     body: input.body,
-    tag: input.tag || input.conversationId || 'chatx',
+    tag: input.tag || input.messageId || input.conversationId || 'chatx',
   });
   if (!input.conversationId) return;
   notification.onclick = () => {
     window.focus();
-    window.location.assign(`/chat/${input.conversationId}`);
+    window.location.assign(input.messageId ? `/chat/${input.conversationId}?at=${input.messageId}` : `/chat/${input.conversationId}`);
   };
 }
 
-export async function listenForChatNotificationOpens(open: (conversationId: string) => void) {
+export async function listenForChatNotificationOpens(open: (conversationId: string, messageId?: string) => void) {
   if (!Capacitor.isNativePlatform()) return () => undefined;
   const handle = await LocalNotifications.addListener('localNotificationActionPerformed', (event) => {
     const conversationId = event.notification.extra?.conversationId;
-    if (typeof conversationId === 'string' && conversationId) open(conversationId);
+    const messageId = event.notification.extra?.messageId;
+    if (typeof conversationId === 'string' && conversationId) open(conversationId, typeof messageId === 'string' ? messageId : undefined);
   });
   return () => {
     void handle.remove();

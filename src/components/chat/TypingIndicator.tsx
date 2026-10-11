@@ -1,36 +1,34 @@
 import Avatar from '../common/Avatar';
-import { typingComposerCaption, typingLabel } from '../../lib/typing';
+import { typingLabel } from '../../lib/typing';
 import type { User } from '../../types/user';
 
 type TypingIndicatorProps = {
   names: string[];
-  typists?: Pick<User, 'displayName' | 'color' | 'avatarUrl' | 'avatarDecoration'>[];
+  typists?: Pick<User, 'id' | 'displayName' | 'color' | 'avatarUrl' | 'avatarDecoration'>[];
 };
 
 export default function TypingIndicator({ names, typists }: TypingIndicatorProps) {
   const spoken = typingLabel(names);
-  const caption = typingComposerCaption(names);
   if (!spoken) return null;
-
-  const solo = typists?.length === 1 ? typists[0] : undefined;
+  const faces = (typists ?? []).slice(0, 3);
 
   return (
     <div className="composer-typing" role="status" aria-live="polite" aria-label={spoken}>
-      {solo ? (
+      {faces.map((user) => (
         <Avatar
-          name={solo.displayName}
-          color={solo.color}
-          size={44}
-          src={solo.avatarUrl}
-          decoration={solo.avatarDecoration}
+          key={user.id}
+          name={user.displayName}
+          color={user.color}
+          size={18}
+          src={user.avatarUrl}
+          decoration={user.avatarDecoration}
         />
-      ) : null}
+      ))}
       <span className="typing-dots" aria-hidden="true">
         <i />
         <i />
         <i />
       </span>
-      <span className="composer-typing-label" dir="auto">{caption}</span>
     </div>
   );
 }

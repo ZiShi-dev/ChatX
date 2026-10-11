@@ -337,6 +337,7 @@ function ChoiceSheet({
 
 export default function PeopleAdminPage() {
   const loadHome = useChatStore((state) => state.loadHome);
+  const setMainOpen = useChatStore((state) => state.setMainOpen);
   const removeUser = useUserStore((state) => state.removeUser);
   const updateUser = useUserStore((state) => state.updateUser);
   const dataSaver = useDataSaver();
@@ -465,7 +466,15 @@ export default function PeopleAdminPage() {
         {access === 'pending' ? <PageSkeleton kind="settings" /> : null}
         {access === 'ready' ? (
           <>
-            <p className="settings-lead">اختر ما تريد حذفه لكل حساب أو مجموعة. محادثة ChatX الرئيسية تبقى.</p>
+            <p className="settings-lead">اختر ما تريد حذفه لكل حساب أو مجموعة. محادثة ChatX الرئيسية تبقى، ويمكن إخفاؤها عن غير الأعضاء.</p>
+            <section className="owner-system" aria-labelledby="owner-main-title">
+              <h2 id="owner-main-title">المجموعة الرئيسية</h2>
+              <p className="owner-system-hint">إخفاؤها يبقيها لمن هم داخلها فقط. إظهارها يعيد كل الحسابات إلى المجموعة.</p>
+              <div className="account-actions">
+                <button type="button" onClick={() => void setMainOpen(false).then((ok) => setDone(ok ? 'أُخفيت عن غير الأعضاء.' : 'تعذر إخفاء المجموعة.'))}>إخفاء عن غير الأعضاء</button>
+                <button type="button" className="is-allow" onClick={() => void setMainOpen(true).then((ok) => setDone(ok ? 'ظهرت لكل الحسابات.' : 'تعذر إظهار المجموعة.'))}>إظهار للجميع</button>
+              </div>
+            </section>
             {done ? <p className="owner-done" role="status">{done}</p> : null}
             <section className="owner-system" aria-labelledby="owner-system-title">
               <h2 id="owner-system-title">حذف الوسائط من القرص</h2>

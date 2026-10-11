@@ -15,6 +15,8 @@ import { ensureRoomKey, openMessageMedia, openMessages, openPreview, sealMessage
 import { mentionRecipients } from '../lib/mention';
 import type { InboxItem } from '../lib/inbox';
 import { deletedPrivatePeer } from '../lib/conversation';
+import { privateTalkGate } from '../lib/friends';
+import { readDirectoryUsers } from '../lib/directory';
 import { firstUrl, linkDraft, readPreviewPayload, siteHost } from '../lib/link';
 import { AdminApiError, adminFetch, adminFetchBlob, invalidateApiSession } from '../lib/adminApi';
 import { loadChatSnapshot, saveChatSnapshot, releaseMedia } from '../lib/chatCache';
@@ -101,7 +103,12 @@ type ChatState = {
   loadInbox: (before?: { at: string; id: string }) => Promise<'ok' | 'local' | 'offline' | 'invalid'>;
   setTyping: (conversationId: string, userIds: string[]) => void;
   openPrivate: (userId: string) => Promise<string>;
+  changeFriend: (userId: string, action: 'ask' | 'accept' | 'decline') => Promise<boolean>;
   createGroup: (name: string, memberIds: string[]) => Promise<string>;
+  setRoomMember: (conversationId: string, userId: string, present: boolean) => Promise<boolean>;
+  setMainOpen: (open: boolean) => Promise<boolean>;
+  deleteGroup: (conversationId: string) => Promise<boolean>;
+  listOutsiders: (conversationId: string) => Promise<User[]>;
   updateGroup: (conversationId: string, patch: { name?: string; bio?: string; avatarUrl?: string; bannerUrl?: string | null }) => Promise<boolean>;
   pauseOutgoing: () => void;
   flushOutgoing: () => void;
@@ -669,6 +676,20 @@ function takeReply(conversationId: string) {
   return pending.messageId;
 }
 
+function blockedTalk(conversations: Conversation[], messages: Message[], conversationId: string, media: boolean) {
+  const roomId = accountRoom(conversationId);
+  const room = conversations.find((item) => item.id === roomId);
+  if (!room) return null;
+  const gate = privateTalkGate({
+    type: room.type,
+    self: room.self,
+    friend: room.friend,
+    messages: messages.filter((item) => item.conversationId === roomId),
+  });
+  if (gate === 'open' || (gate === 'intro' && !media)) return null;
+  return gate === 'locked' ? 'المحادثة مقفلة حتى قبول الصداقة' : 'الرسالة الأولى نصية فقط';
+}
+
 export const useChatStore = create<ChatState>((set, get) => ({
   conversations: CONVERSATIONS,
   messages: MESSAGES,
@@ -701,6 +722,11 @@ export const useChatStore = create<ChatState>((set, get) => ({
       set({ lastError: textTooLongMessage(text.length) });
       return;
     }
+    const refused = blockedTalk(get().conversations, get().messages, conversationId, false);
+    if (refused) {
+      set({ lastError: refused });
+      return;
+    }
     const roomId = accountRoom(conversationId);
     const url = firstUrl(text);
     appendMessage({
@@ -716,6 +742,11 @@ export const useChatStore = create<ChatState>((set, get) => ({
     });
   },
   sendImage: (conversationId, quality, picked) => {
+    const refused = blockedTalk(get().conversations, get().messages, conversationId, true);
+    if (refused) {
+      set({ lastError: refused });
+      return;
+    }
     useSettingsStore.getState().setImageQuality(quality);
     const roomId = accountRoom(conversationId);
     const original = picked?.fileSize ?? ORIGINAL_IMAGE_SIZE;
@@ -738,6 +769,11 @@ export const useChatStore = create<ChatState>((set, get) => ({
     });
   },
   sendVideo: (conversationId, quality, picked) => {
+    const refused = blockedTalk(get().conversations, get().messages, conversationId, true);
+    if (refused) {
+      set({ lastError: refused });
+      return;
+    }
     const roomId = accountRoom(conversationId);
     if (isServerId(roomId)) {
       const saving = useSettingsStore.getState().dataSaver || useNetworkStore.getState().network !== 'online';
@@ -788,6 +824,11 @@ export const useChatStore = create<ChatState>((set, get) => ({
     });
   },
   sendFile: (conversationId, picked) => {
+    const refused = blockedTalk(get().conversations, get().messages, conversationId, true);
+    if (refused) {
+      set({ lastError: refused });
+      return;
+    }
     const roomId = accountRoom(conversationId);
     const tooBig = picked.fileSize > FILE_BYTES_MAX;
     if (tooBig) {
@@ -1114,6 +1155,42 @@ export const useChatStore = create<ChatState>((set, get) => ({
     set((state) => ({ conversations: [conversation, ...state.conversations] }));
     return conversation.id;
   },
+  changeFriend: async (userId, action) => {
+    const currentUserId = useAuthStore.getState().currentUser.id;
+    const room = get().conversations.find((conversation) => isPrivateBetween(conversation, currentUserId, userId));
+    const apply = (friend: Conversation['friend']) => {
+      if (!room) return;
+      set((state) => ({
+        conversations: state.conversations.map((conversation) => (
+          conversation.id === room.id ? { ...conversation, friend } : conversation
+        )),
+      }));
+    };
+    if (isServerId(currentUserId)) {
+      if (!isServerId(userId)) return false;
+      try {
+        await adminFetch('/api/friends', { method: 'POST', body: { userId, action } });
+        await get().loadHome();
+        return true;
+      } catch {
+        return false;
+      }
+    }
+    if (!room || userId === currentUserId) return false;
+    if (action === 'ask') {
+      if (room.friend === 'friends' || room.friend === 'outgoing' || room.friend === 'incoming') return true;
+      apply('outgoing');
+      return true;
+    }
+    if (action === 'accept') {
+      if (room.friend !== 'incoming') return false;
+      apply('friends');
+      return true;
+    }
+    if (room.friend !== 'incoming' && room.friend !== 'outgoing') return false;
+    apply(undefined);
+    return true;
+  },
   createGroup: async (name, memberIds) => {
     const currentUserId = useAuthStore.getState().currentUser.id;
     const title = name.trim();
@@ -1142,6 +1219,90 @@ export const useChatStore = create<ChatState>((set, get) => ({
     };
     set((state) => ({ conversations: [conversation, ...state.conversations] }));
     return conversation.id;
+  },
+  setRoomMember: async (conversationId, userId, present) => {
+    const me = useAuthStore.getState().currentUser.id;
+    if (!present && userId === me) return false;
+    const room = get().conversations.find((item) => item.id === conversationId);
+    if (!room || (room.type !== 'group' && room.type !== 'global')) return false;
+    if (isServerId(conversationId)) {
+      try {
+        await adminFetch(`/api/rooms/${conversationId}/members`, { method: 'POST', body: { userId, present } });
+        await get().loadHome();
+        return true;
+      } catch {
+        return false;
+      }
+    }
+    set((state) => ({
+      conversations: state.conversations.map((item) => {
+        if (item.id !== conversationId) return item;
+        const ids = new Set(item.participantIds);
+        if (present) ids.add(userId);
+        else ids.delete(userId);
+        const next = { ...item, participantIds: [...ids] };
+        if (item.type === 'global' && !present) next.closed = true;
+        return next;
+      }),
+    }));
+    return true;
+  },
+  setMainOpen: async (open) => {
+    const me = useAuthStore.getState().currentUser.id;
+    const roomId = isServerId(me) ? SERVER_GLOBAL_ROOM_ID : GLOBAL_CHAT_ID;
+    if (isServerId(me)) {
+      try {
+        await adminFetch(`/api/rooms/${roomId}/visibility`, { method: 'POST', body: { open } });
+        await get().loadHome();
+        return true;
+      } catch {
+        return false;
+      }
+    }
+    const everyone = useUserStore.getState().users.map((user) => user.id);
+    set((state) => ({
+      conversations: state.conversations.map((item) => {
+        if (item.id !== roomId && item.type !== 'global') return item;
+        if (!open) return { ...item, closed: true };
+        const next = { ...item, participantIds: [...new Set(everyone)] };
+        delete next.closed;
+        return next;
+      }),
+    }));
+    return true;
+  },
+  deleteGroup: async (conversationId) => {
+    const room = get().conversations.find((item) => item.id === conversationId);
+    if (!room || room.type !== 'group') return false;
+    if (isServerId(conversationId)) {
+      try {
+        await adminFetch(`/api/rooms/${conversationId}`, { method: 'DELETE' });
+      } catch {
+        return false;
+      }
+    }
+    set((state) => ({
+      conversations: state.conversations.filter((item) => item.id !== conversationId),
+      messages: state.messages.filter((item) => item.conversationId !== conversationId),
+      fullRooms: state.fullRooms.filter((id) => id !== conversationId),
+    }));
+    return true;
+  },
+  listOutsiders: async (conversationId) => {
+    const room = get().conversations.find((item) => item.id === conversationId);
+    if (!room || (room.type !== 'group' && room.type !== 'global')) return [];
+    if (isServerId(conversationId)) {
+      try {
+        const users = readDirectoryUsers(await adminFetch(`/api/rooms/${conversationId}/members`));
+        if (!users) return [];
+        rememberPeople(users);
+        return users;
+      } catch {
+        return [];
+      }
+    }
+    const inside = new Set(room.participantIds);
+    return useUserStore.getState().users.filter((user) => !inside.has(user.id));
   },
   updateGroup: async (conversationId, patch) => {
     const current = get().conversations.find((item) => item.id === conversationId);

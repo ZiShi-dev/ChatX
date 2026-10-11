@@ -251,26 +251,20 @@ describe('profile', () => {
     const patch = (body: unknown) => api(new Request('http://127.0.0.1/api/profile', {
       method: 'PATCH', headers: { 'content-type': 'application/json', 'x-chatx-request': '1', cookie: `chatx_session=${token}` }, body: JSON.stringify(body),
     }));
-    assert.equal((await patch({ avatarDecoration: 'hat', profileEffect: 'stars' })).status, 200);
+    assert.equal((await patch({ avatarDecoration: 'hat' })).status, 200);
     const saved = await deps.repo.findUserById(member.id);
-    assert.equal(saved?.avatarDecoration, 'hat'); assert.equal(saved?.profileEffect, 'stars');
+    assert.equal(saved?.avatarDecoration, 'hat');
     const loaded = await api(new Request('http://127.0.0.1/api/profile', { headers: { cookie: `chatx_session=${token}` } }));
-    const body = await loaded.json() as { user: { avatarDecoration: string; profileEffect: string } };
-    assert.equal(body.user.avatarDecoration, 'hat'); assert.equal(body.user.profileEffect, 'stars');
-    assert.equal((await patch({ avatarDecoration: 'https://example.com/hat.gif', profileEffect: 'stars' })).status, 401);
-    assert.equal((await patch({ profileEffect: '<script>' })).status, 401);
+    const body = await loaded.json() as { user: { avatarDecoration: string; profileEffect?: string } };
+    assert.equal(body.user.avatarDecoration, 'hat');
+    assert.equal(body.user.profileEffect, undefined);
+    assert.equal((await patch({ avatarDecoration: 'https://example.com/hat.gif' })).status, 401);
     assert.equal((await deps.repo.findUserById(member.id))?.avatarDecoration, 'hat');
-    assert.equal((await patch({ avatarDecoration: 'dragon', profileEffect: 'meteors' })).status, 200);
+    assert.equal((await patch({ avatarDecoration: 'dragon' })).status, 200);
     assert.equal((await deps.repo.findUserById(member.id))?.avatarDecoration, 'dragon');
-    assert.equal((await deps.repo.findUserById(member.id))?.profileEffect, 'meteors');
     assert.equal((await patch({ avatarDecoration: 'hat-rain' })).status, 200);
     assert.equal((await deps.repo.findUserById(member.id))?.avatarDecoration, 'hat-rain');
-    for (const profileEffect of ['celestial-dragon', 'sword-domain', 'time-cicada', 'jade-lotus', 'heavenly-tribulation', 'jade-petals', 'spirit-embers']) {
-      assert.equal((await patch({ profileEffect })).status, 200);
-      assert.equal((await deps.repo.findUserById(member.id))?.profileEffect, profileEffect);
-    }
-    assert.equal((await patch({ avatarDecoration: null, profileEffect: 'none' })).status, 200);
+    assert.equal((await patch({ avatarDecoration: null })).status, 200);
     assert.equal((await deps.repo.findUserById(member.id))?.avatarDecoration, 'none');
-    assert.equal((await deps.repo.findUserById(member.id))?.profileEffect, 'none');
   });
 });

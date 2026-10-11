@@ -59,6 +59,8 @@ function readServerConversation(row: unknown): { conversation: Conversation; mes
     ...(typeof data.bannerUrl === 'string' ? { bannerUrl: data.bannerUrl } : {}),
     ...(type !== 'private' && typeof data.turnUserId === 'string' && isServerId(data.turnUserId) ? { turnUserId: data.turnUserId } : {}),
     ...(type !== 'private' && typeof data.turnOpensAt === 'string' && Number.isFinite(Date.parse(data.turnOpensAt)) ? { turnOpensAt: data.turnOpensAt } : {}),
+    ...(type === 'global' && data.closed === true ? { closed: true } : {}),
+    ...(type === 'private' && (data.friend === 'outgoing' || data.friend === 'incoming' || data.friend === 'friends') ? { friend: data.friend } : {}),
   };
   const last = data.lastMessage;
   if (last == null) return { conversation };
@@ -125,7 +127,6 @@ export function readHomePayload(payload: unknown): HomePayload | null {
     conversations.push(opened.conversation);
     if (opened.message) messages.push(opened.message);
   }
-  if (!conversations.some((conversation) => conversation.type === 'global')) return null;
   const users: User[] = [];
   for (const item of data.users) {
     const user = readDirectoryUser(item);

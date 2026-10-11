@@ -10,6 +10,7 @@ import NetworkStatusBanner from '../components/common/NetworkBanner';
 import MessageList from '../components/chat/MessageList';
 import MessageSearch from '../components/chat/MessageSearch';
 import MessageComposer from '../components/chat/MessageComposer';
+import TypingIndicator from '../components/chat/TypingIndicator';
 import EmojiPanel from '../components/chat/EmojiPanel';
 import PageNav from '../components/common/PageNav';
 import GroupHeader from '../components/groups/GroupHeader';
@@ -20,6 +21,7 @@ import { CHAT_VISIBLE_WINDOW, MESSAGE_HIGHLIGHT_DURATION, MESSAGE_PAGE_SIZE, SKE
 import { GLOBAL_CHAT_ID } from '../data/conversations';
 import { isServerId, SERVER_GLOBAL_ROOM_ID } from '../lib/home';
 import { catchUpLabel, deletedPrivatePeer, historyLimitForUnread, membersOf, openUnreadCount, otherParticipant, unreadAbove, unreadScrollTop } from '../lib/conversation';
+import { privateTalkGate } from '../lib/friends';
 import { resolveMessageFocus } from '../lib/inbox';
 import { scrollMessageForActions } from '../lib/messageFocusScroll';
 import { watchingRoom } from '../lib/liveInbox';
@@ -97,7 +99,15 @@ function sendFollow(scroller: HTMLElement) {
 
 function stickThread(scroller: HTMLElement, following: { current: boolean }) {
   if (sendFollow(scroller)) return;
-  if (following.current || performance.now() < followSendUntil) pinBottom(scroller);
+  if (!following.current && performance.now() >= followSendUntil) return;
+  const gap = bottomTop(scroller) - scroller.scrollTop;
+  if (gap < 2) return;
+  if (stillMotion() || gap > 420) {
+    pinBottom(scroller);
+    return;
+  }
+  if (glideUntil > performance.now()) return;
+  glideBottom(scroller, 220);
 }
 
 function noteSendScroll(scrollTop: number) {
@@ -172,6 +182,7 @@ export default function ChatPage() {
   const setTyping = useChatStore((state) => state.setTyping);
   const cancelEdit = useChatStore((state) => state.cancelEdit);
   const openPrivate = useChatStore((state) => state.openPrivate);
+  const changeFriend = useChatStore((state) => state.changeFriend);
   const reactionKeyboardId = useChatStore((state) => state.reactionKeyboardId);
   const closeReactionKeyboard = useChatStore((state) => state.closeReactionKeyboard);
   const toggleReaction = useChatStore((state) => state.toggleReaction);
@@ -544,7 +555,7 @@ export default function ChatPage() {
         setAway(true);
         return;
       }
-      if (keepBottom) {
+      if (keepBottom || performance.now() < glideUntil) {
         stickRef.current = true;
         return;
       }
@@ -841,6 +852,10 @@ export default function ChatPage() {
   }
 
   const peerGone = deletedPrivatePeer(conversation, currentUser.id, users);
+  const talk = privateTalkGate({ type: conversation.type, self: conversation.self, friend: conversation.friend, messages });
+  const otherId = conversation.type === 'private' && !conversation.self
+    ? conversation.participantIds.find((personId) => personId !== currentUser.id)
+    : undefined;
   const members = membersOf(conversation, users);
   const onlineCount = members.filter((user) => getUserPresence(user.id, users) === 'online').length;
   const groupSubtitle = currentUser.status === 'online'
@@ -958,6 +973,9 @@ export default function ChatPage() {
               onLoadOlder={revealOlder}
             />
           )}
+          {!searching && (
+            <TypingIndicator names={typingTypists.map((user) => user.displayName)} typists={typingTypists} />
+          )}
           <div ref={endRef} />
         </div>
       </IonContent>
@@ -1026,7 +1044,27 @@ export default function ChatPage() {
             </button>
           </div>
         ) : (
-          <MessageComposer conversationId={conversation.id} typists={typingTypists} />
+          <>
+            {talk !== 'open' && otherId && (
+              <div className="friend-bar">
+                {conversation.friend === 'incoming' ? (
+                  <>
+                    <p>طلب صداقة</p>
+                    <button type="button" onClick={() => void changeFriend(otherId, 'accept')}>قبول</button>
+                    <button type="button" onClick={() => void changeFriend(otherId, 'decline')}>تجاهل</button>
+                  </>
+                ) : conversation.friend === 'outgoing' ? (
+                  <p>{talk === 'locked' ? 'المحادثة مقفلة حتى قبول الصداقة' : 'تم إرسال طلب الصداقة'}</p>
+                ) : (
+                  <>
+                    <p>{talk === 'locked' ? 'المحادثة مقفلة حتى قبول الصداقة' : 'رسالة نصية واحدة قبل قبول الصداقة'}</p>
+                    <button type="button" onClick={() => void changeFriend(otherId, 'ask')}>طلب صداقة</button>
+                  </>
+                )}
+              </div>
+            )}
+            <MessageComposer conversationId={conversation.id} talk={talk} />
+          </>
         )}
       </IonFooter>
       {conversation.type !== 'private' && (

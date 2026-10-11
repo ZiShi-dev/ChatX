@@ -3,6 +3,7 @@ import type { Deps } from './authService.ts';
 import { noticeKind, SEALED_PREVIEW } from './inbox.ts';
 import { isSealed } from './sealed.ts';
 import type { InboxKind, RoomMessage } from './types.ts';
+import { deliverPush } from './pushDelivery.ts';
 
 const CHANNEL = 'chatx-messages';
 const TOKEN_URL = 'https://oauth2.googleapis.com/token';
@@ -27,7 +28,11 @@ function base64Url(input: string | Buffer) {
   return Buffer.from(input).toString('base64url');
 }
 
-export function pushConfigured() { return pushEnv() !== null; }
+export async function pushConfigured() {
+  const env = pushEnv();
+  if (!env) return false;
+  try { return Boolean(await accessToken(env)); } catch { return false; }
+}
 
 async function accessToken(env: PushEnv) {
   const scope = env.projectId + ':' + env.clientEmail;
@@ -93,10 +98,11 @@ export function pushSuppressed(quiet: string, hiddenKinds: string, conversationI
   return false;
 }
 
-async function sendToken(env: PushEnv, token: string, title: string, body: string, data: Record<string, string>) {
-  const auth = await accessToken(env);
-  if (!auth) return false;
-  const response = await fetch(`https://fcm.googleapis.com/v1/projects/${env.projectId}/messages:send`, {
+async function sendToken(env: PushEnv, token: string, title: string, body: string, data: Record<string, string>, stillAllowed: () => Promise<boolean>) {
+  const response = await deliverPush(async () => {
+    const auth = await accessToken(env);
+    if (!auth) throw new Error('push_auth_unavailable');
+    const result = await fetch(`https://fcm.googleapis.com/v1/projects/${env.projectId}/messages:send`, {
     method: 'POST',
     signal: AbortSignal.timeout(10_000),
     headers: { authorization: `Bearer ${auth}`, 'content-type': 'application/json' },
@@ -111,14 +117,22 @@ async function sendToken(env: PushEnv, token: string, title: string, body: strin
         data,
       },
     }),
-  });
-  if (response.status === 401) { cachedToken = ''; tokenUntil = 0; }
+    });
+    if (result.status === 401) { cachedToken = ''; tokenUntil = 0; }
+    return result;
+  }, stillAllowed);
+  if (!response) return 'failed';
   if (response.ok) return 'sent';
   const error = await response.json().catch(() => null) as { error?: { details?: Array<{ errorCode?: string }> } } | null;
   return error?.error?.details?.some(item => item.errorCode === 'UNREGISTERED') ? 'expired' : 'failed';
 }
 
 export async function sendMessagePush(deps: Deps, message: RoomMessage & { hints?: import('./sealed.ts').NoticeHints }) {
+  try { await dispatchMessagePush(deps, message); }
+  catch { console.warn('[push] Message dispatch unavailable; inbox remains the source of truth.'); }
+}
+
+async function dispatchMessagePush(deps: Deps, message: RoomMessage & { hints?: import('./sealed.ts').NoticeHints }) {
   const env = pushEnv();
   if (!env) return;
   const members = await deps.repo.listRoomNoticeMembers(message.roomId, message.senderId);
@@ -148,9 +162,17 @@ export async function sendMessagePush(deps: Deps, message: RoomMessage & { hints
       kind: String(kind),
     };
     for (const token of tokens) {
-      void sendToken(env, token, title, body, data).then(result => {
+      const stillAllowed = async () => {
+        const latestPrefs = await deps.repo.readPushPrefs(member.id);
+        if (pushSuppressed(latestPrefs.quiet, latestPrefs.hiddenKinds, message.roomId, kind)) return false;
+        if (!(await deps.repo.listPushTokens(member.id)).includes(token)) return false;
+        const notices = await deps.repo.listNotifications(member.id, 100, null);
+        return notices.some(notice => notice.messageId === message.id && notice.roomId === message.roomId && !notice.read && !notice.deleted);
+      };
+      void sendToken(env, token, title, body, data, stillAllowed).then(result => {
         if (result === 'expired') return deps.repo.deletePushToken(member.id, token);
-      }).catch(() => undefined);
+        if (result === 'failed') console.warn('[push] Delivery failed after bounded retries.');
+      }).catch(() => { console.warn('[push] Delivery unavailable; inbox remains available.'); });
     }
   }
 }

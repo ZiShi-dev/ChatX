@@ -1,75 +1,89 @@
-import { readFile, writeFile, mkdir, stat } from 'node:fs/promises';
+import { readFile, writeFile, mkdir, stat, readdir, rm } from 'node:fs/promises';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 
-// Development-only importer. Runtime never contacts GitHub, Unicode, or a CDN.
-const REVISION = '1ffb34c752ecf5d402f04cfb4b392c77f57c54bc';
+// Development-only importer. Runtime never contacts GitHub or a CDN.
+// Twemoji graphics from RealityRipple's directory. Apple, JoyPixels, Facebook,
+// WhatsApp and the other sets in that repo are not vendored.
+const REVISION = 'db08071637157a9def981b59beae9a8d64e70778';
 const ROOT = new URL('../', import.meta.url);
-const cache = new URL('.cache/chatx-emoji/', ROOT);
+const cache = new URL('.cache/chatx-emoji-twemoji/', ROOT);
 const output = new URL('public/assets/emoji/', ROOT);
-const rawBase = `https://raw.githubusercontent.com/microsoft/fluentui-emoji/${REVISION}/`;
+const rawBase = `https://raw.githubusercontent.com/RealityRipple/emoji/${REVISION}/`;
 await mkdir(cache, { recursive: true });
 await mkdir(output, { recursive: true });
 await mkdir(new URL('raw/', cache), { recursive: true });
+
 async function fetched(url) {
-  const response = await fetch(url, { signal: AbortSignal.timeout(30_000) });
-  if (!response.ok) throw new Error(`Asset source returned ${response.status}`);
+  const response = await fetch(url, { signal: AbortSignal.timeout(60_000) });
+  if (!response.ok) throw new Error(`Asset source returned ${response.status} for ${url}`);
   return Buffer.from(await response.arrayBuffer());
 }
 async function source(name, url) {
   const path = new URL(name, cache);
   try { return await readFile(path); } catch {
-    const bytes = await fetched(url); await writeFile(path, bytes); return bytes;
+    const bytes = await fetched(url);
+    await writeFile(path, bytes);
+    return bytes;
   }
 }
-const tree = JSON.parse((await source('tree.json', `https://api.github.com/repos/microsoft/fluentui-emoji/git/trees/${REVISION}?recursive=1`)).toString());
+
+const tree = JSON.parse((await source('tree.json', `https://api.github.com/repos/RealityRipple/emoji/git/trees/${REVISION}?recursive=1`)).toString());
 if (tree.truncated) throw new Error('Incomplete emoji inventory');
-const normalize = (name) => name.toLowerCase().replace(/[^a-z0-9]/g, '');
-const folders = new Map(tree.tree.filter((row) => row.path.endsWith('/metadata.json')).map((row) => [normalize(row.path.split('/')[1]), row.path.split('/')[1]]));
-const names = new Map();
-for (const line of (await source('emoji-test-18.txt', 'https://unicode.org/Public/emoji/latest/emoji-test.txt')).toString().split('\n')) {
-  const match = line.match(/^([0-9A-F ]+)\s*; fully-qualified\s*#\s*(\S+) E[\d.]+ (.+)$/);
-  if (match) names.set(match[2], match[3]);
+const available = new Set(tree.tree
+  .filter((row) => row.path.startsWith('twemoji/') && row.path.endsWith('.png'))
+  .map((row) => row.path.slice('twemoji/'.length, -4)));
+
+function appKey(emoji) {
+  return [...emoji].filter((part) => part !== '\ufe0f').map((part) => part.codePointAt(0).toString(16)).join('-');
 }
+function padded(emoji) {
+  return [...emoji].map((part) => part.codePointAt(0).toString(16).padStart(4, '0'));
+}
+
+const sequences = new Map();
+for (const line of (await source('emoji-test.txt', 'https://unicode.org/Public/emoji/latest/emoji-test.txt')).toString().split('\n')) {
+  const match = line.match(/^([0-9A-F ]+)\s*; fully-qualified\s*#\s*(\S+)/);
+  if (match) sequences.set(match[2], match[1].trim().toLowerCase().split(/\s+/));
+}
+
+function fileName(emoji) {
+  const parts = sequences.get(emoji) ?? padded(emoji);
+  const full = parts.join('-');
+  if (available.has(full)) return full;
+  const stripped = parts.filter((part) => part !== 'fe0f').join('-');
+  if (available.has(stripped)) return stripped;
+  return '';
+}
+
 const { EMOJI_GROUPS } = await import('../src/lib/emojiCatalog.ts');
-const selected = new Set(EMOJI_GROUPS.flatMap((group) => group.emojis));
-const aliases = { '🤗': 'Hugging face', '😵': 'Knocked-out face', '😡': 'Pouting face', '🔺': 'Red triangle', '#️⃣': 'Keycap hashtag', '*️⃣': 'Keycap asterisk' };
-const tones = new Map([['🏻', 'Light'], ['🏼', 'Medium-Light'], ['🏽', 'Medium'], ['🏾', 'Medium-Dark'], ['🏿', 'Dark']]);
-for (const emoji of names.keys()) {
+const catalog = new Set(EMOJI_GROUPS.flatMap((group) => group.emojis));
+const selected = new Set(catalog);
+for (const emoji of sequences.keys()) {
   const base = emoji.replace(/[\u{1f3fb}-\u{1f3ff}]/gu, '');
-  if (base !== emoji && selected.has(base)) selected.add(emoji);
+  if (base !== emoji && selected.has(base) && fileName(emoji)) selected.add(emoji);
 }
+
 const rows = [];
+const missing = [];
 for (const emoji of selected) {
-  const base = emoji.replace(/[\u{1f3fb}-\u{1f3ff}]/gu, '');
-  const folder = aliases[base] || folders.get(normalize(names.get(base) || ''));
-  const tone = [...emoji].find((part) => tones.has(part));
-  const prefix = `assets/${folder}/`;
-  const candidates = tree.tree.filter((row) => row.path.startsWith(prefix) && row.path.includes('/3D/') && row.path.endsWith('.png'));
-  const asset = candidates.find((row) => tone ? row.path.includes(`/${tones.get(tone)}/`) : row.path.includes('/Default/'))
-    || (!tone ? candidates.find((row) => row.path.split('/').length === 4) : undefined);
-  if (!asset && tone) continue; // Preserve unsupported skin-tone sequences as Unicode at runtime.
-  if (!asset) throw new Error(`Missing licensed illustration for ${emoji}`);
-  const key = [...emoji].filter((part) => part !== '\ufe0f').map((part) => part.codePointAt(0).toString(16)).join('-');
-  rows.push({ emoji, key, path: asset.path });
+  const file = fileName(emoji);
+  if (!file) {
+    if (catalog.has(emoji)) missing.push(emoji);
+    continue;
+  }
+  rows.push({ emoji, file, key: appKey(emoji) });
 }
-let processed = 0;
-let bytes = 0;
+if (missing.length) throw new Error(`Twemoji has no illustration for: ${missing.join(' ')}`);
+
 const pending = [];
-const fresh = [];
-for (const row of rows) {
-  const target = new URL(`${row.key}.webp`, output);
-  try { bytes += (await stat(target)).size; processed++; continue; } catch { /* New asset. */ }
-  fresh.push(row);
-}
 let next = 0;
 await Promise.all(Array.from({ length: 8 }, async () => {
-  while (next < fresh.length) {
-    const row = fresh[next++];
-    const url = rawBase + row.path.split('/').map(encodeURIComponent).join('/');
-    await source(`raw/${row.key}.png`, url);
-    pending.push({ png: fileURLToPath(new URL(`raw/${row.key}.png`, cache)), webp: fileURLToPath(new URL(`${row.key}.webp`, output)) });
-    if (pending.length % 40 === 0) console.log(`Downloaded ${pending.length}/${fresh.length} new emoji`);
+  while (next < rows.length) {
+    const row = rows[next++];
+    await source(`raw/${row.file}.png`, `${rawBase}twemoji/${row.file}.png`);
+    pending.push({ png: fileURLToPath(new URL(`raw/${row.file}.png`, cache)), webp: fileURLToPath(new URL(`${row.key}.webp`, output)) });
+    if (pending.length % 40 === 0) console.log(`Downloaded ${pending.length}/${rows.length} emoji`);
   }
 }));
 if (pending.length) {
@@ -84,11 +98,25 @@ for job in jobs:
 print(len(jobs))
 `], { input: JSON.stringify(pending), encoding: 'utf8' });
   if (converted.status !== 0) throw new Error(converted.stderr || 'WebP conversion failed');
-  for (const job of pending) bytes += (await stat(job.webp)).size;
-  processed += pending.length;
 }
+
 const keys = [...new Set(rows.map((row) => row.key))].sort();
-await writeFile(new URL('src/lib/emojiAssets.ts', ROOT), `// Generated by scripts/build-emoji-assets.mjs; Microsoft Fluent Emoji, MIT.\nexport const EMOJI_ASSET_KEYS = new Set(${JSON.stringify(keys)});\n`);
-await writeFile(new URL('LICENSE.txt', output), await fetched(rawBase + 'LICENSE'));
-await writeFile(new URL('NOTICE.txt', output), `Microsoft Fluent Emoji\nCopyright (c) Microsoft Corporation. MIT license; see LICENSE.txt.\nSource: https://github.com/microsoft/fluentui-emoji/tree/${REVISION}\nModified for ChatX: resized to 64px and encoded as WebP.\n${keys.length} assets; ${bytes} bytes.\n`);
-console.log(`Prepared ${keys.length} local emoji assets, ${(bytes / 1_000_000).toFixed(2)} MB total`);
+const keep = new Set(keys.map((key) => `${key}.webp`));
+for (const name of await readdir(output)) {
+  if (name.endsWith('.webp') && !keep.has(name)) await rm(new URL(name, output));
+}
+let total = 0;
+for (const key of keys) total += (await stat(new URL(`${key}.webp`, output))).size;
+
+await writeFile(new URL('src/lib/emojiAssets.ts', ROOT), `// Generated by scripts/build-emoji-assets.mjs; Twemoji graphics, CC BY 4.0.\nexport const EMOJI_ASSET_KEYS = new Set(${JSON.stringify(keys)});\n`);
+await writeFile(new URL('LICENSE.txt', output), await fetched(rawBase + 'LICENSE-TWEMOJI-GRAPHICS'));
+await writeFile(new URL('NOTICE.txt', output), `Twemoji
+Copyright (c) 2022–present Jason Sofonia & Justine De Caires
+Copyright (c) 2014–2021 Twitter
+Graphics: Creative Commons Attribution 4.0 International. See LICENSE.txt.
+Directory: https://github.com/RealityRipple/emoji/tree/${REVISION}/twemoji
+Upstream: https://github.com/jdecked/twemoji
+Modified for ChatX: resized to 64px and encoded as WebP.
+${keys.length} assets; ${total} bytes.
+`);
+console.log(`Prepared ${keys.length} local emoji assets, ${(total / 1_000_000).toFixed(2)} MB total`);

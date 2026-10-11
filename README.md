@@ -68,7 +68,7 @@ Voir [la vérification de l'économie de données](docs/DONNEES-2026-10-09.md).
 
 ## Emojis
 
-Les emojis des messages, réactions et sélecteur utilisent des illustrations Fluent 3D locales sous licence MIT, identiques sur les appareils pour les caractères couverts. Le texte envoyé reste Unicode ; les caractères hors du paquet et le clavier natif gardent leur rendu système. Les 1 035 images optimisées occupent environ 1,75 Mo et sont embarquées dans l'APK, sans CDN. Voir [la solution, la licence et les vérifications](docs/EMOJIS-2026-10-09.md).
+Les emojis des messages, réactions et sélecteur utilisent des illustrations Twemoji locales (CC BY 4.0), identiques sur les appareils pour les caractères couverts. Le texte envoyé reste Unicode ; les caractères hors du paquet et le clavier natif gardent leur rendu système. Les 1 175 images optimisées occupent environ 2,29 Mo et sont embarquées dans l'APK, sans CDN. Voir [la solution, la licence et les vérifications](docs/EMOJIS-2026-10-09.md).
 
 ## Vérifier
 

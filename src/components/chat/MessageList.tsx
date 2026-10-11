@@ -114,6 +114,13 @@ function MessageList({ messages, limit, showAuthor, group = false, direct = fals
         const day = formatMessageDay(message.createdAt);
         const previous = index > 0 ? formatMessageDay(visible[index - 1].createdAt) : '';
         const faces = group ? facesOnMessage(cursor, message, currentUserId, authors) : NO_SEEN;
+        const next = visible[index + 1];
+        const media = message.type === 'image' || message.type === 'video';
+        const sameSender = (other?: Message) => Boolean(
+          other && !other.event && !message.event && other.senderId === message.senderId && formatMessageDay(other.createdAt) === day,
+        );
+        const continued = showAuthor && !media && sameSender(visible[index - 1]) && index !== unreadAt;
+        const followed = showAuthor && !media && sameSender(next) && index + 1 !== unreadAt;
         return (
           <Fragment key={message.id}>
             {day !== previous && <p className="chat-day">{day}</p>}
@@ -124,7 +131,10 @@ function MessageList({ messages, limit, showAuthor, group = false, direct = fals
             <MessageBubble
               message={message}
               mine={message.senderId === currentUserId}
-              showAuthor={showAuthor}
+              showAuthor={showAuthor && !continued}
+              showAvatar={showAuthor && !followed}
+              reserveAvatar={showAuthor && followed}
+              continued={continued}
               group={group}
               direct={direct}
               directSeen={Boolean(direct && otherId && cursorSees(cursor[otherId], byId, message))}

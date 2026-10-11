@@ -7,7 +7,6 @@ import { IonIcon } from '@ionic/react';
 import { attachOutline, cameraOutline, checkmark, closeOutline, documentOutline, folderOutline, happyOutline, imagesOutline, send } from 'ionicons/icons';
 import PermissionDialog from '../common/PermissionDialog';
 import EmojiPanel from './EmojiPanel';
-import TypingIndicator from './TypingIndicator';
 import Avatar from '../common/Avatar';
 import EmojiText from '../common/EmojiText';
 import { adminFetch } from '../../lib/adminApi';
@@ -79,7 +78,7 @@ const EMPTY_IDS: string[] = [];
 
 type MessageComposerProps = {
   conversationId: string;
-  typists?: User[];
+  talk?: 'open' | 'intro' | 'locked';
 };
 
 type Attachment = {
@@ -107,7 +106,7 @@ function kindOf(name: string, mimeType = ''): Attachment['kind'] {
   return 'file';
 }
 
-export default function MessageComposer({ conversationId, typists = EMPTY_USERS }: MessageComposerProps) {
+export default function MessageComposer({ conversationId, talk = 'open' }: MessageComposerProps) {
   const sendMessage = useChatStore((state) => state.sendMessage);
   const sendImage = useChatStore((state) => state.sendImage);
   const sendVideo = useChatStore((state) => state.sendVideo);
@@ -224,9 +223,20 @@ export default function MessageComposer({ conversationId, typists = EMPTY_USERS 
   const resizeField = () => {
     const field = fieldRef.current;
     if (!field) return;
+    const previous = field.offsetHeight;
+    field.style.transition = 'none';
     field.style.height = 'auto';
     const next = Math.min(Math.max(field.scrollHeight, 44), 120);
-    field.style.height = `${next}px`;
+    field.style.height = `${previous}px`;
+    if (Math.abs(previous - next) < 2) {
+      field.style.height = `${next}px`;
+      field.style.transition = '';
+      return;
+    }
+    window.requestAnimationFrame(() => {
+      field.style.transition = '';
+      field.style.height = `${next}px`;
+    });
   };
 
   useEffect(() => {
@@ -663,7 +673,7 @@ export default function MessageComposer({ conversationId, typists = EMPTY_USERS 
     holdKeyboard();
   };
 
-  const canSend = !savingEdit && Boolean(draft.trim() || (!editing && attachments.length));
+  const canSend = talk !== 'locked' && !savingEdit && Boolean(draft.trim() || (!editing && talk === 'open' && attachments.length));
 
   return (
     <>
@@ -802,7 +812,6 @@ export default function MessageComposer({ conversationId, typists = EMPTY_USERS 
         )}
         {emojiOpen && <EmojiPanel onPick={insertEmoji} onClose={() => { setEmojiOpen(false); fieldRef.current?.focus(); }} />}
         <div className="composer-bar">
-          <TypingIndicator names={typists.map((user) => user.displayName)} typists={typists} />
           <div className="composer-field">
             <button
               type="button"
@@ -827,6 +836,7 @@ export default function MessageComposer({ conversationId, typists = EMPTY_USERS 
               dir="auto"
               maxLength={MESSAGE_TEXT_MAX}
               value={draft}
+              disabled={talk === 'locked'}
               placeholder="اكتب رسالة"
               enterKeyHint="send"
               onChange={(event) => {
@@ -854,7 +864,7 @@ export default function MessageComposer({ conversationId, typists = EMPTY_USERS 
                 }
               }}
             />
-            <button
+            {talk === 'open' && <button
               type="button"
               className={menuOpen ? 'composer-icon open' : 'composer-icon'}
               aria-label={menuOpen ? 'إغلاق' : 'مرفق'}
@@ -866,8 +876,8 @@ export default function MessageComposer({ conversationId, typists = EMPTY_USERS 
               }}
             >
               <IonIcon icon={menuOpen ? closeOutline : attachOutline} />
-            </button>
-            {!editing && !draft.trim() && attachments.length === 0 && (
+            </button>}
+            {talk === 'open' && !editing && !draft.trim() && attachments.length === 0 && (
               <button
                 type="button"
                 className="composer-icon"

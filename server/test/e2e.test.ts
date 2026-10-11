@@ -20,6 +20,8 @@ async function setup() {
   for (const user of [alice, bob, stranger]) { await repo.insertUser(user); await repo.createSession(hashSession(user.id), user.id, new Date(now + 86_400_000)); }
   const roomId = randomUUID();
   await repo.createRoom({ id: roomId, kind: 'private', name: null, creatorId: alice.id, memberIds: [bob.id], at: new Date(now) });
+  await repo.changeFriend(alice.id, bob.id, 'ask', new Date(now));
+  await repo.changeFriend(bob.id, alice.id, 'accept', new Date(now));
   const config = loadConfig({ DATABASE_URL: 'postgres://unused' });
   const api = createApi({ repo, config, now: () => now, rateLimit: createLimiter(config, () => now) });
   const call = (path: string, method = 'GET', body?: unknown, owner = alice.id) => api(new Request(`http://localhost/api${path}`, {

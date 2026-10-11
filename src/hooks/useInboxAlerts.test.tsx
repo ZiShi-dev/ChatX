@@ -108,7 +108,9 @@ it.each([
   window.history.replaceState({}, '', `/chat/${openRoom}`); mount();
   const incoming = { ...item('cross-chat'), conversationId: incomingRoom, conversationType: incomingRoom as 'private' | 'group', kind: incomingRoom === 'group' ? 'mention' as const : 'message' as const, conversationName, senderName: 'Bob', unread: true, unreadCount: 1 };
   act(() => useChatStore.setState({ serverInbox: [incoming] }));
-  expect(useLiveInbox.getState().notices[0]).toMatchObject({ conversationId: incomingRoom, messageId: 'cross-chat', title: conversationName ?? 'Bob' });
+  const banner = useLiveInbox.getState().notices[0];
+  expect(banner).toMatchObject({ conversationId: incomingRoom, messageId: 'cross-chat', title: conversationName ?? 'Bob', senderName: 'Bob', preview: 'cross-chat' });
+  expect(banner?.context).toBe(conversationName);
   expect(window.location.pathname).toBe(`/chat/${openRoom}`);
   expect(useChatStore.getState().serverInbox[0].unread).toBe(true);
 });

@@ -140,7 +140,7 @@ final class InboxPoll {
         synchronized (InboxLifecycle.LOCK) {
             synchronized (InboxWatch.class) {
                 if (!InboxLifecycle.current(lease) || InboxWatch.seen(InboxWatch.prefs(context)).contains(messageId)) return false;
-                manager.notify(messageId.hashCode(), builder.build());
+                manager.notify(messageId, messageId.hashCode(), builder.build());
                 InboxWatch.markSeen(context, java.util.Collections.singleton(messageId));
             }
         }

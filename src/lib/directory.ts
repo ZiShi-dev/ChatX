@@ -1,5 +1,5 @@
 import { parseCustomRoleColors, sanitizeCustomRoleLabel } from './customRole';
-import { avatarDecoration, profileEffect } from './profileCosmetics';
+import { avatarDecoration } from './profileCosmetics';
 import type { InviteCode } from '../types/invite';
 import { sanitizeMessageFont, sanitizeUserColor } from './userStyle';
 import type { User, UserRole } from '../types/user';
@@ -51,7 +51,6 @@ export function readDirectoryUser(value: unknown): User | null {
     color,
     messageFont,
     avatarDecoration: avatarDecoration(data.avatarDecoration),
-    profileEffect: profileEffect(data.profileEffect),
     ...(avatarUrl ? { avatarUrl } : {}),
     ...(bannerUrl ? { bannerUrl } : {}),
     ...(customRoleLabel && customRoleColors.length > 0 ? { customRoleLabel, customRoleColors } : {}),

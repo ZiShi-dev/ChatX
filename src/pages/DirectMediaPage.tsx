@@ -7,7 +7,6 @@ import EmptyState from '../components/common/EmptyState';
 import NetworkStatusBanner from '../components/common/NetworkBanner';
 import PageNav from '../components/common/PageNav';
 import CustomRoleBadge from '../components/common/CustomRoleBadge';
-import ProfileEffect from '../components/common/ProfileEffect';
 import { useProfileMotion } from '../hooks/useProfileMotion';
 import { otherParticipant } from '../lib/conversation';
 import { connectionLabel, getUserPresence } from '../lib/presence';
@@ -39,7 +38,6 @@ export default function DirectMediaPage() {
           <EmptyState title="المحادثة غير موجودة" />
         ) : (
           <div className="profile-frame">
-            <ProfileEffect effect={(isSelf ? currentUser : other!)?.profileEffect} color={(isSelf ? currentUser : other!)?.color ?? currentUser.color} />
             <section className="profile-hero">
               {(() => {
                 const subject = isSelf ? currentUser : other!;
@@ -51,7 +49,7 @@ export default function DirectMediaPage() {
                     >
                       {subject.bannerUrl ? <img src={subject.bannerUrl} alt="" /> : null}
                     </div>
-                    <span className="group-hero-photo">
+                    <span className="profile-photo group-hero-photo">
                       <Avatar
                         name={subject.displayName}
                         color={subject.color}

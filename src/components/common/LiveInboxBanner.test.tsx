@@ -23,8 +23,22 @@ it('hides the banner of the chat already open and shows one from another chat', 
   useLiveInbox.getState().push(notice);
   render(<MemoryRouter initialEntries={['/home']}><LiveInboxBanner /></MemoryRouter>);
   expect(screen.getByRole('status')).toHaveTextContent('New message');
+  expect(document.querySelector('.live-inbox-open .avatar')).not.toBeNull();
   fireEvent.click(screen.getByRole('button', { name: 'إخفاء الإشعار' }));
   expect(screen.queryByRole('status')).toBeNull();
+});
+it('shows the sender, the message and the room like a Discord toast', () => {
+  primeInbox('mention-1');
+  useChatStore.setState({ serverInbox: [{ ...inboxRow('mention-1'), kind: 'mention', conversationType: 'group' }] });
+  useLiveInbox.getState().push({ ...notice, messageId: 'mention-1', kind: 'mention', conversationType: 'group', senderName: 'ليلى', context: 'المساء', preview: 'مرحبا @نورة', title: 'المساء', body: 'ليلى: مرحبا @نورة' });
+  render(<MemoryRouter initialEntries={['/home']}><LiveInboxBanner /></MemoryRouter>);
+  const status = screen.getByRole('status');
+  expect(status).toHaveTextContent('ليلى');
+  expect(status).toHaveTextContent('مرحبا @نورة');
+  expect(status).toHaveTextContent('إشارة');
+  expect(status).toHaveTextContent('المساء');
+  expect(status).not.toHaveTextContent('ليلى: مرحبا');
+  expect(document.querySelector('.live-inbox-banner.is-mention')).not.toBeNull();
 });
 it('respects disabled types and room mute without replaying disabled notifications', () => {
   useSettingsStore.setState({ notifyTypes: { ...DEFAULT_NOTIFY_TYPES, message: false } });

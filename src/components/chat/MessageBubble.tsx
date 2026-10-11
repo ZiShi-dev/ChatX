@@ -10,6 +10,7 @@ import { IonIcon } from '@ionic/react';
 import { alertCircleOutline, arrowUndoOutline, arrowUpOutline, atOutline, banOutline, bookmark, bookmarkOutline, checkmarkDoneOutline, checkmarkOutline, closeOutline, copyOutline, createOutline, documentOutline, downloadOutline, informationCircleOutline, peopleOutline, play, timeOutline, trashOutline } from 'ionicons/icons';
 import Avatar from '../common/Avatar';
 import EmojiText from '../common/EmojiText';
+import { emojiOnlyCount } from '../../lib/emoji';
 import { conversationTitle, formatMessageTime, formatNotificationTime } from '../../lib/conversation';
 import { toSavedEntry } from '../../lib/saved';
 import { normalizeLinkPreviewImage, previewImage, textParts, siteHost } from '../../lib/link';
@@ -40,6 +41,9 @@ type MessageBubbleProps = {
   message: Message;
   mine: boolean;
   showAuthor: boolean;
+  showAvatar?: boolean;
+  reserveAvatar?: boolean;
+  continued?: boolean;
   group?: boolean;
   direct?: boolean;
   directSeen?: boolean;
@@ -181,8 +185,10 @@ const NO_DIRECTORY: User[] = [];
 
 function MessageText({ text, username, onOpenProfile }: { text: string; username: string; onOpenProfile?: (user: User) => void }) {
   const users = useUserStore((state) => (text.includes('@') ? state.users : NO_DIRECTORY));
+  const emojiCount = emojiOnlyCount(text);
+  const emojiSize = emojiCount > 0 && emojiCount <= 3 ? ` is-emoji-${emojiCount}` : '';
   return (
-    <p className="bubble-text">
+    <p className={`bubble-text${emojiSize}`}>
       {textParts(text).map((part, index) => {
         const candidate = /^https?:\/\//.test(part) ? part.replace(/[),.;!?]+$/, '') : '';
         const url = candidate && isSafeExternalUrl(candidate) ? candidate : '';
@@ -367,7 +373,7 @@ function PersonName({ user, onOpen }: { user: User; onOpen?: (user: User) => voi
   );
 }
 
-function MessageBubble({ message, mine, showAuthor, group = false, direct = false, directSeen = false, groupSeen = false, seenHere = NO_SEEN_USERS, receiptRows = NO_RECEIPTS, author, spotlight = false, onOpenProfile }: MessageBubbleProps) {
+function MessageBubble({ message, mine, showAuthor, showAvatar = showAuthor, reserveAvatar = false, continued = false, group = false, direct = false, directSeen = false, groupSeen = false, seenHere = NO_SEEN_USERS, receiptRows = NO_RECEIPTS, author, spotlight = false, onOpenProfile }: MessageBubbleProps) {
   const currentUser = useAuthStore((state) => state.currentUser);
   const currentUserId = currentUser.id;
   const username = currentUser.username;
@@ -669,9 +675,10 @@ function MessageBubble({ message, mine, showAuthor, group = false, direct = fals
 
   if (message.deletedForEveryone) {
     return (
-      <div id={`msg-${message.id}`} className={`bubble-stack ${mine ? 'mine' : 'theirs'}`}>
+      <div id={`msg-${message.id}`} className={`bubble-stack ${mine ? 'mine' : 'theirs'}${continued ? ' is-continued' : ''}`}>
         <div className="bubble-row">
-          {showAuthor && !mine && author && <PersonButton user={author} onOpen={onOpenProfile} />}
+          {showAvatar && !mine && author && <PersonButton user={author} onOpen={onOpenProfile} />}
+          {reserveAvatar && !showAvatar && !mine && author && <span className="bubble-person-gap" aria-hidden="true" />}
           <div className="bubble deleted">
             {message.replyToId && <ReplyQuote messageId={message.replyToId} />}
             {showAuthor && !mine && author && <PersonName user={author} onOpen={onOpenProfile} />}
@@ -690,7 +697,7 @@ function MessageBubble({ message, mine, showAuthor, group = false, direct = fals
     <div
       ref={stackRef}
       id={`msg-${message.id}`}
-      className={`bubble-stack ${mine ? 'mine' : 'theirs'}${message.type === 'image' || message.type === 'video' ? ' is-media' : ''}${menuOpen ? ' is-picked' : ''}${direct && canSeeReceipts ? ' is-receipt' : ''}${spotlight ? ' is-target' : ''}${reactionTotal > 0 ? ' has-reactions' : ''}${bornSending.current ? ' is-new' : ''}`}
+      className={`bubble-stack ${mine ? 'mine' : 'theirs'}${continued ? ' is-continued' : ''}${message.type === 'image' || message.type === 'video' ? ' is-media' : ''}${menuOpen ? ' is-picked' : ''}${direct && canSeeReceipts ? ' is-receipt' : ''}${spotlight ? ' is-target' : ''}${reactionTotal > 0 ? ' has-reactions' : ''}${bornSending.current ? ' is-new' : ''}`}
       onContextMenu={(event) => {
         if (!canOpenMenu) return;
         event.preventDefault();
@@ -790,7 +797,8 @@ function MessageBubble({ message, mine, showAuthor, group = false, direct = fals
           <IonIcon icon={alertCircleOutline} />
         </button>
       )}
-      {showAuthor && !mine && author && <PersonButton user={author} onOpen={onOpenProfile} />}
+      {showAvatar && !mine && author && <PersonButton user={author} onOpen={onOpenProfile} />}
+      {reserveAvatar && !showAvatar && !mine && author && <span className="bubble-person-gap" aria-hidden="true" />}
       <div
         className={['bubble', tone ? `is-${tone}` : '', message.link ? 'has-link' : '', message.type === 'image' || message.type === 'video' ? 'has-media' : '', mediaSending ? 'is-sending' : ''].filter(Boolean).join(' ')}
       >
