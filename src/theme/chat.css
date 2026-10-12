@@ -1819,8 +1819,8 @@ ion-content.chat-scroll::part(scroll) {
 }
 
 .bubble-stack.is-media {
-  width: min(100%, 540px);
-  max-width: min(100%, 540px);
+  width: min(var(--media-inline-size, 278px), 78vw);
+  max-width: min(82%, 278px);
 }
 
 .bubble-stack.is-media .swipe-shift,
@@ -4870,7 +4870,10 @@ ion-toolbar.network-toolbar.setup {
 
 .bubble.has-media {
   position: relative;
-  width: min(540px, calc(100vw - 40px));
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  box-sizing: border-box;
   padding: 3px;
   overflow: visible;
 }
@@ -4934,7 +4937,7 @@ ion-toolbar.network-toolbar.setup {
   width: 100%;
   height: auto;
   aspect-ratio: 4 / 3;
-  object-fit: contain;
+  object-fit: cover;
   background: rgba(11, 20, 18, 0.35);
 }
 

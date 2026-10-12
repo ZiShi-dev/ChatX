@@ -26,7 +26,7 @@
   height: auto;
   max-height: 336px;
   aspect-ratio: auto;
-  object-fit: contain;
+  object-fit: cover;
   background: transparent;
   -webkit-user-drag: none;
 }

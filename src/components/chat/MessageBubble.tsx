@@ -109,7 +109,7 @@ function LoadRing({ progress }: { progress: number }) {
   );
 }
 
-function MediaBlock({ message }: { message: Message }) {
+function MediaBlock({ message, onSize }: { message: Message; onSize: (size: { width: number; height: number }) => void }) {
   const downloadMedia = useChatStore((state) => state.downloadMedia);
   const dataSaver = useDataSaver();
   const autoImages = useSettingsStore((state) => state.autoDownloadImages);
@@ -135,14 +135,11 @@ function MediaBlock({ message }: { message: Message }) {
     const naturalWidth = node instanceof HTMLVideoElement ? node.videoWidth : node.naturalWidth;
     const naturalHeight = node instanceof HTMLVideoElement ? node.videoHeight : node.naturalHeight;
     if (naturalWidth > 0 && naturalHeight > 0) {
+      onSize({ width: naturalWidth, height: naturalHeight });
       const stack = node.closest<HTMLElement>('.bubble-stack.is-media');
       stack?.style.setProperty('--media-inline-size', `${mediaBubbleWidth(naturalWidth, naturalHeight) + 6}px`);
     }
-    if (!ratio) {
-      const width = node instanceof HTMLVideoElement ? node.videoWidth : node.naturalWidth;
-      const height = node instanceof HTMLVideoElement ? node.videoHeight : node.naturalHeight;
-      if (width > 0 && height > 0) node.style.aspectRatio = `${width} / ${height}`;
-    }
+    if (naturalWidth > 0 && naturalHeight > 0) node.style.aspectRatio = `${naturalWidth} / ${naturalHeight}`;
     window.dispatchEvent(new CustomEvent('chatx-thread-layout', { detail: { conversationId: message.conversationId } }));
   };
 
@@ -411,6 +408,7 @@ function MessageBubble({ message, mine, showAuthor, showAvatar = showAuthor, res
   const actionRequest = useChatStore((state) => state.messageActionOpenId);
   const clearActionRequest = useChatStore((state) => state.clearMessageActionRequest);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [previewSize, setPreviewSize] = useState<{ width: number; height: number } | null>(null);
   const [reactionsOpen, setReactionsOpen] = useState(false);
   const users = useUserStore((state) => (reactionsOpen ? state.users : NO_DIRECTORY));
   const saved = useSavedStore((state) => state.entries.some((item) => item.userId === currentUserId && item.messageId === message.id));
@@ -711,7 +709,7 @@ function MessageBubble({ message, mine, showAuthor, showAvatar = showAuthor, res
     <div
       ref={stackRef}
       id={`msg-${message.id}`}
-      style={message.type === 'image' || message.type === 'video' ? { '--media-inline-size': `${mediaBubbleWidth(message.media?.width, message.media?.height) + 6}px` } as CSSProperties : undefined}
+      style={message.type === 'image' || message.type === 'video' ? { '--media-inline-size': `${mediaBubbleWidth(previewSize?.width ?? message.media?.width, previewSize?.height ?? message.media?.height) + 6}px` } as CSSProperties : undefined}
       className={`bubble-stack ${mine ? 'mine' : 'theirs'}${continued ? ' is-continued' : ''}${message.type === 'image' || message.type === 'video' ? ' is-media' : ''}${menuOpen ? ' is-picked' : ''}${direct && canSeeReceipts ? ' is-receipt' : ''}${spotlight ? ' is-target' : ''}${reactionTotal > 0 ? ' has-reactions' : ''}${bornSending.current ? ' is-new' : ''}`}
       onContextMenu={(event) => {
         if (!canOpenMenu) return;
@@ -823,7 +821,7 @@ function MessageBubble({ message, mine, showAuthor, showAvatar = showAuthor, res
         {message.link && <LinkBlock message={message} />}
         {message.type === 'text' && message.text && <MessageText text={message.text} username={username} onOpenProfile={onOpenProfile} />}
         {message.type === 'link' && <MessageText text={message.text || message.link?.url || ''} username={username} onOpenProfile={onOpenProfile} />}
-        {(message.type === 'image' || message.type === 'video') && <MediaBlock message={message} />}
+        {(message.type === 'image' || message.type === 'video') && <MediaBlock message={message} onSize={setPreviewSize} />}
         {message.type === 'file' && message.media && (
           <button
             type="button"

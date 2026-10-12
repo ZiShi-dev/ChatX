@@ -8,7 +8,7 @@ const browser = await chromium.launch({ headless: true, executablePath: process.
 try {
   for (const viewport of [{ width: 360, height: 800 }, { width: 1280, height: 900 }]) {
     const page = await browser.newPage({ viewport });
-    const cards = [[600, 900], [1000, 500], [800, 800]].map(([width, height], i) => {
+    const cards = [[600, 900], [1000, 500], [800, 800], [921, 2048]].map(([width, height], i) => {
       const picture = `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}"><rect width="100%" height="100%" fill="#54848a"/><path d="M0 ${height}L${width / 2} ${height / 3}L${width} ${height}Z" fill="#b0cabc"/><circle cx="${width * .7}" cy="${height * .2}" r="${width * .07}" fill="#ecdaaa"/></svg>`;
       return `<div class="bubble-stack is-media ${i === 1 ? 'theirs' : 'mine'}" style="--media-inline-size:${mediaBubbleWidth(width, height) + 6}px"><div class="swipe-shift"><div class="bubble-row"><div class="bubble has-media"><div class="media-card image"><button class="media-open"><img class="media-preview" src="data:image/svg+xml,${encodeURIComponent(picture)}" style="aspect-ratio:${width}/${height}" /></button></div><span class="bubble-time">15:04 ✓✓</span></div></div></div></div>`;
     }).join('');
