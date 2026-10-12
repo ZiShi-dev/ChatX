@@ -1,10 +1,12 @@
+import { APPLE_EMOJI_CATEGORIES } from './appleEmojiCatalog';
+
 export type EmojiGroup = {
   id: string;
   label: string;
   emojis: string[];
 };
 
-export const EMOJI_GROUPS: EmojiGroup[] = [
+const BASE_EMOJI_GROUPS: EmojiGroup[] = [
   {
     id: 'faces',
     label: 'وجوه',
@@ -51,3 +53,9 @@ export const EMOJI_GROUPS: EmojiGroup[] = [
     emojis: ['✅', '❌', '⭕', '❗', '❓', '❕', '❔', '‼️', '⁉️', '🟰', '🔴', '🟠', '🟡', '🟢', '🔵', '🟣', '⚫', '⚪', '🟤', '🔺', '🔻', '🔸', '🔹', '🔶', '🔷', '🔳', '🔲', '▪️', '▫️', '◾', '◽', '◼️', '◻️', '⬛', '⬜', '🔈', '🔇', '🔉', '🔊', '🔔', '🔕', '📣', '📢', '💬', '♠️', '♥️', '♦️', '♣️', '🃏', '🀄', '🎴', '🔇', '♻️', '⚜️', '🔱', '📛', '🔰', '⭕', '✅', '☑️', '✔️', '✳️', '✴️', '❇️', '©️', '®️', '™️', '#️⃣', '*️⃣', '0️⃣', '1️⃣', '2️⃣', '3️⃣', '4️⃣', '5️⃣', '6️⃣', '7️⃣', '8️⃣', '9️⃣', '🔟', '🔠', '🔡', '🔢', '🔣', '🔤', '🅰️', '🅱️', '🆎', '🆑', '🆒', '🆓', 'ℹ️', '🆔', '🆕', '🆖', '🆗', '🆘', '🆙', '🆚', '🎌', '🏴', '🏳️', '🏁', '🚩', '🪯'],
   },
 ];
+
+// Existing categories keep Unicode fallbacks; selected Apple categories expose every asset.
+export const EMOJI_GROUPS: EmojiGroup[] = [...BASE_EMOJI_GROUPS, { id: 'flags', label: 'أعلام', emojis: [] }].map(group => ({
+  ...group,
+  emojis: [...new Set([...group.emojis, ...(APPLE_EMOJI_CATEGORIES[group.id as keyof typeof APPLE_EMOJI_CATEGORIES] ?? [])])],
+}));

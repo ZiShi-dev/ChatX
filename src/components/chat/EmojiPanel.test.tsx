@@ -22,12 +22,23 @@ it('restores category scroll and supports keyboard category navigation', () => {
   fireEvent.click(screen.getByRole('tab', { name: 'قلوب' })); expect(grid.scrollTop).toBe(0);
   fireEvent.click(screen.getByRole('tab', { name: 'وجوه' })); expect(grid.scrollTop).toBe(90);
   const faces = screen.getByRole('tab', { name: 'وجوه' }); faces.focus(); fireEvent.keyDown(faces, { key: 'End' });
-  expect(screen.getByRole('tab', { name: 'رموز' })).toHaveAttribute('aria-selected', 'true');
+  expect(screen.getByRole('tab', { name: 'أعلام' })).toHaveAttribute('aria-selected', 'true');
 });
 it('limits broad search rendering and exposes additional results on demand', () => {
   render(<EmojiPanel onPick={vi.fn()} />);
   fireEvent.change(screen.getByRole('searchbox'), { target: { value: 'e' } });
   expect(screen.getAllByRole('option')).toHaveLength(120);
   fireEvent.click(screen.getByRole('button', { name: 'عرض المزيد' }));
+  expect(screen.getAllByRole('option')).toHaveLength(240);
+});
+
+it('loads large categories progressively and restores their loaded count', () => {
+  render(<EmojiPanel onPick={vi.fn()} />);
+  fireEvent.click(screen.getByRole('tab', { name: 'إيماءات' }));
+  expect(screen.getAllByRole('option')).toHaveLength(120);
+  fireEvent.click(screen.getByRole('button', { name: 'عرض المزيد' }));
+  expect(screen.getAllByRole('option')).toHaveLength(240);
+  fireEvent.click(screen.getByRole('tab', { name: 'قلوب' }));
+  fireEvent.click(screen.getByRole('tab', { name: 'إيماءات' }));
   expect(screen.getAllByRole('option')).toHaveLength(240);
 });

@@ -199,7 +199,7 @@ const NO_DIRECTORY: User[] = [];
 function MessageText({ text, username, onOpenProfile }: { text: string; username: string; onOpenProfile?: (user: User) => void }) {
   const users = useUserStore((state) => (text.includes('@') ? state.users : NO_DIRECTORY));
   const emojiCount = emojiOnlyCount(text);
-  const emojiSize = emojiCount > 0 && emojiCount <= 3 ? ` is-emoji-${emojiCount}` : '';
+  const emojiSize = emojiCount > 0 ? ` is-emoji-${Math.min(emojiCount, 3)}` : '';
   return (
     <p className={`bubble-text${emojiSize}`}>
       {textParts(text).map((part, index) => {
@@ -396,6 +396,7 @@ function MessageBubble({ message, mine, showAuthor, showAvatar = showAuthor, res
     return Boolean(parent && parent.senderId === currentUserId);
   });
   const tone = replyToMe ? 'reply' : message.text ? mentionTone(message.text, username) : null;
+  const standaloneEmoji = message.type === 'text' && !message.replyToId && !message.link && emojiOnlyCount(message.text ?? '') === 1;
   const downloadMedia = useChatStore((state) => state.downloadMedia);
   const retryMessage = useChatStore((state) => state.retryMessage);
   const cancelMessage = useChatStore((state) => state.cancelMessage);
@@ -814,7 +815,7 @@ function MessageBubble({ message, mine, showAuthor, showAvatar = showAuthor, res
       {showAvatar && !mine && author && <PersonButton user={author} onOpen={onOpenProfile} />}
       {reserveAvatar && !showAvatar && !mine && author && <span className="bubble-person-gap" aria-hidden="true" />}
       <div
-        className={['bubble', tone ? `is-${tone}` : '', message.link ? 'has-link' : '', message.type === 'image' || message.type === 'video' ? 'has-media' : '', mediaSending ? 'is-sending' : ''].filter(Boolean).join(' ')}
+        className={['bubble', standaloneEmoji ? 'is-single-emoji' : '', tone ? `is-${tone}` : '', message.link ? 'has-link' : '', message.type === 'image' || message.type === 'video' ? 'has-media' : '', mediaSending ? 'is-sending' : ''].filter(Boolean).join(' ')}
       >
         {tone && tone !== 'reply' && <AimMark tone={tone} />}
         {showAuthor && !mine && author && <PersonName user={author} onOpen={onOpenProfile} />}

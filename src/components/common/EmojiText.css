@@ -25,11 +25,15 @@
   display: block;
   pointer-events: none;
   user-select: none;
+  object-fit: contain;
 }
+
+.chat-emoji.is-fallback > span { display:grid; place-items:center; color:inherit; font-size:inherit; line-height:1; }
 
 .bubble-text .chat-emoji {
   width: 28px;
   height: 28px;
+  font-size: 26px;
   vertical-align: calc((1em - 28px) / 2);
 }
 
@@ -44,22 +48,25 @@
 }
 
 .bubble-text.is-emoji-1 .chat-emoji {
-  width: 40px;
-  height: 40px;
+  width: 56px;
+  height: 56px;
+  font-size: 52px;
   vertical-align: middle;
 }
 
-.bubble-text.is-emoji-2 .chat-emoji {
-  width: 34px;
-  height: 34px;
-  vertical-align: middle;
-}
-
+.bubble-text.is-emoji-2 .chat-emoji,
 .bubble-text.is-emoji-3 .chat-emoji {
-  width: 30px;
-  height: 30px;
+  width: 36px;
+  height: 36px;
+  font-size: 32px;
   vertical-align: middle;
 }
+
+.bubble-stack.mine .bubble.is-single-emoji,
+.bubble-stack.theirs .bubble.is-single-emoji { display:flex; flex-direction:column; align-items:center; gap:4px; padding:4px 6px; background:transparent; border:0; box-shadow:none; min-width:0; }
+.bubble.is-single-emoji .bubble-text { margin:0; padding:0; }
+.bubble.is-single-emoji .bubble-time { align-self:center; margin:0; padding:2px 7px; min-height:18px; border-radius:8px; background:var(--chatx-raised); color:var(--chatx-muted); opacity:1; }
+.bubble.is-single-emoji .bubble-author { align-self:flex-start; color:var(--chatx-accent); }
 
 .chat-event .chat-emoji {
   width: 26px;

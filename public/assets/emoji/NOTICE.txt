@@ -2,5 +2,6 @@ Apple emoji artwork
 Copyright (C) Apple Inc. All rights reserved.
 License supplied by the source repository: see LICENSE.txt.
 Source: https://github.com/RealityRipple/emoji/tree/db08071637157a9def981b59beae9a8d64e70778/apple
-Modified for ChatX: resized to 64px and encoded as WebP.
-1175 assets; 2698480 bytes.
+Selection: complete Apple directory except 1f1ee-1f1f1 (Israel flag), as requested.
+Modified for ChatX: visible bounds normalized into a 64px canvas and encoded as WebP.
+3772 assets; 8100310 bytes.

@@ -49,7 +49,7 @@ try {
   const search = page.getByRole('searchbox', { name: 'البحث عن إيموجي' });
   await search.fill('rire');
   const picture = page.getByRole('option', { name: '😂', exact: true }).locator('img');
-  assert.ok((await picture.getAttribute('src')).includes('apple-db080716'));
+  assert.ok((await picture.getAttribute('src')).includes('apple-complete-v3'));
   await picture.evaluate(img => img.decode());
   await page.screenshot({ path: 'docs/apple-emoji-picker-mobile.png' });
   assert.deepEqual(errors, []);

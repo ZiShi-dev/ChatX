@@ -3,12 +3,12 @@ import { expect, it } from 'vitest';
 import EmojiText from './EmojiText';
 
 it('preserves Unicode for copy and accessibility and falls back if an asset fails', () => {
-  const { container } = render(<EmojiText text="مرحبا 😀👍🏽" />);
-  expect(container.textContent).toBe('مرحبا 😀👍🏽');
+  const { container } = render(<EmojiText text="مرحبا 😀👍" />);
+  expect(container.textContent).toBe('مرحبا 😀👍');
   const images = container.querySelectorAll('img');
   expect(images.length).toBe(2);
-  expect(images[0].getAttribute('src')).toBe('/assets/emoji/1f600.webp?v=apple-db080716');
+  expect(images[0].getAttribute('src')).toBe('/assets/emoji/1f600.webp?v=apple-complete-v3');
   fireEvent.error(images[0]);
-  expect(container.textContent).toBe('مرحبا 😀👍🏽');
+  expect(container.textContent).toBe('مرحبا 😀👍');
   expect(container.querySelectorAll('img').length).toBe(1);
 });

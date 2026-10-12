@@ -8,6 +8,7 @@ const aliases: Record<string, string> = {
   nature: 'animal nature flower fleur حيوان طبيعة زهرة', food: 'food drink nourriture boisson طعام شراب',
   activity: 'sport game activity jeu نشاط رياضة لعبة', travel: 'travel car voyage voiture سفر سيارة',
   objects: 'object phone objet téléphone أشياء هاتف', symbols: 'symbol flag symbole drapeau رموز علم',
+  flags: 'flag flags country drapeau drapeaux pays علم أعلام بلد',
 };
 const names: Record<string, string> = {
   '😂': 'laugh rire ضحك', '🤣': 'laugh rire ضحك', '😭': 'cry pleurer بكاء', '😢': 'cry sad triste حزين',

@@ -28,6 +28,7 @@ export default function EmojiPanel({ selected, onPick, onClose }: EmojiPanelProp
   const [limit, setLimit] = useState(120);
   const grid = useRef<HTMLDivElement>(null);
   const scroll = useRef(new Map<string, number>());
+  const shownLimits = useRef(new Map<string, number>());
   const pickRef = useRef(onPick);
   const accountRef = useRef(owner);
   useEffect(() => { pickRef.current = onPick; }, [onPick]);
@@ -42,9 +43,9 @@ export default function EmojiPanel({ selected, onPick, onClose }: EmojiPanelProp
   const group = groups.find(item => item.id === groupId) ?? groups[1];
   const searching = Boolean(query.trim());
   const matches = useMemo(() => searching ? searchEmoji(query) : [...new Set(group.emojis)], [searching, query, group]);
-  const items = useMemo(() => searching ? matches.slice(0, limit) : matches, [searching, matches, limit]);
+  const items = useMemo(() => matches.slice(0, limit), [matches, limit]);
   const scrollKey = searching ? `search:${query}` : group.id;
-  useLayoutEffect(() => { if (grid.current) grid.current.scrollTop = scroll.current.get(scrollKey) ?? 0; setActive(0); setLimit(120); }, [scrollKey]);
+  useLayoutEffect(() => { if (grid.current) grid.current.scrollTop = scroll.current.get(scrollKey) ?? 0; setActive(0); setLimit(shownLimits.current.get(scrollKey) ?? 120); }, [scrollKey]);
 
   return (
     <div className="emoji-panel emoji-picker" onPointerDown={event => event.stopPropagation()} onPointerMove={event => event.stopPropagation()} onPointerUp={event => event.stopPropagation()} onKeyDown={event => {
@@ -95,7 +96,7 @@ export default function EmojiPanel({ selected, onPick, onClose }: EmojiPanelProp
         {items.map((emoji, index) => <EmojiOption key={emoji} emoji={emoji} selected={ownsEmoji(selected, emoji)} active={index === active} onPick={pick} />)}
         {!items.length && <p className="emoji-picker-empty" role="status">{searching ? 'لا توجد نتائج. جرّب اسم فئة أو إيموجي.' : 'الإيموجي الذي تستخدمه سيظهر هنا.'}</p>}
       </div>
-      {items.length < matches.length && <button type="button" className="emoji-picker-more" onClick={() => setLimit(value => value + 120)}>عرض المزيد</button>}
+      {items.length < matches.length && <button type="button" className="emoji-picker-more" onClick={() => setLimit(value => { const next = value + 120; shownLimits.current.set(scrollKey, next); return next; })}>عرض المزيد</button>}
     </div>
   );
 }
