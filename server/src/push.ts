@@ -114,9 +114,18 @@ async function sendToken(env: PushEnv, token: string, title: string, body: strin
         android: {
           priority: 'HIGH',
           ttl: '86400s',
-          notification: { title, body, channel_id: CHANNEL, tag: data.messageId, default_sound: true, default_vibrate_timings: true },
+          notification: {
+            title,
+            body,
+            channel_id: CHANNEL,
+            tag: data.messageId,
+            notification_priority: 'PRIORITY_HIGH',
+            visibility: 'PUBLIC',
+            default_sound: true,
+            default_vibrate_timings: true,
+          },
         },
-        data,
+        data: { ...data, title, body },
       },
     }),
     });
@@ -162,6 +171,10 @@ async function dispatchMessagePush(deps: Deps, message: RoomMessage & { hints?: 
       conversationId: message.roomId,
       messageId: message.id,
       kind: String(kind),
+      conversationType: room?.kind ?? 'group',
+      createdAt: message.createdAt.toISOString(),
+      senderName,
+      conversationName: groupName,
     };
     for (const token of tokens) {
       const stillAllowed = async () => {

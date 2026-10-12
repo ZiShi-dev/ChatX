@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { fcmEnabled } from '../lib/fcmEnabled';
 import { isServerId } from '../lib/home';
 import { startPushRegistration, stopPushRegistration, syncPushPrefs } from '../lib/pushRegister';
@@ -11,9 +11,12 @@ import { useChatStore } from '../stores/chatStore';
 import { App } from '@capacitor/app';
 import { Capacitor } from '@capacitor/core';
 import { clearReadPushNotifications } from '../lib/readPushNotifications';
+import { showPushPreview } from '../lib/pushPreview';
 
 export function useFcmPush() {
   const navigate = useNavigate();
+  const navigateRef = useRef(navigate);
+  navigateRef.current = navigate;
   const activated = useAuthStore((state) => state.activated);
   const userId = useAuthStore((state) => state.currentUser.id);
 
@@ -23,7 +26,7 @@ export function useFcmPush() {
     void startPushRegistration(userId).catch(() => undefined);
     const opened = (event: Event) => {
       const path = (event as CustomEvent<{ path?: string }>).detail?.path;
-      if (path && /^\/chat\/[^/?]+(?:\?[^#]+)?$/.test(path)) openNotificationChat(navigate, path);
+      if (path && /^\/chat\/[^/?]+(?:\?[^#]+)?$/.test(path)) openNotificationChat(navigateRef.current, path);
     };
     let refresh: ReturnType<typeof setTimeout> | undefined;
     let clearRead: ReturnType<typeof setTimeout> | undefined;
@@ -41,6 +44,7 @@ export function useFcmPush() {
     cleanupRead(useChatStore.getState().serverInbox);
     const receivedRooms = new Set<string>();
     const received = (event: Event) => {
+      showPushPreview((event as CustomEvent).detail);
       const roomId = (event as CustomEvent<{ conversationId?: string }>).detail?.conversationId;
       if (roomId) receivedRooms.add(roomId);
       clearTimeout(refresh);
@@ -79,5 +83,5 @@ export function useFcmPush() {
       unsubSettings();
       void stopPushRegistration().catch(() => undefined);
     };
-  }, [activated, userId, navigate]);
+  }, [activated, userId]);
 }

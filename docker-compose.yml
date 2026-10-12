@@ -38,9 +38,12 @@ services:
       CHATX_TRUST_PROXY: ${CHATX_TRUST_PROXY:-true}
       CHATX_CORS_ORIGIN: ${CHATX_CORS_ORIGIN:-}
       CHATX_MEDIA_DIR: /media
+      CHATX_RELEASE_DIR: /releases
       CHATX_BIND: 0.0.0.0
     volumes:
       - chatx-media:/media
+      - ./releases:/releases:ro
+      - ./update-public.pem:/app/update-public.pem:ro
     ports:
       - "127.0.0.1:8787:8787"
     depends_on:

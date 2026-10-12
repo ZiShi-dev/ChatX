@@ -6,7 +6,7 @@
 2. Les messages ordinaires de groupe, réactions et événements restent dans l’application. Les mentions, mentions générales, réponses et messages privés peuvent déclencher une alerte.
 3. Les préférences globales et la mise en sourdine de la conversation filtrent les alertes côté serveur et côté interface.
 4. Un jeton Firebase appartient à un seul compte. L’inscription sur un autre compte transfère le jeton ; une suppression provenant de l’ancien compte ne supprime pas le nouveau propriétaire.
-5. L’inscription ne désactive le mécanisme de secours qu’après validation de l’authentification Firebase du serveur et synchronisation des préférences.
+5. L’inscription ne désactive le mécanisme de secours qu’après validation de l’authentification Firebase du serveur. Les préférences sont synchronisées avec leurs propres reprises ; leur échec temporaire ne désactive pas un jeton déjà confirmé.
 6. Les échecs d’inscription sont repris avec temporisation. Une permission accordée ultérieurement est prise en compte au retour dans l’application. Les préférences modifiées pendant une écriture sont resynchronisées.
 7. Les échecs temporaires FCM sont repris au maximum trois fois, en respectant `Retry-After`. Avant une reprise, les préférences, le jeton et l’état non lu du message sont vérifiés. Les jetons `UNREGISTERED` sont supprimés.
 8. En premier plan, Firebase ne crée pas une seconde alerte système : l’application affiche sa bannière selon les préférences et la conversation ouverte. Les arrivées rapprochées sont regroupées sans perdre l’actualisation du chat actif.

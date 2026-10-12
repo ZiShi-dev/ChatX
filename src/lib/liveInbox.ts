@@ -14,11 +14,12 @@ export type LiveInboxNotice = {
   avatarUrl?: string;
   color?: string;
 };
+const dismissed = new Set<string>();
 export const useLiveInbox = create<{ notices: LiveInboxNotice[]; push: (notice: LiveInboxNotice) => void; dismiss: (key: string) => void; clear: () => void }>(set => ({
   notices: [],
-  push: notice => set(state => ({ notices: [...state.notices.filter(item => item.key !== notice.key), notice].slice(-100) })),
-  dismiss: key => set(state => ({ notices: state.notices.filter(item => item.key !== key) })),
-  clear: () => set({ notices: [] }),
+  push: notice => { if (!dismissed.has(notice.key)) set(state => ({ notices: [...state.notices.filter(item => item.key !== notice.key), notice].slice(-100) })); },
+  dismiss: key => { dismissed.add(key); while (dismissed.size > 300) dismissed.delete(dismissed.values().next().value!); set(state => ({ notices: state.notices.filter(item => item.key !== key) })); },
+  clear: () => { dismissed.clear(); set({ notices: [] }); },
 }));
 export function inboxAlertKey(item: { id: string; kind: string; createdAt: string }) { return `${item.kind}:${item.id}:${item.createdAt}`; }
 export function liveAlertText(item: { conversationName?: string; senderName?: string; preview: string }, senderName?: string) {

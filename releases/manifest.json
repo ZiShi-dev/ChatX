@@ -1,4 +1,11 @@
 {
   "web": null,
-  "native": null
+  "native": {
+    "versionCode": 3,
+    "versionName": "1.1",
+    "sha256": "578c95fe83547d652064fa5c9045dc81a1fc30c264271734f5c5c84f6c8a7b77",
+    "signature": "EKmMKzUgj1gvVbq9DSBdQqdLVHsEsaZEKgmWhCPmvxeckMC3kFqDX+7hJJJiOwZ34RwYYx0Td6lddrxt95PaviHn22ncLFl1IGBrwCLgNWvwJR08hHJraXXcJ4B4eR24A9G6pE03s0wwPuON42G1qVa5M1f6JBmEc2tXwo9qyTmJfjn5jUOICnP7B3oFhxGUrQyPdKlB1aW4sO5A0lNTcv4hpz4mVRHIVEOJ4pzIA9AywpgcP4UCbI7a5RQZrg+JCT9GOveDlK+iOrTsCrYA3dZNJN0A/9EcJuSIQ/pc94PzjR3+pZmgcZxvXqgngso0u578LUdnXupTtaJ/vufdew==",
+    "path": "/app/releases/apk/n3-578c95fe8354.apk",
+    "manifestSignature": "ie5IokEIJIYjAwLSztCFKsJVFHCp7r5dOXCm6g/TcUozuTDDoxjhW9aX25UuZ74FL040HQNOsgoZASBFf0MgpsHY5tEHktVk/IbcX06FaZqYTNPup54JCK9YKjnBzpG2mH4+bxXsEmPbxV2Qh7TzSvl95r5djxmjxoom5efPu3OlELSvnRr7loNpRUVXweu8en6w/k6NbMYbdJi2enaEGQZLl370hd4lCwSDYH45ha8etpGPisRYe3Uvd20ndxwZ9ZDnAZ4ls0lrbDsHrDsnJiDjNxtiwkhCk5vMzcKCTXoyLLmRnkyHUOFJFmYnEPT/c3wTLripcYgrgshN3WtoYQ=="
+  }
 }

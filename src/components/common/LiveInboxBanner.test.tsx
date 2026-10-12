@@ -20,7 +20,8 @@ it('hides the banner of the chat already open and shows one from another chat', 
   const here = render(<MemoryRouter initialEntries={[`/chat/${room}`]}><LiveInboxBanner /></MemoryRouter>);
   expect(screen.queryByRole('status')).toBeNull();
   here.unmount();
-  useLiveInbox.getState().push(notice);
+  primeInbox('two');
+  useLiveInbox.getState().push({ ...notice, key: 'two', messageId: 'two' });
   render(<MemoryRouter initialEntries={['/home']}><LiveInboxBanner /></MemoryRouter>);
   expect(screen.getByRole('status')).toHaveTextContent('New message');
   expect(document.querySelector('.live-inbox-open .avatar')).not.toBeNull();

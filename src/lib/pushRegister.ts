@@ -157,7 +157,7 @@ export async function startPushRegistration(userId: string) {
   }));
   own(await PushNotifications.addListener('pushNotificationReceived', (event) => {
     if (lease !== generation) return;
-    window.dispatchEvent(new CustomEvent('chatx-push-received', { detail: event.data }));
+    window.dispatchEvent(new CustomEvent('chatx-push-received', { detail: { ...event.data, title: event.title, body: event.body } }));
   }));
   if (lease !== generation) return;
   if (Capacitor.getPlatform() === 'android') {
@@ -190,6 +190,11 @@ export function syncPushPrefs() {
   else if (started && !candidate) void PushNotifications.register().catch(() => undefined);
   else if (!token && candidate) retrySync();
   else void syncPrefs().catch(() => { if (started && token) schedulePrefsRetry(); });
+}
+
+export async function refreshPushRegistration(userId: string) {
+  await startPushRegistration(userId);
+  if (started) await PushNotifications.register();
 }
 
 export function resetPushRegistrationForTests() {

@@ -1,0 +1,30 @@
+import { afterEach, expect, it, vi } from 'vitest';
+import { showPushPreview } from './pushPreview';
+import { useLiveInbox, inboxAlertKey } from './liveInbox';
+import { useChatStore } from '../stores/chatStore';
+import { useSettingsStore } from '../stores/settingsStore';
+const room = '22222222-2222-4222-8222-222222222222', id = '33333333-3333-4333-8333-333333333333';
+const incoming = { conversationId: room, messageId: id, kind: 'message', conversationType: 'private', createdAt: '2026-10-12T12:00:00.000Z', title: 'Alice', body: 'Hello' };
+const inbox = useChatStore.getState().serverInbox, types = useSettingsStore.getState().notifyTypes;
+afterEach(() => { useLiveInbox.getState().clear(); useChatStore.setState({ serverInbox: inbox }); useSettingsStore.setState({ notifyTypes: types }); vi.restoreAllMocks(); });
+it('shows a received push immediately without waiting for inbox loading and does not replay it after dismissal', () => {
+  vi.spyOn(document, 'visibilityState', 'get').mockReturnValue('visible');
+  window.history.replaceState({}, '', '/home');
+  useChatStore.setState({ serverInbox: [] });
+  showPushPreview(incoming);
+  expect(useLiveInbox.getState().notices[0]?.messageId).toBe(id);
+  const key = inboxAlertKey({ id, kind: incoming.kind, createdAt: incoming.createdAt });
+  useLiveInbox.getState().dismiss(key);
+  showPushPreview(incoming);
+  expect(useLiveInbox.getState().notices).toHaveLength(0);
+});
+it('respects the open chat, disabled preferences and ordinary group-message policy', () => {
+  vi.spyOn(document, 'visibilityState', 'get').mockReturnValue('visible');
+  window.history.replaceState({}, '', `/chat/${room}`); showPushPreview(incoming);
+  expect(useLiveInbox.getState().notices).toHaveLength(0);
+  window.history.replaceState({}, '', '/home');
+  showPushPreview({ ...incoming, conversationType: 'group' });
+  expect(useLiveInbox.getState().notices).toHaveLength(0);
+  useSettingsStore.setState({ notifyTypes: { ...types, message: false } }); showPushPreview(incoming);
+  expect(useLiveInbox.getState().notices).toHaveLength(0);
+});

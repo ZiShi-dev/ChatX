@@ -2,6 +2,8 @@ import { useRef, useState } from 'react';
 import { IonContent, IonHeader, IonPage, IonToggle } from '@ionic/react';
 import NetworkStatusBanner from '../components/common/NetworkBanner';
 import NotificationPermissionCard from '../components/common/NotificationPermission';
+import PushConnectionCard from '../components/common/PushConnectionCard';
+import ApkUpdateCard from '../components/common/ApkUpdateCard';
 import PageNav from '../components/common/PageNav';
 import { APPEARANCE_PRESETS, DEFAULT_LOGO, logoFromFile, wallpaperFromFile } from '../lib/appearance';
 import { notificationPresentation, type InboxKind } from '../lib/inbox';
@@ -249,6 +251,7 @@ export default function SettingsPage({ embedded = false }: SettingsPageProps) {
 
   const body = (
     <div className="settings-shell profile-frame">
+        <ApkUpdateCard />
         <AppearanceSettings />
         <section className="settings-block">
           <h2>الخصوصية</h2>
@@ -268,6 +271,7 @@ export default function SettingsPage({ embedded = false }: SettingsPageProps) {
           <h2>الإشعارات</h2>
           <p className="settings-lead">تظهر اللافتات وإشعارات الهاتف للإشارات والردود والرسائل الخاصة فقط. رسائل المجموعات العادية والتفاعلات والأحداث تبقى في صفحة الإشعارات. عند قراءة الرسالة يزول التنبيه.</p>
           <NotificationPermissionCard />
+          <PushConnectionCard />
           <div className="notify-types" role="group" aria-label="أنواع الإشعارات">
             {(Object.keys(notifyTypes) as InboxKind[]).map((kind) => {
               const look = notificationPresentation(kind);
