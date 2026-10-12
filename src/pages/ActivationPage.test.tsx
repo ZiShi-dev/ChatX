@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, expect, test, vi } from 'vitest';
 import { useNetworkStore } from '../stores/networkStore';
 import { useSettingsStore } from '../stores/settingsStore';
@@ -45,6 +45,22 @@ afterEach(() => {
   vi.unstubAllEnvs();
   delete window.google;
 });
+
+test('finishes the first Google callback without another click and ignores duplicate callbacks while connecting', async () => {
+  let resolve!: (value: { ok: true; step: 'ready' }) => void;
+  signIn.mockImplementation(() => new Promise((done) => { resolve = done; }));
+  window.google!.accounts.id.initialize = ({ callback }) => {
+    callback({ credential: 'first-token' });
+    callback({ credential: 'first-token' });
+  };
+  const { default: ActivationPage } = await import('./ActivationPage');
+  render(<ActivationPage />);
+  expect(await screen.findByRole('status')).toHaveTextContent('جارٍ تسجيل الدخول');
+  expect(signIn).toHaveBeenCalledTimes(1);
+  await act(async () => resolve({ ok: true, step: 'ready' }));
+  await waitFor(() => expect(navigate).toHaveBeenCalledWith('/home', { replace: true }));
+  expect(navigate).toHaveBeenCalledTimes(1);
+}, 15000);
 
 test('walks through name, appearance and decoration before creating the account', async () => {
   signIn.mockResolvedValue({ ok: true, step: 'profile', name: 'نورة', picture: 'https://lh3.googleusercontent.com/a/photo' });

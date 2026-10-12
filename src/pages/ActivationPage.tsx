@@ -62,6 +62,8 @@ export default function ActivationPage() {
   const nameRef = useRef<HTMLInputElement>(null);
   const googleRef = useRef<HTMLDivElement>(null);
   const onCredential = useRef<(credential: string) => void>(() => undefined);
+  const googlePending = useRef(false);
+  const [connecting, setConnecting] = useState(false);
   const [step, setStep] = useState<'google' | 'profile'>('google');
   const [part, setPart] = useState<ProfilePart>('details');
   const [credential, setCredential] = useState('');
@@ -81,7 +83,12 @@ export default function ActivationPage() {
   const brandLogo = useSettingsStore((state) => state.appearance.logo);
 
   onCredential.current = (token: string) => {
+    if (googlePending.current) return;
+    googlePending.current = true;
+    setConnecting(true);
+    setError('');
     void (async () => {
+      try {
       const result = await signInWithGoogle(token);
       if (!result.ok) {
         setError(connectionError(result.reason) || 'تعذر التحقق من حساب Google. أعد المحاولة.');
@@ -97,6 +104,12 @@ export default function ActivationPage() {
       setPart('details');
       setError('');
       setStep('profile');
+      } catch {
+        setError('تعذر الاتصال. تحقق من الشبكة ثم أعد المحاولة.');
+      } finally {
+        googlePending.current = false;
+        setConnecting(false);
+      }
     })();
   };
 
@@ -263,7 +276,7 @@ export default function ActivationPage() {
                 <h1>الدخول</h1>
                 <p className="muted">سجّل الدخول بحساب Google. إذا كان الحساب صالحًا، تنتقل إلى الخطوة التالية.</p>
                 {CLIENT_ID ? (
-                  <div className="google-login">
+                  <div className="google-login" aria-busy={connecting} style={connecting ? { pointerEvents: 'none', opacity: 0.65 } : undefined}>
                     <button type="button" className="google-login-face" tabIndex={-1} aria-hidden="true">
                       <svg viewBox="0 0 48 48" width="20" height="20" aria-hidden="true">
                         <path fill="#FFC107" d="M43.6 20.5H42V20H24v8h11.3C33.7 32.7 29.3 36 24 36c-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.8 1.2 8 3.1l5.7-5.7C34.2 6.1 29.4 4 24 4 12.9 4 4 12.9 4 24s8.9 20 20 20 20-8.9 20-20c0-1.2-.1-2.3-.4-3.5z" />
@@ -276,6 +289,7 @@ export default function ActivationPage() {
                     <div ref={googleRef} className="google-slot" />
                   </div>
                 ) : <p className="form-error">تسجيل الدخول بحساب Google غير مُعد.</p>}
+                {connecting ? <p className="muted" role="status">جارٍ تسجيل الدخول…</p> : null}
                 {error ? <p className="form-error" role="alert">{error}</p> : null}
               </div>
             ) : (

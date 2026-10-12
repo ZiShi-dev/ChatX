@@ -139,7 +139,12 @@ public class MainActivity extends BridgeActivity {
         layout.addView(popup, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
         Dialog dialog = new Dialog(this, android.R.style.Theme_Black_NoTitleBar_Fullscreen);
         dialog.setContentView(layout);
-        dialog.setOnDismissListener(unused -> popup.destroy());
+        dialog.setOnDismissListener(unused -> {
+            // GIS delivers the credential to the opener as the popup closes.
+            // Detach now, but let queued cross-window messages finish before destruction.
+            layout.removeView(popup);
+            getBridge().getWebView().postDelayed(popup::destroy, 500);
+        });
         dialog.show();
 
         popup.setWebChromeClient(new WebChromeClient() {
@@ -152,7 +157,7 @@ public class MainActivity extends BridgeActivity {
             @Override
             public boolean shouldOverrideUrlLoading(WebView window, WebResourceRequest request) {
                 String host = request.getUrl().getHost();
-                boolean allowed = "https".equals(request.getUrl().getScheme()) && host != null && (host.equals("localhost") || host.equals("accounts.google.com") || host.endsWith(".google.com") || host.endsWith(".gstatic.com") || host.endsWith(".googleusercontent.com"));
+                boolean allowed = "about:blank".equals(request.getUrl().toString()) || ("https".equals(request.getUrl().getScheme()) && host != null && (host.equals("localhost") || host.equals("accounts.google.com") || host.endsWith(".google.com") || host.endsWith(".gstatic.com") || host.endsWith(".googleusercontent.com")));
                 if (!allowed && dialog.isShowing()) dialog.dismiss();
                 return !allowed;
             }
