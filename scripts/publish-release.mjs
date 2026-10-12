@@ -85,3 +85,4 @@ if (kind === 'web') {
 } else {
   fail('Utilise web ou apk.');
 }
+await import('./sync-server-releases.mjs');
