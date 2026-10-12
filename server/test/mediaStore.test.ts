@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { describe, it } from 'node:test';
 import pg from 'pg';
-import { createMediaStore, isDiskMediaExpired, MEDIA_PURGE_INTERVAL_MS, mediaRetentionMs, migrateLegacyMedia, purgeExpiredMedia, purgeOrphanMedia } from '../src/mediaStore.ts';
+import { createMediaStore, isDiskMediaExpired, MEDIA_PURGE_INTERVAL_MS, mediaRetentionMs, migrateLegacyMedia, planDiskPurge, purgeExpiredMedia, purgeOrphanMedia, readMediaOpsStatus, wipeDiskMedia } from '../src/mediaStore.ts';
 import { createPostgresRepository } from '../src/postgres.ts';
 import { migrate } from '../src/migrate.ts';
 import type { AuthUser } from '../src/types.ts';
@@ -34,6 +34,56 @@ describe('media store', () => {
       assert.equal(isDiskMediaExpired(due, now, day), true, kind);
       assert.equal(isDiskMediaExpired(now - 60_000, now, day), false, kind);
     }
+  });
+
+  it('keeps the same disk deadline when the server process restarts', () => {
+    const now = Date.parse('2026-10-12T10:15:00.000Z');
+    const lastRun = '2026-10-12T00:00:00.000Z';
+    const first = planDiskPurge(lastRun, now);
+    const restarted = planDiskPurge(lastRun, now + 60 * 60 * 1000);
+    assert.equal(first.due, false);
+    assert.equal(restarted.due, false);
+    assert.equal(first.nextRunAt, '2026-10-13T00:00:00.000Z');
+    assert.equal(restarted.nextRunAt, first.nextRunAt);
+    assert.equal(restarted.delayMs, first.delayMs - 60 * 60 * 1000);
+    const missed = planDiskPurge('2026-10-11T00:00:00.000Z', now);
+    assert.equal(missed.due, true);
+    assert.equal(missed.nextRunAt, first.nextRunAt);
+    const fresh = planDiskPurge(null, now);
+    assert.equal(fresh.due, true);
+    assert.equal(fresh.nextRunAt, first.nextRunAt);
+    assert.notEqual(fresh.nextRunAt, new Date(now + MEDIA_PURGE_INTERVAL_MS).toISOString());
+  });
+
+  it('deletes every disk file without moving the automatic deadline', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'chatx-media-'));
+    const store = createMediaStore(root);
+    const imageId = randomUUID();
+    const fileId = randomUUID();
+    const orphanId = randomUUID();
+    await store.put('image', imageId, Buffer.from('img'));
+    await store.put('file', fileId, Buffer.from('file'));
+    await store.put('file', orphanId, Buffer.from('orphan'));
+    const before = readMediaOpsStatus();
+    const queries: string[] = [];
+    const pool = {
+      async query(sql: string) {
+        const text = sql.trim();
+        queries.push(text);
+        if (text.includes('UNION ALL')) return { rows: [] };
+        if (text.startsWith('SELECT') && text.includes('FROM message_images')) return { rows: [{ message_id: imageId }] };
+        if (text.startsWith('SELECT') && text.includes('FROM message_files')) return { rows: [{ message_id: fileId }] };
+        return { rows: [] };
+      },
+    };
+    const removed = await wipeDiskMedia(pool as never, store);
+    assert.deepEqual(removed, { images: 1, files: 1, orphans: 1 });
+    assert.equal(await store.get('image', imageId), null);
+    assert.equal(await store.get('file', fileId), null);
+    assert.equal(await store.get('file', orphanId), null);
+    assert.equal(queries.some((sql) => sql.startsWith('DELETE FROM message_images')), true);
+    assert.equal(queries.some((sql) => sql.startsWith('DELETE FROM message_files')), true);
+    assert.deepEqual(readMediaOpsStatus(), before);
   });
 
   it('creates images and files directories on ensure', async () => {

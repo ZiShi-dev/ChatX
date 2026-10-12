@@ -88,6 +88,38 @@ describe('owner tools', () => {
     assert.equal(body.media.diskBytes, 4096);
   });
 
+  it('lets only the Google operator wipe disk media', async () => {
+    const deps = testDeps();
+    let wiped = 0;
+    const operator = person(operatorId, 'إبراهيم', ERASE_OPERATOR_EMAIL, 'google-operator');
+    const member = person(memberId, 'أمينة', 'amina@example.com');
+    await deps.repo.insertUser(operator);
+    await deps.repo.insertUser(member);
+    await deps.repo.createSession(hashSession('operator-token'), operator.id, new Date(now + 60_000));
+    await deps.repo.createSession(hashSession('member-token'), member.id, new Date(now + 60_000));
+    const handle = createApi(deps);
+    assert.equal((await call(handle, '/api/owner/media/wipe', 'operator-token', {})).status, 503);
+    assert.equal((await call(handle, '/api/owner/media/wipe', 'member-token', {})).status, 403);
+    deps.ownerWipeMedia = async () => { wiped += 1; return { images: 7, files: 0, orphans: 0 }; };
+    deps.ownerSystem = async () => ({ media: {
+      mediaRetentionMs: 86_400_000, diskImageFiles: wiped ? 0 : 7,
+      diskFileFiles: 0, diskBytes: wiped ? 0 : 4096,
+      metadataImages: wiped ? 0 : 7, metadataFiles: 0,
+      legacyImageRows: 0, legacyFileRows: 0, lastPurgeAt: null,
+      lastPurgeError: null, lastExpiredImages: 0, lastExpiredFiles: 0,
+      lastOrphans: 0, nextPurgeAt: null, purgeIntervalMs: 86_400_000,
+    } });
+    assert.equal((await call(handle, '/api/owner/media/wipe', 'member-token', {})).status, 403);
+    assert.equal(wiped, 0);
+    const response = await call(handle, '/api/owner/media/wipe', 'operator-token', {});
+    assert.equal(response.status, 200);
+    const result = await response.json() as { media: { diskImageFiles: number; metadataImages: number }; removed: { images: number } };
+    assert.equal(result.media.diskImageFiles, 0);
+    assert.equal(result.media.metadataImages, 0);
+    assert.equal(result.removed.images, 7);
+    assert.equal(wiped, 1);
+  });
+
   it('shows the member list only to the Google operator', async () => {
     const { handle } = await signedIn();
     assert.equal((await call(handle, '/api/owner/members', '')).status, 401);

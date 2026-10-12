@@ -11,6 +11,7 @@ import {
   eraseOwnerMember,
   listOwnerMembers,
   listOwnerSystem,
+  wipeOwnerMedia,
   previewGoogle,
   readOwnProfile,
   readPresence,
@@ -495,6 +496,11 @@ async function route(deps: Deps, request: Request) {
     const result = await listOwnerSystem(deps, readSessionToken(request));
     if (!result.ok) return failure(deps, result.error);
     return json(result.system);
+  }
+  if (request.method === 'POST' && path === '/api/owner/media/wipe') {
+    const result = await wipeOwnerMedia(deps, readSessionToken(request));
+    if (!result.ok) return failure(deps, result.error);
+    return json({ ok: true, removed: result.removed, media: result.media });
   }
   if (request.method === 'POST' && path === '/api/owner/groups/erase') {
     const result = await eraseOwnerGroup(deps, {

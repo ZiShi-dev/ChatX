@@ -113,6 +113,32 @@ export type MediaOpsStatus = {
   nextRunAt: string | null;
 };
 
+function purgeInterval(intervalMs: number) {
+  return Number.isInteger(intervalMs) && intervalMs >= 60_000 ? intervalMs : MEDIA_PURGE_INTERVAL_MS;
+}
+
+/** Next sweep is the following UTC day boundary, so a process restart keeps the same deadline. */
+export function nextDiskPurgeAt(nowMs: number, intervalMs = MEDIA_PURGE_INTERVAL_MS) {
+  const interval = purgeInterval(intervalMs);
+  return Math.floor(nowMs / interval) * interval + interval;
+}
+
+export function diskPurgeIsDue(lastRunAt: string | null, nowMs: number, intervalMs = MEDIA_PURGE_INTERVAL_MS) {
+  const previous = nextDiskPurgeAt(nowMs, intervalMs) - purgeInterval(intervalMs);
+  if (!lastRunAt) return true;
+  const last = Date.parse(lastRunAt);
+  return !Number.isFinite(last) || last < previous;
+}
+
+export function planDiskPurge(lastRunAt: string | null, nowMs: number, intervalMs = MEDIA_PURGE_INTERVAL_MS) {
+  const nextMs = nextDiskPurgeAt(nowMs, intervalMs);
+  return {
+    due: diskPurgeIsDue(lastRunAt, nowMs, intervalMs),
+    nextRunAt: new Date(nextMs).toISOString(),
+    delayMs: Math.max(1_000, nextMs - nowMs),
+  };
+}
+
 let mediaOps: MediaOpsStatus = {
   lastRunAt: null,
   lastError: null,
@@ -224,13 +250,79 @@ export async function collectOwnerMediaStatus(pool: pg.Pool, store: MediaStore, 
     lastExpiredImages: ops.lastExpiredImages,
     lastExpiredFiles: ops.lastExpiredFiles,
     lastOrphans: ops.lastOrphans,
-    nextPurgeAt: ops.nextRunAt,
+    nextPurgeAt: new Date(nextDiskPurgeAt(Date.now())).toISOString(),
     purgeIntervalMs: MEDIA_PURGE_INTERVAL_MS,
   };
 }
 
-export function startMediaPurgeScheduler(pool: pg.Pool, store: MediaStore, retentionMs: number, log: (message: string) => void = () => undefined) {
+function isoTime(value: Date | string | null) {
+  if (value instanceof Date && Number.isFinite(value.getTime())) return value.toISOString();
+  if (typeof value === 'string' && Number.isFinite(Date.parse(value))) return new Date(value).toISOString();
+  return null;
+}
+
+export async function loadMediaOps(pool: pg.Pool): Promise<MediaOpsStatus | null> {
+  const result = await pool.query<{
+    next_run_at: Date | string | null;
+    last_run_at: Date | string | null;
+    last_error: string | null;
+    last_expired_images: number;
+    last_expired_files: number;
+    last_orphans: number;
+  }>(
+    `SELECT next_run_at, last_run_at, last_error, last_expired_images, last_expired_files, last_orphans
+     FROM media_purge_state WHERE id = true`,
+  );
+  const row = result.rows[0];
+  if (!row) return null;
+  return {
+    nextRunAt: isoTime(row.next_run_at),
+    lastRunAt: isoTime(row.last_run_at),
+    lastError: typeof row.last_error === 'string' ? row.last_error.slice(0, 300) : null,
+    lastExpiredImages: row.last_expired_images,
+    lastExpiredFiles: row.last_expired_files,
+    lastOrphans: row.last_orphans,
+  };
+}
+
+export async function saveMediaOps(pool: pg.Pool, status: MediaOpsStatus) {
+  await pool.query(
+    `INSERT INTO media_purge_state (id, next_run_at, last_run_at, last_error, last_expired_images, last_expired_files, last_orphans)
+     VALUES (true, $1, $2, $3, $4, $5, $6)
+     ON CONFLICT (id) DO UPDATE SET
+       next_run_at = EXCLUDED.next_run_at,
+       last_run_at = EXCLUDED.last_run_at,
+       last_error = EXCLUDED.last_error,
+       last_expired_images = EXCLUDED.last_expired_images,
+       last_expired_files = EXCLUDED.last_expired_files,
+       last_orphans = EXCLUDED.last_orphans`,
+    [status.nextRunAt, status.lastRunAt, status.lastError, status.lastExpiredImages, status.lastExpiredFiles, status.lastOrphans],
+  );
+}
+
+/** Removes every image, file and video from disk and drops their records. The automatic deadline stays. */
+export async function wipeDiskMedia(pool: pg.Pool, store: MediaStore) {
+  const images = await pool.query<{ message_id: string }>('SELECT message_id FROM message_images');
+  const files = await pool.query<{ message_id: string }>('SELECT message_id FROM message_files');
+  for (const row of images.rows) await store.remove('image', row.message_id);
+  for (const row of files.rows) await store.remove('file', row.message_id);
+  await pool.query('DELETE FROM message_images');
+  await pool.query('DELETE FROM message_files');
+  const orphans = await purgeOrphanMedia(pool, store);
+  return { images: images.rows.length, files: files.rows.length, orphans };
+}
+
+export async function startMediaPurgeScheduler(pool: pg.Pool, store: MediaStore, retentionMs: number, log: (message: string) => void = () => undefined) {
   let timer: ReturnType<typeof setTimeout> | undefined;
+  let stopped = false;
+  let running = false;
+  const persist = async () => {
+    try {
+      await saveMediaOps(pool, mediaOps);
+    } catch (error) {
+      log(error instanceof Error ? error.message : 'media purge state save failed');
+    }
+  };
   const tick = async () => {
     try {
       const before = new Date(Date.now() - retentionMs);
@@ -249,17 +341,40 @@ export function startMediaPurgeScheduler(pool: pg.Pool, store: MediaStore, reten
       mediaOps = {
         ...mediaOps,
         lastRunAt: new Date().toISOString(),
-        lastError: error instanceof Error ? error.message : 'media purge failed',
+        lastError: (error instanceof Error ? error.message : 'media purge failed').slice(0, 300),
       };
       throw error;
     }
   };
-  const arm = () => {
-    mediaOps = { ...mediaOps, nextRunAt: new Date(Date.now() + MEDIA_PURGE_INTERVAL_MS).toISOString() };
-    timer = setTimeout(() => {
-      void tick().catch((error) => log(error instanceof Error ? error.message : 'media purge failed')).finally(arm);
-    }, MEDIA_PURGE_INTERVAL_MS);
+  const step = async () => {
+    if (stopped || running) return;
+    running = true;
+    try {
+      if (diskPurgeIsDue(mediaOps.lastRunAt, Date.now())) {
+        try {
+          await tick();
+        } catch (error) {
+          log(error instanceof Error ? error.message : 'media purge failed');
+        }
+      }
+      if (stopped) {
+        await persist();
+        return;
+      }
+      const settled = planDiskPurge(mediaOps.lastRunAt, Date.now());
+      mediaOps = { ...mediaOps, nextRunAt: settled.nextRunAt };
+      await persist();
+      if (stopped) return;
+      timer = setTimeout(() => { void step(); }, settled.due ? 1_000 : settled.delayMs);
+    } finally {
+      running = false;
+    }
   };
-  void tick().catch((error) => log(error instanceof Error ? error.message : 'media purge failed')).finally(arm);
-  return () => { if (timer) clearTimeout(timer); };
+  const saved = await loadMediaOps(pool);
+  if (saved) mediaOps = saved;
+  await step();
+  return () => {
+    stopped = true;
+    if (timer) clearTimeout(timer);
+  };
 }

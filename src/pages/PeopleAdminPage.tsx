@@ -83,7 +83,7 @@ function MediaPurgeClock({ system }: { system: OwnerSystemMedia }) {
   return (
     <div className="owner-system-clock">
       <p className="owner-system-hint">
-        تُحفظ الصور والملفات والفيديو على القرص <span dir="ltr">{hours}</span> ساعة من وقت حفظها. يحذفها الفحص التالي بعد هذه المدة. يعمل الفحص كل <span dir="ltr">{intervalHours}</span> ساعة، لذلك قد يبقى ملف حتى الفحص الذي يلي بلوغه المهلة.
+        تُحفظ الصور والملفات والفيديو على القرص <span dir="ltr">{hours}</span> ساعة من وقت حفظها. يحذفها الفحص التالي بعد هذه المدة. يعمل الفحص كل <span dir="ltr">{intervalHours}</span> ساعة في موعد ثابت، لذلك قد يبقى ملف حتى الفحص الذي يلي بلوغه المهلة. إعادة تشغيل الخادم لا تعيد هذا المؤقت.
       </p>
       {remaining == null ? (
         <p className="owner-system-hint">يبدأ المؤقت بعد أول فحص للخادم.</p>
@@ -164,6 +164,16 @@ function patchMemberMessages(userId: string, picked: Record<ChoiceKey, boolean>)
     return [{ ...message, reactions: message.reactions.filter((item) => item.userId !== userId) }];
   });
   if (changed) useChatStore.setState({ messages: next });
+}
+
+function markDiskMediaExpired() {
+  const messages = useChatStore.getState().messages.map((message) => {
+    if (message.status !== 'sent') return message;
+    if (message.type !== 'image' && message.type !== 'file' && message.type !== 'video') return message;
+    if (message.media?.state === 'cached') return message;
+    return { ...message, mediaExpired: true, downloadFailed: false };
+  });
+  useChatStore.setState({ messages });
 }
 
 function patchGroupMessages(roomId: string, picked: Record<GroupChoiceKey, boolean>) {
@@ -359,6 +369,9 @@ export default function PeopleAdminPage() {
   const [done, setDone] = useState('');
   const [system, setSystem] = useState<OwnerSystemMedia | null>(null);
   const [systemError, setSystemError] = useState('');
+  const [wipeAsk, setWipeAsk] = useState(false);
+  const [wiping, setWiping] = useState(false);
+  const systemRequest = useRef(0);
 
   useEffect(() => {
     alive.current = true;
@@ -388,8 +401,9 @@ export default function PeopleAdminPage() {
   }, []);
 
   const refreshSystem = useCallback(() => {
+    const request = ++systemRequest.current;
     void adminFetch('/api/owner/system').then((payload) => {
-      if (!alive.current) return;
+      if (!alive.current || request !== systemRequest.current) return;
       const media = payload && typeof payload === 'object' && 'media' in payload ? (payload as { media: OwnerSystemMedia }).media : null;
       if (!media) {
         setSystem(null);
@@ -399,7 +413,7 @@ export default function PeopleAdminPage() {
       setSystem(media);
       setSystemError('');
     }).catch((error) => {
-      if (!alive.current) return;
+      if (!alive.current || request !== systemRequest.current) return;
       setSystem(null);
       setSystemError(error instanceof AdminApiError ? 'تعذر قراءة حالة الخادم.' : 'تعذر الاتصال بالخادم.');
     });
@@ -411,6 +425,29 @@ export default function PeopleAdminPage() {
     const timer = window.setInterval(refreshSystem, 60_000);
     return () => window.clearInterval(timer);
   }, [access, refreshSystem]);
+
+  const wipeDisk = useCallback(async () => {
+    ++systemRequest.current;
+    setWiping(true);
+    setDone('');
+    try {
+      const payload = await adminFetch('/api/owner/media/wipe', { method: 'POST', body: {} });
+      ++systemRequest.current;
+      markDiskMediaExpired();
+      if (!alive.current) return;
+      setWipeAsk(false);
+      const media = payload && typeof payload === 'object' && 'media' in payload ? (payload as { media: OwnerSystemMedia | null }).media : null;
+      setDone('حُذفت وسائط الرسائل من القرص ومن قاعدة البيانات. الصور المحفوظة على أجهزة المستخدمين لا تُحذف.');
+      if (media) { setSystem(media); setSystemError(''); }
+      else refreshSystem();
+    } catch (error) {
+      if (!alive.current) return;
+      if (error instanceof AdminApiError && error.code === 'offline') setDone('تعذر الاتصال.');
+      else setDone('تعذر حذف الملفات.');
+    } finally {
+      if (alive.current) setWiping(false);
+    }
+  }, [refreshSystem]);
 
   const usersRef = useRef(users);
   const groupsRef = useRef(groups);
@@ -544,7 +581,20 @@ export default function PeopleAdminPage() {
                   ) : null}
                 </ul>
               ) : null}
-              <button type="button" className="owner-system-refresh" onClick={refreshSystem}>تحديث الحالة</button>
+              {wipeAsk ? (
+                <div className="owner-system-confirm">
+                  <p className="owner-system-alert" role="alert">يُحذف الآن كل الصور والملفات والفيديو من القرص. الرسائل تبقى، ومؤقت الحذف التلقائي لا يعود إلى البداية.</p>
+                  <div className="owner-system-actions">
+                    <button type="button" onClick={() => setWipeAsk(false)} disabled={wiping}>إلغاء</button>
+                    <button type="button" className="danger" onClick={() => void wipeDisk()} disabled={wiping}>{wiping ? 'جارٍ الحذف' : 'حذف الآن'}</button>
+                  </div>
+                </div>
+              ) : (
+                <div className="owner-system-actions">
+                  <button type="button" onClick={refreshSystem} disabled={wiping}>تحديث الحالة</button>
+                  <button type="button" className="danger" onClick={() => { setDone(''); setWipeAsk(true); }} disabled={wiping}>حذف ملفات القرص</button>
+                </div>
+              )}
             </section>
           </>
         ) : null}

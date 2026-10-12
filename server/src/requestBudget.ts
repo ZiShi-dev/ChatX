@@ -18,7 +18,7 @@ export function createRequestBudget(now:()=>number) {
     const path=new URL(request.url).pathname;
     if(path.startsWith('/api/auth/google'))return consume('auth:'+ip,30);
     if(path==='/api/links/preview')return consume('link:'+ip,40);
-    if(path==='/api/owner/erase' || path==='/api/owner/groups/erase') {
+    if(path==='/api/owner/erase' || path==='/api/owner/groups/erase' || path==='/api/owner/media/wipe') {
       const token=readSessionToken(request);
       const limited=consume('owner:'+(token?hashSession(token):ip),10);
       if(limited)return limited;

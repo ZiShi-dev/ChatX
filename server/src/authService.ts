@@ -36,6 +36,7 @@ export type Deps = {
   now: () => number;
   rateLimit: RateLimiter;
   ownerSystem?: () => Promise<OwnerSystemStatus | null>;
+  ownerWipeMedia?: () => Promise<unknown>;
 };
 
 type Failure = { ok: false; error: 'invalid_credentials' | 'rate_limited' | 'unavailable' | 'forbidden' | 'username_taken' };
@@ -297,6 +298,16 @@ export async function listOwnerSystem(deps: Deps, token: string) {
   const system = await deps.ownerSystem();
   if (!system) return { ok: false as const, error: 'unavailable' as const };
   return { ok: true as const, system };
+}
+
+export async function wipeOwnerMedia(deps: Deps, token: string) {
+  const user = await sessionUser(deps, token);
+  if (!user) return { ok: false as const, error: 'invalid_credentials' as const };
+  if (!ownerAccount(user)) return { ok: false as const, error: 'forbidden' as const };
+  if (!deps.ownerWipeMedia) return { ok: false as const, error: 'unavailable' as const };
+  const removed = await deps.ownerWipeMedia();
+  const system = deps.ownerSystem ? await deps.ownerSystem() : null;
+  return { ok: true as const, removed, media: system?.media ?? null };
 }
 
 export async function listOwnerMembers(deps: Deps, token: string) {

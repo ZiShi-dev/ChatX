@@ -8,7 +8,7 @@ import { createApi, securityHeaders } from './http.ts';
 import { configureHttpServer, proxyClientAddress } from './transportSecurity.ts';
 import { clientRequestHeaders } from './requestHeaders.ts';
 import { migrate } from './migrate.ts';
-import { collectOwnerMediaStatus, createMediaStore, migrateLegacyMedia, startMediaPurgeScheduler } from './mediaStore.ts';
+import { collectOwnerMediaStatus, createMediaStore, migrateLegacyMedia, startMediaPurgeScheduler, wipeDiskMedia } from './mediaStore.ts';
 import { createPool, createPostgresRepository } from './postgres.ts';
 import { tryServeRelease } from './releases.ts';
 import { loadThrottle, saveThrottle } from './throttle.ts';
@@ -73,13 +73,14 @@ try {
   await media.ensure();
   await migrateLegacyMedia(pool, media);
   const repo = createPostgresRepository(pool, media);
-  startMediaPurgeScheduler(pool, media, config.mediaRetentionMs);
+  const stopMediaPurge = await startMediaPurgeScheduler(pool, media, config.mediaRetentionMs);
   const throttle = await loadThrottle(pool);
   const handle = createApi({
     repo,
     config,
     now: () => Date.now(),
     ownerSystem: async () => ({ media: await collectOwnerMediaStatus(pool, media, config.mediaRetentionMs) }),
+    ownerWipeMedia: () => wipeDiskMedia(pool, media),
     rateLimit: createLimiter(config, () => Date.now(), {
       initial: throttle,
       onChange: (state) => saveThrottle(pool, state),
@@ -133,6 +134,7 @@ try {
   if(tlsServer)configureHttpServer(tlsServer);
   tlsServer?.listen(config.tlsPort, '0.0.0.0');
   const shutdown = () => {
+    stopMediaPurge();
     localServer.close();
     tlsServer?.close();
     void pool.end();
