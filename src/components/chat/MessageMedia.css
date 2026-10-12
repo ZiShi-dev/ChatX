@@ -1,36 +1,62 @@
-.chat-thread .bubble.has-media {
-  width: auto;
-  max-width: 100%;
+/* Compact, edge-aligned media bubbles; the frame follows the photo's aspect ratio. */
+.chat-thread .bubble-stack.is-media {
+  width: min(var(--media-inline-size, 278px), 78vw);
+  max-width: min(82%, 278px);
 }
-
+.chat-thread .bubble-stack.is-media .bubble.has-media {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  padding: 3px;
+  border: 0;
+  border-radius: 16px;
+  box-sizing: border-box;
+}
 .chat-thread .bubble.has-media .media-card,
 .chat-thread .bubble.has-media .media-open {
   width: 100%;
   max-width: 100%;
   touch-action: pan-y;
 }
-
+.chat-thread .bubble.has-media .media-open { border-radius: 13px; }
 .chat-thread .bubble.has-media .media-preview,
 .chat-thread .bubble.has-media .media-placeholder {
   width: 100%;
   max-width: 100%;
   height: auto;
-  max-height: min(78vh, 640px);
+  max-height: 336px;
+  aspect-ratio: auto;
+  object-fit: contain;
   background: transparent;
   -webkit-user-drag: none;
 }
-
-.chat-thread .bubble.has-media .bubble-time,
+.chat-thread .bubble.has-media .media-placeholder { aspect-ratio: 4 / 3; }
+.chat-thread .bubble.has-media .bubble-time {
+  position: absolute;
+  inset-inline-start: auto;
+  inset-inline-end: 7px;
+  bottom: 7px;
+  display: inline-flex;
+  gap: 4px;
+  margin: 0;
+  padding: 2px 6px;
+  min-height: 18px;
+  border-radius: 8px;
+  background: rgba(0,0,0,.48);
+  color: #fff;
+  font-size: 11px;
+  line-height: 1.35;
+  opacity: 1;
+  pointer-events: none;
+}
 .chat-thread .bubble.has-media.is-sending .bubble-time {
   position: static;
-  inset: auto;
   flex-wrap: wrap;
+  justify-content: flex-end;
   margin: 4px 2px 1px;
   padding: 0;
-  min-height: 18px;
   background: transparent;
   color: var(--chatx-muted);
-  font-size: 12px;
-  line-height: 1.4;
-  opacity: 1;
+  pointer-events: auto;
 }
+.chat-thread .bubble.has-media .media-local-mark { display: none; }

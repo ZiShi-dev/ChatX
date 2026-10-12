@@ -3,7 +3,8 @@ import MessageReactionFloater from './MessageReactionFloater';
 import MediaViewer from './MediaViewer';
 import './MessageMedia.css';
 import './MentionGesture.css';
-import { memo, useEffect, useLayoutEffect, useRef, useState, type SyntheticEvent } from 'react';
+import { memo, useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type SyntheticEvent } from 'react';
+import { mediaBubbleWidth } from '../../lib/mediaBubbleLayout';
 import { chatNavigationSlot, resolveMessageActionsHost } from '../../lib/messageActionsHost';
 import { createPortal } from 'react-dom';
 import { IonIcon } from '@ionic/react';
@@ -131,6 +132,12 @@ function MediaBlock({ message }: { message: Message }) {
   const ratio = media.width && media.height ? `${media.width} / ${media.height}` : undefined;
   const layout = (event: SyntheticEvent<HTMLImageElement | HTMLVideoElement>) => {
     const node = event.currentTarget;
+    const naturalWidth = node instanceof HTMLVideoElement ? node.videoWidth : node.naturalWidth;
+    const naturalHeight = node instanceof HTMLVideoElement ? node.videoHeight : node.naturalHeight;
+    if (naturalWidth > 0 && naturalHeight > 0) {
+      const stack = node.closest<HTMLElement>('.bubble-stack.is-media');
+      stack?.style.setProperty('--media-inline-size', `${mediaBubbleWidth(naturalWidth, naturalHeight) + 6}px`);
+    }
     if (!ratio) {
       const width = node instanceof HTMLVideoElement ? node.videoWidth : node.naturalWidth;
       const height = node instanceof HTMLVideoElement ? node.videoHeight : node.naturalHeight;
@@ -703,6 +710,7 @@ function MessageBubble({ message, mine, showAuthor, showAvatar = showAuthor, res
     <div
       ref={stackRef}
       id={`msg-${message.id}`}
+      style={message.type === 'image' || message.type === 'video' ? { '--media-inline-size': `${mediaBubbleWidth(message.media?.width, message.media?.height) + 6}px` } as CSSProperties : undefined}
       className={`bubble-stack ${mine ? 'mine' : 'theirs'}${continued ? ' is-continued' : ''}${message.type === 'image' || message.type === 'video' ? ' is-media' : ''}${menuOpen ? ' is-picked' : ''}${direct && canSeeReceipts ? ' is-receipt' : ''}${spotlight ? ' is-target' : ''}${reactionTotal > 0 ? ' has-reactions' : ''}${bornSending.current ? ' is-new' : ''}`}
       onContextMenu={(event) => {
         if (!canOpenMenu) return;
