@@ -11,7 +11,7 @@ async function sessionUser(deps: Deps, token: string | undefined) {
 export async function registerPushToken(deps: Deps, token: string | undefined, platform: string | undefined, session: string | undefined) {
   const user = await sessionUser(deps, session);
   if (!user || typeof token !== 'string' || !TOKEN.test(token)) return { ok: false as const, error: 'invalid_credentials' as const };
-  const safePlatform = platform === 'ios' ? 'ios' : 'android';
+  const safePlatform = platform === 'android-data-v1' ? platform : platform === 'ios' ? 'ios' : 'android';
   await deps.repo.savePushToken(user.id, token, safePlatform);
   return { ok: true as const };
 }

@@ -65,10 +65,13 @@ public class InboxWatchPlugin extends Plugin {
     private void deliver(Intent intent) {
         if (intent == null) return;
         String conversationId = intent.getStringExtra("chatxConversation");
+        if (conversationId == null || conversationId.isEmpty()) conversationId = intent.getStringExtra("conversationId");
         if (conversationId == null || conversationId.isEmpty()) return;
+        String messageId = intent.getStringExtra("chatxMessage");
+        if (messageId == null || messageId.isEmpty()) messageId = intent.getStringExtra("messageId");
         JSObject data = new JSObject();
         data.put("conversationId", conversationId);
-        data.put("messageId", intent.getStringExtra("chatxMessage"));
-        notifyListeners("open", data);
+        data.put("messageId", messageId);
+        notifyListeners("open", data, true);
     }
 }

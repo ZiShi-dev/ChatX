@@ -79,7 +79,8 @@ function schedulePrefsRetry() {
 
 async function syncToken(value: string) {
   const lease = generation;
-  const response = await adminFetch('/api/push/register', { method: 'POST', body: JSON.stringify({ token: value, platform: Capacitor.getPlatform() }) }) as { pushEnabled?: boolean };
+  const platform = Capacitor.getPlatform() === 'android' ? 'android-data-v1' : Capacitor.getPlatform();
+  const response = await adminFetch('/api/push/register', { method: 'POST', body: JSON.stringify({ token: value, platform }) }) as { pushEnabled?: boolean };
   if (!started || generation !== lease || candidate !== value) return;
   token = response.pushEnabled === true ? value : '';
   retryCount = 0;
@@ -157,7 +158,7 @@ export async function startPushRegistration(userId: string) {
   }));
   own(await PushNotifications.addListener('pushNotificationReceived', (event) => {
     if (lease !== generation) return;
-    window.dispatchEvent(new CustomEvent('chatx-push-received', { detail: { ...event.data, title: event.title, body: event.body } }));
+    window.dispatchEvent(new CustomEvent('chatx-push-received', { detail: { ...event.data, title: event.title ?? event.data?.title, body: event.body ?? event.data?.body } }));
   }));
   if (lease !== generation) return;
   if (Capacitor.getPlatform() === 'android') {

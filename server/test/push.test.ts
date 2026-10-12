@@ -41,12 +41,14 @@ it('sends real FCM notification payloads, shares OAuth and removes unregistered 
       ? Response.json({ error: { details: [{ errorCode: 'UNREGISTERED' }] } }, { status: 404 })
       : Response.json({ name: 'synthetic-delivery' });
   };
+  let dataOnly = false;
   const deps = { repo: {
     listRoomNoticeMembers: async () => [{ id: 'recipient', username: 'Bob' }],
     readRoomLabel: async () => ({ kind: 'private', name: null }),
     findUserById: async () => ({ displayName: 'Alice' }),
     readPushPrefs: async () => ({ quiet: '', hiddenKinds: '' }),
     listPushTokens: async () => ['valid-device', 'expired-device'],
+    listPushDevices: async () => [{ token: 'valid-device', platform: dataOnly ? 'android-data-v1' : 'android' }],
     deletePushToken: async (_id: string, token: string) => { removed.push(token); },
   } } as unknown as Deps;
   await sendMessagePush(deps, { id: 'message-id', roomId: 'private-room', senderId: 'sender', text: 'Hello', createdAt: new Date(), deleted: false });
@@ -58,4 +60,13 @@ it('sends real FCM notification payloads, shares OAuth and removes unregistered 
   assert.equal(payloads[0]!.message.android.notification.tag, 'message-id');
   assert.equal(payloads[0]!.message.android.notification.channel_id, 'chatx-messages');
   assert.deepEqual(removed, ['expired-device']);
+  dataOnly = true;
+  await sendMessagePush(deps, { id: 'second-message', roomId: 'private-room', senderId: 'sender', text: 'Second', createdAt: new Date(), deleted: false });
+  for (let tries = 0; tries < 20 && payloads.length < 4; tries++) await new Promise(resolve => setTimeout(resolve, 1));
+  const compatible = payloads.find(payload => payload.message.token === 'valid-device' && payload.message.data.messageId === 'second-message')!;
+  assert.ok(compatible);
+  assert.equal('notification' in compatible.message.android, false);
+  assert.equal('collapse_key' in compatible.message.android, false);
+  assert.equal(compatible.message.android.priority, 'HIGH');
+  assert.equal(compatible.message.data.body, 'Second');
 });

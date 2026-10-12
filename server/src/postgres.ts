@@ -1289,6 +1289,10 @@ export function createPostgresRepository(pool: pg.Pool, store: MediaStore): Auth
       const result = await pool.query<{ token: string }>('SELECT token FROM push_tokens WHERE user_id = $1', [userId]);
       return result.rows.map((row) => row.token);
     },
+    async listPushDevices(userId) {
+      const result = await pool.query<{ token: string; platform: string }>('SELECT token, platform FROM push_tokens WHERE user_id = $1', [userId]);
+      return result.rows;
+    },
     async savePushPrefs(userId, quiet, hiddenKinds) {
       await pool.query(
         'INSERT INTO push_prefs (user_id, quiet, hidden_kinds, updated_at) VALUES ($1, $2, $3, now()) ON CONFLICT (user_id) DO UPDATE SET quiet = EXCLUDED.quiet, hidden_kinds = EXCLUDED.hidden_kinds, updated_at = now()',

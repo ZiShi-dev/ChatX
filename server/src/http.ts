@@ -165,7 +165,7 @@ async function route(deps: Deps, request: Request) {
     securityHeaders(headers);
     return new Response(null, { status: 204, headers });
   }
-  if (request.method === 'GET' && path === '/api/health') return json({ ok: true, groupTurnPolicy: 'weekly-v3-direct', networkPolicy: 'durable-delta-v1', securityPolicy:'bounded-api-v1', turnNotificationPolicy:'all-members-v1', notificationReadPolicy:'durable-v1', pushPolicy: 'fcm-status-v1', pushConfigured: hasPushConfiguration() });
+  if (request.method === 'GET' && path === '/api/health') return json({ ok: true, groupTurnPolicy: 'weekly-v3-direct', networkPolicy: 'durable-delta-v1', securityPolicy:'bounded-api-v1', turnNotificationPolicy:'all-members-v1', notificationReadPolicy:'durable-v1', pushPolicy: 'fcm-data-v2', pushConfigured: hasPushConfiguration() });
   if (request.method === 'GET' && path === '/api/app/release') return json(readAppRelease(deps.config.releaseDir, bundledUpdatePublicKey()));
   const groupTurn = path.match(/^\/api\/rooms\/([0-9a-f-]{36})\/turn$/i);
   if (groupTurn && request.method === 'GET') {

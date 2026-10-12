@@ -100,7 +100,7 @@ export function pushSuppressed(quiet: string, hiddenKinds: string, conversationI
   return false;
 }
 
-async function sendToken(env: PushEnv, token: string, title: string, body: string, data: Record<string, string>, stillAllowed: () => Promise<boolean>) {
+async function sendToken(env: PushEnv, token: string, title: string, body: string, data: Record<string, string>, stillAllowed: () => Promise<boolean>, dataOnly = false) {
   const response = await deliverPush(async () => {
     const auth = await accessToken(env);
     if (!auth) throw new Error('push_auth_unavailable');
@@ -114,7 +114,7 @@ async function sendToken(env: PushEnv, token: string, title: string, body: strin
         android: {
           priority: 'HIGH',
           ttl: '86400s',
-          notification: {
+          ...(!dataOnly ? { notification: {
             title,
             body,
             channel_id: CHANNEL,
@@ -123,7 +123,7 @@ async function sendToken(env: PushEnv, token: string, title: string, body: strin
             visibility: 'PUBLIC',
             default_sound: true,
             default_vibrate_timings: true,
-          },
+          } } : {}),
         },
         data: { ...data, title, body },
       },
@@ -135,6 +135,7 @@ async function sendToken(env: PushEnv, token: string, title: string, body: strin
   if (!response) return 'failed';
   if (response.ok) return 'sent';
   const error = await response.json().catch(() => null) as { error?: { details?: Array<{ errorCode?: string }> } } | null;
+  console.warn('[push] FCM rejected delivery', response.status, error?.error?.details?.map(item => item.errorCode).filter(Boolean).join(',') || 'unknown');
   return error?.error?.details?.some(item => item.errorCode === 'UNREGISTERED') ? 'expired' : 'failed';
 }
 
@@ -165,6 +166,7 @@ async function dispatchMessagePush(deps: Deps, message: RoomMessage & { hints?: 
     if (pushSuppressed(prefs.quiet, prefs.hiddenKinds, message.roomId, kind)) continue;
     const tokens = await deps.repo.listPushTokens(member.id);
     if (tokens.length === 0) continue;
+    const devices = deps.repo.listPushDevices ? await deps.repo.listPushDevices(member.id) : [];
     const title = groupName || senderName || 'ChatX';
     const body = groupName && senderName ? `${senderName}: ${textPreview}` : textPreview;
     const data = {
@@ -184,7 +186,7 @@ async function dispatchMessagePush(deps: Deps, message: RoomMessage & { hints?: 
         const notices = await deps.repo.listNotifications(member.id, 100, null);
         return notices.some(notice => notice.messageId === message.id && notice.roomId === message.roomId && !notice.read && !notice.deleted);
       };
-      void sendToken(env, token, title, body, data, stillAllowed).then(result => {
+      void sendToken(env, token, title, body, data, stillAllowed, devices.some(device => device.token === token && device.platform === 'android-data-v1')).then(result => {
         if (result === 'expired') return deps.repo.deletePushToken(member.id, token);
         if (result === 'failed') console.warn('[push] Delivery failed after bounded retries.');
       }).catch(() => { console.warn('[push] Delivery unavailable; inbox remains available.'); });

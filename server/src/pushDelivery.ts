@@ -14,7 +14,7 @@ export async function deliverPush(
     if (attempt === 2) return response ?? null;
     const value = response?.headers.get('retry-after');
     const seconds = value && /^\d+$/.test(value) ? Number(value) * 1000 : value ? Date.parse(value) - Date.now() : 0;
-    const backoff = response?.status === 429 ? 60_000 * 2 ** attempt : response?.status === 401 ? 0 : 10_000 * 2 ** attempt;
+    const backoff = response?.status === 429 ? 60_000 * 2 ** attempt : response?.status === 401 ? 0 : 1000 * 2 ** attempt;
     const pause = Math.max(backoff, Number.isFinite(seconds) ? seconds : 0);
     // A long server-directed pause is left to inbox recovery; do not retain jobs indefinitely.
     if (pause > 600_000) return response ?? null;

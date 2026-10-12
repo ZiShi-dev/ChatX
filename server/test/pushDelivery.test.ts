@@ -24,3 +24,8 @@ it('backs off quota failures for at least a minute and refreshes rejected authen
   await deliverPush(async () => { attempts++; return new Response('', { status: attempts === 1 ? 429 : attempts === 2 ? 401 : 200 }); }, async () => true, async ms => { pauses.push(ms); });
   assert.deepEqual(pauses, [60000, 0]);
 });
+it('recovers transient failures after one and two seconds, without increasing mobile polling', async () => {
+  const pauses: number[] = [];
+  await deliverPush(async () => new Response('', { status: 503 }), async () => true, async ms => { pauses.push(ms); });
+  assert.deepEqual(pauses, [1000, 2000]);
+});

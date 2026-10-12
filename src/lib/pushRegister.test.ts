@@ -38,6 +38,16 @@ vi.mock('./fcmEnabled', () => ({
 }));
 
 describe('pushRegister', () => {
+  it('preserves data-only titles and bodies for foreground banners', async () => {
+    await startPushRegistration('11111111-1111-4111-8111-111111111111');
+    const handler = vi.mocked(PushNotifications.addListener).mock.calls.find(call => String(call[0]) === 'pushNotificationReceived')![1] as (event: unknown) => void;
+    const received = vi.fn();
+    window.addEventListener('chatx-push-received', received);
+    try {
+      handler({ data: { title: 'Alice', body: 'Hello', messageId: 'message' } });
+      expect((received.mock.calls[0][0] as CustomEvent).detail).toMatchObject({ title: 'Alice', body: 'Hello' });
+    } finally { window.removeEventListener('chatx-push-received', received); }
+  });
   const originalTypes = useSettingsStore.getState().notifyTypes;
   afterEach(() => { resetPushRegistrationForTests(); vi.useRealTimers(); useSettingsStore.setState({ notifyTypes: originalTypes }); });
   beforeEach(() => {

@@ -901,6 +901,9 @@ export function createMemoryRepository(): AuthRepository {
     async listPushTokens(userId) {
       return [...pushTokens.values()].filter((item) => item.userId === userId).map((item) => item.token);
     },
+    async listPushDevices(userId) {
+      return [...pushTokens.values()].filter((item) => item.userId === userId).map(({ token, platform }) => ({ token, platform }));
+    },
     async savePushPrefs(userId, quiet, hiddenKinds) {
       pushPrefs.set(userId, { quiet, hiddenKinds });
     },

@@ -112,6 +112,7 @@ export interface AuthRepository {
   savePushToken(userId: string, token: string, platform: string): Promise<void>;
   deletePushToken(userId: string, token: string): Promise<void>;
   listPushTokens(userId: string): Promise<string[]>;
+  listPushDevices?(userId: string): Promise<Array<{ token: string; platform: string }>>;
   savePushPrefs(userId: string, quiet: string, hiddenKinds: string): Promise<void>;
   readPushPrefs(userId: string): Promise<{ quiet: string; hiddenKinds: string }>;
   claimTurnNotice(roomId: string, holderId: string): Promise<boolean>;
