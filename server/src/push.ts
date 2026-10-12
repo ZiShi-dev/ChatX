@@ -28,6 +28,8 @@ function base64Url(input: string | Buffer) {
   return Buffer.from(input).toString('base64url');
 }
 
+export function hasPushConfiguration() { return pushEnv() !== null; }
+
 export async function pushConfigured() {
   const env = pushEnv();
   if (!env) return false;
