@@ -1,11 +1,11 @@
 {
   "web": null,
   "native": {
-    "versionCode": 9,
+    "versionCode": 10,
     "versionName": "1.1",
-    "sha256": "4e6eb2de882a54f0263759dba83166dce2b38035b6c15dddb8c60c8fc2dd9295",
-    "signature": "L+zVgtbm8FewFYyRde2UfnNP6JnDeJl4oRGL9+iaZOexEb/cUJowyfwSO/V9Hn4XF4MH2MkaTnX74l2U0ZX3FN9RcMr560wFVOKVg0kj71/yl89SW4iU9lgfnJ8N/EEXWzaeAmm4Ddldw1VJcl+XVemGbiWlWaK+5sIxYj9PUYJ3ueU9ZHqyqMqHuptknv0NozE7CEmEt3XDIk/t4LtzkmsYsg4Ut7TpjK7P5eTomZe1qcIJ3JEmetvudbarpt486tgBuBY1tayqGB3fMj6TyxRAivAxrGykioXbH3cLxz20mxmOC5MgWahXMqJFIfT/L1tdRjmV/O/+StRIAcyevg==",
-    "path": "/app/releases/apk/n9-4e6eb2de882a.apk",
-    "manifestSignature": "hEH5+pLgoB+hGJ0fT46lmHLt8VNlSSjLWEmgmzhjNCyS4NYrlG9DU6C/qNHGwse1fjfhShyUIT4VSs6eHPzvQdpO5PkmTJpG0E6u3tjloaf9OrffLrOZL78ng1OJX4M9n/y2Ze2FwAJs6Fef9VH3Alu0yyxlMC0epIDhrj7G0YLOmSSzOgyseyR+lpMjiMY290Qj0vkJgtfTL2fRkTFufZfbMYSw3cJzqxHznvv3xczZ4i5gH0OwvnY/353/SyjKcXoTwhGVwVWuTSaYUC3HT9+D+zqRjXe0wyEtMDNasHX7lFABz2E8j8Gv6j0wntJpZDC6Pz1r5xLoBkxB72J0Rg=="
+    "sha256": "7f15c7fbe666ef76ad20102ae4967021f1693ca8048cc9e460752f5264a74cbe",
+    "signature": "YL9TU6QAmlndbAFvrCZMAEldrsThn0rmpLmcw2xlrOakVE89HwQvgVIDDxdUH2exo1CJ6Re6XORKZEECCWn7r6OICURQk+qmGNMkfJeeefEek21oZJaI+ZIWvVX7e2robruyKtx8Js9KmGXMohCv+RbZthQbDFzpzLqvfb/GIQ5Aga8ItyszcpzZzUHgwu7wkc6KPuBuDARzQYcxWELBU5WYZZtv6DCQAg1k5w60/PN1oHLx+Fw3GbdjxMKzX6qtOZqiGLWaKuLmhXxo8ilHGBcXMRJI6Ai/8eX6OL4XwSfrHqFQ6qpddtpSvyWoF8MhdWAHwfN9SpIh92+JwHCPQA==",
+    "path": "/app/releases/apk/n10-7f15c7fbe666.apk",
+    "manifestSignature": "ggh+6wx1KnQvkW+5TI/WA3PT/D/4wHZxC1GnKC2aXqqELCHbkWVS4tsBtPsHFoc1UM8ZV7GB8Ok8Z7Z8Lft85qe5WBMdzP/nJLWHO+NP6c/h1RLNgHZDan3fHDMqUK1UBGBePIomj2383iiQCeD59XrI0Tev8ifzUfAonQjYR9oN+PyugGS961TJ5fxMX/Ht3EoHsYlDr5b7opaU9ue+kWxTiPTO3H5WOmG8vUdVqzi0jYFyYZBVj6q1BSObNcDkndSMPX83fDn2ieZHXVh3K8HMZIIo7wt3Nni32FIwimPiOkCPU6aRSDJq31oS+5/8N5lkbY61vtWpk7zHWpH53w=="
   }
 }

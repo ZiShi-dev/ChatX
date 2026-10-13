@@ -2788,6 +2788,7 @@ button.chat-avatar {
 }
 
 .composer-input {
+  box-sizing: border-box;
   flex: 1;
   align-self: flex-end;
   min-width: 0;
@@ -2805,7 +2806,6 @@ button.chat-avatar {
   font: inherit;
   font-size: 16px;
   line-height: 22px;
-  transition: height 180ms ease;
 }
 
 .composer-input::placeholder {

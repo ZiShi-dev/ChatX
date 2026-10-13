@@ -6,7 +6,7 @@ import './MentionGesture.css';
 import { memo, useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type SyntheticEvent } from 'react';
 import { mediaBubbleWidth } from '../../lib/mediaBubbleLayout';
 import { chatNavigationSlot, resolveMessageActionsHost } from '../../lib/messageActionsHost';
-import { createPortal } from 'react-dom';
+import { createPortal, flushSync } from 'react-dom';
 import { IonIcon } from '@ionic/react';
 import { alertCircleOutline, arrowUndoOutline, arrowUpOutline, atOutline, banOutline, bookmark, bookmarkOutline, checkmarkDoneOutline, checkmarkOutline, closeOutline, copyOutline, createOutline, documentOutline, downloadOutline, informationCircleOutline, peopleOutline, play, timeOutline, trashOutline } from 'ionicons/icons';
 import Avatar from '../common/Avatar';
@@ -560,7 +560,14 @@ function MessageBubble({ message, mine, showAuthor, showAvatar = showAuthor, res
               <IonIcon icon={arrowUndoOutline} />
             </button>
             {canEdit && (
-              <button type="button" role="menuitem" onClick={() => { setMenuOpen(false); beginEdit(message.id); }}>
+              <button type="button" role="menuitem" onClick={() => {
+                flushSync(() => { setMenuOpen(false); beginEdit(message.id); });
+                if (useChatStore.getState().editingId !== message.id) return;
+                const field = stackRef.current?.closest('ion-page')?.querySelector<HTMLTextAreaElement>('.composer-input');
+                field?.focus({ preventScroll: true });
+                field?.setSelectionRange(field.value.length, field.value.length);
+                if (field && Capacitor.getPlatform() === 'android') void Keyboard.show().catch(() => undefined);
+              }}>
                 <span>تعديل</span>
                 <IonIcon icon={createOutline} />
               </button>
@@ -788,6 +795,8 @@ function MessageBubble({ message, mine, showAuthor, showAvatar = showAuthor, res
         if (!drag.current.locked) clearHold();
       }}
       onClickCapture={(event) => {
+        // Portal actions are not the trailing click of a bubble long press.
+        if (!event.currentTarget.contains(event.target as Node)) return;
         if (!suppressClick.current) return;
         event.preventDefault();
         event.stopPropagation();

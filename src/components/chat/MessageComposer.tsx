@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { FilePicker } from '@capawesome/capacitor-file-picker';
 import { Camera } from '@capacitor/camera';
 import { Capacitor } from '@capacitor/core';
@@ -220,24 +220,35 @@ export default function MessageComposer({ conversationId, talk = 'open' }: Messa
     };
   }, [conversationId, currentUserId, writing]);
 
-  const resizeField = () => {
+  const resizeField = useCallback(() => {
     const field = fieldRef.current;
     if (!field) return;
-    const previous = field.offsetHeight;
-    field.style.transition = 'none';
     field.style.height = 'auto';
     const next = Math.min(Math.max(field.scrollHeight, 44), 120);
-    field.style.height = `${previous}px`;
-    if (Math.abs(previous - next) < 2) {
-      field.style.height = `${next}px`;
-      field.style.transition = '';
-      return;
-    }
-    window.requestAnimationFrame(() => {
-      field.style.transition = '';
-      field.style.height = `${next}px`;
+    field.style.height = `${next}px`;
+  }, []);
+
+  useLayoutEffect(resizeField, [draft, resizeField]);
+
+  useLayoutEffect(() => {
+    const field = fieldRef.current;
+    if (!field) return;
+    let width = field.getBoundingClientRect().width;
+    const observer = new ResizeObserver(() => {
+      const next = field.getBoundingClientRect().width;
+      if (next === width) return;
+      width = next;
+      resizeField();
     });
-  };
+    observer.observe(field);
+    window.addEventListener('resize', resizeField);
+    window.visualViewport?.addEventListener('resize', resizeField);
+    return () => {
+      observer.disconnect();
+      window.removeEventListener('resize', resizeField);
+      window.visualViewport?.removeEventListener('resize', resizeField);
+    };
+  }, [resizeField]);
 
   useEffect(() => {
     const key = `${currentUserId}:${conversationId}`;
@@ -254,7 +265,7 @@ export default function MessageComposer({ conversationId, talk = 'open' }: Messa
 
   useEffect(() => { setAttachments([]); setSavingEdit(false); }, [conversationId, currentUserId]);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (!editing) return;
     setDraft(editing.text ?? '');
     attachmentsRef.current.forEach((item) => {
@@ -263,7 +274,7 @@ export default function MessageComposer({ conversationId, talk = 'open' }: Messa
     setAttachments([]);
     setMenuOpen(false);
     setEmojiOpen(false);
-    window.requestAnimationFrame(resizeField);
+    setCursor(editing.text.length);
   }, [editing?.id]);
 
   useEffect(() => {
@@ -864,7 +875,7 @@ export default function MessageComposer({ conversationId, talk = 'open' }: Messa
                 }
               }}
             />
-            {talk === 'open' && <button
+            {talk === 'open' && !editing && <button
               type="button"
               className={menuOpen ? 'composer-icon open' : 'composer-icon'}
               aria-label={menuOpen ? 'إغلاق' : 'مرفق'}
