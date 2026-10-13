@@ -150,7 +150,12 @@ function MediaBlock({ message, onSize }: { message: Message; onSize: (size: { wi
           type="button"
           className="media-open"
           aria-label={ready ? (message.type === 'video' ? 'تشغيل' : 'عرض') : 'تحميل'}
-          onClick={() => (ready ? setOpen(true) : downloadMedia(message.id))}
+          onClick={() => {
+            if (!ready) { downloadMedia(message.id); return; }
+            window.dispatchEvent(new Event('chatx-message-selection'));
+            useChatStore.getState().closeReactionKeyboard();
+            setOpen(true);
+          }}
         >
           {playable ? <video className="media-preview" src={poster} muted playsInline preload="metadata" onLoadedData={layout} style={ratio ? { aspectRatio: ratio } : undefined} /> : poster ? (
             <img className={ready ? 'media-preview' : 'media-preview is-held'} src={poster} alt="" decoding="async" loading="lazy" onLoad={layout} style={ratio ? { aspectRatio: ratio } : undefined} />
