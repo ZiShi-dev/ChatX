@@ -51,6 +51,23 @@ export default function MessageReactionFloater({ anchorRef, mineEmojis, keyboard
     const maxCenter = window.innerWidth - margin - floatW / 2;
     if (maxCenter > minCenter) center = Math.min(maxCenter, Math.max(minCenter, center));
     else center = window.innerWidth / 2;
+    // The navigation overflow menu extends beyond the header's viewport bounds.
+    // Keep the usual bubble placement unless the two popups actually overlap.
+    const scope = page ?? document;
+    for (const menu of scope.querySelectorAll<HTMLElement>('.message-selection-more')) {
+      const menuRect = menu.getBoundingClientRect();
+      if (!menuRect.width || !menuRect.height) continue;
+      const overlapsHorizontally = center + floatW / 2 > menuRect.left && center - floatW / 2 < menuRect.right;
+      if (!overlapsHorizontally || top >= menuRect.bottom + gap || top + floatH <= menuRect.top - gap) continue;
+      const belowMenu = menuRect.bottom + gap;
+      if (belowMenu + floatH <= maxBottom) {
+        top = belowMenu;
+        flip = true;
+      } else if (menuRect.top - gap - floatH >= minTop) {
+        top = menuRect.top - gap - floatH;
+        flip = false;
+      }
+    }
     setBox({ top, left: center, flip });
   }, [anchorRef]);
 
@@ -68,6 +85,9 @@ export default function MessageReactionFloater({ anchorRef, mineEmojis, keyboard
       el.addEventListener('scroll', onMove, { passive: true });
     });
     const observer = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(onMove) : null;
+    const menuObserver = new MutationObserver(onMove);
+    const navigation = page?.querySelector('.message-actions-host') ?? document.querySelector('.message-selection');
+    if (navigation) menuObserver.observe(navigation, { childList: true, subtree: true });
     if (observer) {
       if (anchor) observer.observe(anchor);
       if (root.current) observer.observe(root.current);
@@ -78,6 +98,7 @@ export default function MessageReactionFloater({ anchorRef, mineEmojis, keyboard
       window.removeEventListener('resize', onMove);
       window.removeEventListener('scroll', onMove, true);
       observer?.disconnect();
+      menuObserver.disconnect();
       scroller?.removeEventListener('scroll', onMove);
     };
   }, [anchorRef, place]);

@@ -2738,10 +2738,6 @@ button.chat-avatar {
   overflow: visible;
 }
 
-.profile-pop .sheet-photo .avatar {
-  box-shadow: 0 0 0 3px var(--chatx-raised), 0 0 0 4px var(--chatx-accent);
-}
-
 .profile-pop .sheet-photo .photo-badge {
   width: 26px;
   height: 26px;
@@ -3698,7 +3694,6 @@ ion-page > ion-content.group-profile-scroll {
 }
 
 .profile-hero {
-  --profile-ring: var(--chatx-bg);
   position: relative;
   display: flex;
   flex-direction: column;
@@ -3796,11 +3791,6 @@ ion-page > ion-content.group-profile-scroll {
   align-self: flex-start;
   margin-top: -48px;
   margin-inline-start: 16px;
-}
-
-.profile-hero .avatar,
-.profile-hero .avatar-frame {
-  box-shadow: 0 0 0 6px var(--profile-ring);
 }
 
 .profile-hero h1,
@@ -3979,7 +3969,6 @@ ion-page > ion-content.group-profile-scroll {
 }
 
 .member-sheet.app-sheet {
-  --profile-ring: var(--chatx-raised);
   padding-inline: 0;
 }
 
@@ -5346,7 +5335,6 @@ ion-toolbar.network-toolbar.setup {
 
 .profile-pop .user-card-banner + .avatar {
   margin-top: -42px;
-  box-shadow: 0 0 0 4px var(--chatx-frame);
 }
 
 .profile-pop h2 {
