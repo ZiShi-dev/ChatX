@@ -3,7 +3,6 @@ import { Capacitor } from '@capacitor/core';
 import { getApiOrigin } from '../../lib/apiOrigin';
 import { apkCanonical, readCatalog, signatureMatches, installNativeRelease } from '../../lib/appRelease';
 
-const repository = 'https://github.com/ZiShi-dev/ChatX';
 export default function ApkUpdateCard() {
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
@@ -36,7 +35,6 @@ export default function ApkUpdateCard() {
         <strong>آخر إصدار من ChatX</strong>
         <p>تحقق من الإصدار المتاح على خادم ChatX، ثم أكد تثبيت التحديث على أندرويد. لا يلزم حذف التطبيق.</p>
         <button type="button" className="storage-clear" disabled={busy} onClick={() => void download()}>{busy ? 'جارٍ التحقق والتنزيل' : 'التحقق من تحديث التطبيق'}</button>
-        <a href={repository} target="_blank" rel="noopener noreferrer">الكود المصدري · مستودع خاص</a>
         {error ? <p className="form-error" role="alert">{error}</p> : null}
       </article>
     </section>
