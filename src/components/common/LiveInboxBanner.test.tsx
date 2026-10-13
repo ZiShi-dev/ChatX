@@ -47,13 +47,15 @@ it('respects disabled types and room mute without replaying disabled notificatio
   render(<MemoryRouter><LiveInboxBanner /></MemoryRouter>);
   expect(screen.queryByRole('status')).toBeNull(); expect(useLiveInbox.getState().notices).toHaveLength(0);
 });
-it('shows every queued alert in arrival order, including more than three alerts', async () => {
+it('groups a burst into one conversation alert with the latest content', async () => {
   vi.useFakeTimers();
   for (let i = 0; i < 5; i++) {
     useChatStore.setState({ serverInbox: [inboxRow(`${i}`)] });
     useLiveInbox.getState().push({ ...notice, key: `${i}`, messageId: `${i}`, body: `Message ${i}` });
   }
   render(<MemoryRouter><LiveInboxBanner /></MemoryRouter>);
-  for (let i = 0; i < 5; i++) { expect(screen.getByRole('status')).toHaveTextContent(`Message ${i}`); fireEvent.click(screen.getByRole('button', { name: 'إخفاء الإشعار' })); }
+  expect(screen.getByRole('status')).toHaveTextContent('Message 4');
+  expect(screen.getByRole('status')).toHaveTextContent('5 رسائل');
+  fireEvent.click(screen.getByRole('button', { name: 'إخفاء الإشعار' }));
   expect(screen.queryByRole('status')).toBeNull();
 });

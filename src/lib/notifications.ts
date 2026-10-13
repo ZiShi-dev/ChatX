@@ -112,7 +112,7 @@ export async function notifyChatMessage(input: {
     await LocalNotifications.schedule({
       notifications: [
         {
-          id: Math.floor(Math.random() * 2_000_000_000) + 1,
+          id: [...input.conversationId].reduce((hash, char) => (Math.imul(hash, 31) + char.charCodeAt(0)) | 0, 0) >>> 1 || 1,
           title: input.title,
           body: input.body,
           channelId: CHANNEL_ID,
@@ -131,12 +131,12 @@ export async function notifyChatMessage(input: {
   const registration = 'serviceWorker' in navigator ? await navigator.serviceWorker.getRegistration().catch(() => undefined) : undefined;
   if (blocked()) return;
   if (registration?.active) {
-    await registration.showNotification(input.title, { body: input.body, tag: input.tag || input.messageId || input.conversationId || 'chatx', data: { conversationId: input.conversationId, ...(input.messageId ? { messageId: input.messageId } : {}) } });
+    await registration.showNotification(input.title, { body: input.body, tag: input.tag || input.conversationId || 'chatx', data: { conversationId: input.conversationId, ...(input.messageId ? { messageId: input.messageId } : {}) } });
     return;
   }
   const notification = new Notification(input.title, {
     body: input.body,
-    tag: input.tag || input.messageId || input.conversationId || 'chatx',
+    tag: input.tag || input.conversationId || 'chatx',
   });
   if (!input.conversationId) return;
   notification.onclick = () => {

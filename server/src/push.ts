@@ -128,7 +128,7 @@ async function sendToken(env: PushEnv, token: string, title: string, body: strin
             title,
             body,
             channel_id: CHANNEL,
-            tag: data.messageId,
+            tag: data.conversationId,
             notification_priority: 'PRIORITY_HIGH',
             visibility: 'PUBLIC',
             default_sound: true,
@@ -194,7 +194,8 @@ async function dispatchMessagePush(deps: Deps, message: RoomMessage & { hints?: 
     if (tokens.length === 0) { pushLog('recipient_skipped', { ...recipient, reason: 'no_registered_device' }); continue; }
     pushLog('recipient_queued', { ...recipient, deviceCount: tokens.length });
     const devices = deps.repo.listPushDevices ? await deps.repo.listPushDevices(member.id) : [];
-    const title = groupName || senderName || 'ChatX';
+    const label = kind === 'mention' ? 'إشارة إليك' : kind === 'everyone' ? 'إشارة للجميع' : kind === 'reply' ? 'رد على رسالتك' : '';
+    const title = (groupName || senderName || 'ChatX') + (label ? ` · ${label}` : '');
     const body = groupName && senderName ? `${senderName}: ${textPreview}` : textPreview;
     const data = {
       conversationId: message.roomId,
@@ -204,6 +205,9 @@ async function dispatchMessagePush(deps: Deps, message: RoomMessage & { hints?: 
       createdAt: message.createdAt.toISOString(),
       senderName,
       conversationName: groupName,
+      preview: textPreview,
+      // Keep FCM below its 4 KB payload limit; never expose plaintext to the server.
+      ...(isSealed(message.text) && Buffer.byteLength(message.text, 'utf8') <= 2000 ? { sealed: message.text } : {}),
     };
     for (const token of tokens) {
       const stillAllowed = async () => {

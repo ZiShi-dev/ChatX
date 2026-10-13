@@ -17,7 +17,20 @@ public class ChatxMessagingService extends FirebaseMessagingService {
             String title = notification != null && notification.getTitle() != null ? notification.getTitle() : data.get("title");
             String body = notification != null && notification.getBody() != null ? notification.getBody() : data.get("body");
             String conversationId = data.get("conversationId");
-            BackgroundAlert.show(this, title, body, conversationId == null ? "" : conversationId, data.get("messageId"));
+            String roomId = conversationId == null ? "" : conversationId;
+            String messageId = data.get("messageId");
+            String sealed = data.get("sealed");
+            String preview = sealed == null ? null : InboxPoll.openSealed(this, roomId, messageId == null ? "" : messageId, sealed);
+            String sender = data.get("senderName");
+            if (preview != null && !preview.isEmpty()) {
+                preview = preview.replaceAll("\\s+", " ").trim();
+                if (preview.length() > 240) preview = preview.substring(0, 240) + "…";
+                body = sender == null || sender.isEmpty() ? preview : sender + ": " + preview;
+            }
+            String kind = data.get("kind");
+            String label = "mention".equals(kind) ? "إشارة إليك" : "everyone".equals(kind) ? "إشارة للجميع" : "reply".equals(kind) ? "رد على رسالتك" : "";
+            if (!label.isEmpty() && (title == null || !title.endsWith(label))) title = (title == null ? "ChatX" : title) + " · " + label;
+            BackgroundAlert.show(this, title, body, roomId, messageId, !label.isEmpty());
         }
         PushNotificationsPlugin.sendRemoteMessage(remoteMessage);
     }

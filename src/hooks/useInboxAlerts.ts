@@ -102,6 +102,7 @@ export function useInboxAlerts() {
           const roomLabel = item.conversationName?.trim();
           useLiveInbox.getState().push({
             key: inboxAlertKey(item),
+            createdAt: item.createdAt,
             conversationId: item.conversationId,
             conversationType: roomType,
             messageId: item.id,

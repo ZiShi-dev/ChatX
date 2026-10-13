@@ -36,9 +36,13 @@ export default function LiveInboxBanner() {
   }, [notices, dismiss, eligible]);
   useEffect(() => {
     if (!notice) return;
-    const timer = window.setTimeout(() => dismiss(notice.key), 6500);
+    const roomId = notice.conversationId;
+    const timer = window.setTimeout(() => {
+      const latest = useLiveInbox.getState().notices.find(item => item.conversationId === roomId);
+      if (latest) dismiss(latest.key);
+    }, 6500);
     return () => window.clearTimeout(timer);
-  }, [notice, dismiss]);
+  }, [notice?.conversationId, dismiss]);
   if (!notice) return null;
   const name = notice.senderName || notice.title;
   const message = notice.preview || notice.body;
@@ -48,7 +52,7 @@ export default function LiveInboxBanner() {
     <button className="live-inbox-open" type="button" onClick={() => { dismiss(notice.key); openNotificationChat(navigate, chatDeepLink(notice.conversationId, notice.messageId, notice.kind === 'reaction' ? 'reaction' : undefined)); }}>
       <Avatar name={name} color={notice.color || 'var(--chatx-accent)'} size={40} src={notice.avatarUrl} animate={false} />
       <span role="status" className="live-inbox-copy">
-        <strong dir="auto">{name}</strong>
+        <strong dir="auto">{name}{(notice.count ?? 1) > 1 ? <small> · {notice.count} رسائل</small> : null}</strong>
         <span className="live-inbox-message" dir="auto"><EmojiText text={message} /></span>
         {notice.context ? <span className="live-inbox-context">{presentation ? <><span dir={presentation.ltr ? 'ltr' : 'auto'}>{presentation.label}</span><span aria-hidden="true"> · </span></> : null}<span dir="auto">{notice.context}</span></span> : null}
       </span>

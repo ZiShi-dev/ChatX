@@ -64,7 +64,7 @@ it('sends real FCM notification payloads, shares OAuth and removes unregistered 
   assert.equal(payloads.length, 2);
   assert.equal(payloads[0]!.message.android.priority, 'HIGH');
   assert.equal(payloads[0]!.message.android.ttl, '86400s');
-  assert.equal(payloads[0]!.message.android.notification.tag, 'message-id');
+  assert.equal(payloads[0]!.message.android.notification.tag, 'private-room');
   assert.equal(payloads[0]!.message.android.notification.channel_id, 'chatx-messages');
   assert.deepEqual(removed, ['expired-device']);
   dataOnly = true;

@@ -1,6 +1,8 @@
 import { create } from 'zustand';
 import type { InboxKind } from './inbox';
 export type LiveInboxNotice = {
+  count?: number;
+  createdAt?: string;
   key: string;
   kind?: InboxKind;
   conversationType?: 'private' | 'group' | 'global';
@@ -17,7 +19,22 @@ export type LiveInboxNotice = {
 const dismissed = new Set<string>();
 export const useLiveInbox = create<{ notices: LiveInboxNotice[]; push: (notice: LiveInboxNotice) => void; dismiss: (key: string) => void; clear: () => void }>(set => ({
   notices: [],
-  push: notice => { if (!dismissed.has(notice.key)) set(state => ({ notices: [...state.notices.filter(item => item.key !== notice.key), notice].slice(-100) })); },
+  push: notice => {
+    if (dismissed.has(notice.key)) return;
+    set(state => {
+      const previous = state.notices.find(item => item.conversationId === notice.conversationId);
+      const older = previous?.createdAt && notice.createdAt && Date.parse(notice.createdAt) < Date.parse(previous.createdAt);
+      if (previous && previous.key !== notice.key) {
+        dismissed.add(older ? notice.key : previous.key);
+        while (dismissed.size > 300) dismissed.delete(dismissed.values().next().value!);
+      }
+      const grouped = { ...(older ? previous : notice), count: previous ? (previous.count ?? 1) + (previous.key === notice.key ? 0 : 1) : 1 };
+      const notices = state.notices.filter(item => item.conversationId !== notice.conversationId);
+      const index = previous ? state.notices.indexOf(previous) : notices.length;
+      notices.splice(index, 0, grouped);
+      return { notices: notices.slice(-20) };
+    });
+  },
   dismiss: key => { dismissed.add(key); while (dismissed.size > 300) dismissed.delete(dismissed.values().next().value!); set(state => ({ notices: state.notices.filter(item => item.key !== key) })); },
   clear: () => { dismissed.clear(); set({ notices: [] }); },
 }));

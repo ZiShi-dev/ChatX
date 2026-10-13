@@ -1,15 +1,9 @@
 package app.chatx.mobile;
 
-import android.app.Notification;
-import android.graphics.Bitmap;
-import android.app.NotificationChannel;
 import android.app.NotificationManager;
 import androidx.core.app.NotificationManagerCompat;
-import android.app.PendingIntent;
 import android.content.Context;
-import android.content.Intent;
 import android.content.SharedPreferences;
-import android.os.Build;
 import android.webkit.CookieManager;
 import java.io.ByteArrayOutputStream;
 import java.io.InputStream;
@@ -27,7 +21,6 @@ import org.json.JSONArray;
 import org.json.JSONObject;
 
 final class InboxPoll {
-    private static final String CHANNEL = "chatx-messages";
     private static final int MAX_ALERTS = 3;
     private static final Pattern SEALED = Pattern.compile("^e2e1\\.([0-9a-f-]{36})\\.([A-Za-z0-9_-]{16})\\.([A-Za-z0-9_-]{22,16340})$");
     private static String validatedScope = "";
@@ -65,6 +58,7 @@ final class InboxPoll {
             if (rows == null) return;
             Set<String> already = InboxWatch.seen(prefs);
             Set<String> seen = new HashSet<>(already);
+            Set<String> alertedRooms = new HashSet<>();
             int shown = 0;
             for (int index = 0; index < rows.length() && InboxLifecycle.current(lease); index += 1) {
                 JSONObject row = rows.optJSONObject(index);
@@ -79,7 +73,9 @@ final class InboxPoll {
                     continue;
                 }
                 if (shown >= MAX_ALERTS) { validatedEtag = ""; continue; }
+                if (alertedRooms.contains(conversationId)) { seen.add(id); continue; }
                 if (!show(context, row, lease)) continue;
+                alertedRooms.add(conversationId);
                 seen.add(id);
                 shown += 1;
             }
@@ -96,51 +92,17 @@ final class InboxPoll {
     private static boolean show(Context context, JSONObject row, long lease) {
         NotificationManager manager = (NotificationManager) context.getSystemService(Context.NOTIFICATION_SERVICE);
         if (manager == null || !InboxLifecycle.current(lease)) return false;
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            NotificationChannel channel = new NotificationChannel(CHANNEL, "الرسائل", NotificationManager.IMPORTANCE_HIGH);
-            channel.setLockscreenVisibility(Notification.VISIBILITY_PUBLIC);
-            channel.enableVibration(true);
-            manager.createNotificationChannel(channel);
-        }
         String conversationId = row.optString("conversationId");
         String messageId = row.optString("id");
-        Intent open = new Intent(context, MainActivity.class);
-        open.putExtra("chatxConversation", conversationId);
-        open.putExtra("chatxMessage", messageId);
-        open.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_SINGLE_TOP);
-        PendingIntent pending = PendingIntent.getActivity(
-            context,
-            messageId.hashCode(),
-            open,
-            PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE
-        );
         String group = row.optString("conversationName", "").trim();
         String sender = row.optString("senderName", "").trim();
         String content = content(context, row);
         String title = !group.isEmpty() ? group : (!sender.isEmpty() ? sender : "ChatX");
         String body = !group.isEmpty() && !sender.isEmpty() ? sender + ": " + content : content;
-        Notification.Builder builder = Build.VERSION.SDK_INT >= Build.VERSION_CODES.O
-            ? new Notification.Builder(context, CHANNEL)
-            : new Notification.Builder(context);
-        builder.setSmallIcon(R.mipmap.ic_launcher)
-            .setContentTitle(title)
-            .setContentText(body);
-        Bitmap photo = InboxWatch.avatar(context, conversationId);
-        if (photo != null) builder.setLargeIcon(photo);
-        builder
-            .setStyle(new Notification.BigTextStyle().bigText(body))
-            .setAutoCancel(true)
-            .setCategory(Notification.CATEGORY_MESSAGE)
-            .setContentIntent(pending)
-            .setVisibility(Notification.VISIBILITY_PUBLIC);
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) {
-            builder.setPriority(Notification.PRIORITY_HIGH);
-            builder.setDefaults(Notification.DEFAULT_ALL);
-        }
         synchronized (InboxLifecycle.LOCK) {
             synchronized (InboxWatch.class) {
                 if (!InboxLifecycle.current(lease) || InboxWatch.seen(InboxWatch.prefs(context)).contains(messageId)) return false;
-                manager.notify(messageId, messageId.hashCode(), builder.build());
+                BackgroundAlert.show(context, title, body, conversationId, messageId, !"message".equals(row.optString("kind")));
                 InboxWatch.markSeen(context, java.util.Collections.singleton(messageId));
             }
         }
@@ -155,7 +117,7 @@ final class InboxPoll {
         return text.substring(0, 80) + "…";
     }
 
-    private static String openSealed(Context context, String roomId, String messageId, String envelope) {
+    static String openSealed(Context context, String roomId, String messageId, String envelope) {
         Matcher match = SEALED.matcher(envelope);
         if (!match.matches()) return null;
         byte[] key = InboxWatch.roomKey(context, roomId, match.group(1));
