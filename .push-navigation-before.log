@@ -1,0 +1,44 @@
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - import "./scripts/offlineShell" without a file extension (vite.config.ts:1:30). Add the file extension
+  - import "./scripts/legacyCsp" without a file extension (vite.config.ts:2:27). Add the file extension
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v4.1.11 C:/projet/chatX
+
+ ❯ src/hooks/useFcmPush.test.tsx (4 tests | 1 failed) 31ms
+   × keeps Firebase registered when navigating between chats and the home page 17ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/hooks/useFcmPush.test.tsx > keeps Firebase registered when navigating between chats and the home page
+AssertionError: expected "vi.fn()" to not be called at all, but actually been called 2 times
+
+Received:
+
+  1st vi.fn() call:
+
+    Array []
+
+  2nd vi.fn() call:
+
+    Array []
+
+
+Number of calls: 2
+
+ ❯ src/hooks/useFcmPush.test.tsx:35:36
+     33|   act(() => result.current('/chat/one'));
+     34|   act(() => result.current('/home'));
+     35|   expect(stopPushRegistration).not.toHaveBeenCalled();
+       |                                    ^
+     36|   expect(startPushRegistration).toHaveBeenCalledOnce();
+     37| });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 3 passed (4)
+   Start at  15:45:21
+   Duration  2.89s (transform 437ms, setup 200ms, import 1.98s, tests 31ms, environment 499ms)
+

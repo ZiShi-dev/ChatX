@@ -1,4 +1,4 @@
-import { Fragment, memo, useEffect, useMemo, useState } from 'react';
+import { Fragment, memo, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { IonButton } from '@ionic/react';
 import { CHAT_VISIBLE_WINDOW, MESSAGE_PAGE_SIZE } from '../../constants/chat';
 import { formatMessageDay, unreadDividerLabel, unreadOnScreen, unreadStart } from '../../lib/conversation';
@@ -44,6 +44,10 @@ type MessageListProps = {
 function MessageList({ messages, limit, showAuthor, group = false, direct = false, conversationId, memberIds, users, currentUserId, unreadCount = 0, resumeBack = 0, spotlightId = '', filtered = false, hasMore = false, onOpenProfile, onLoadOlder }: MessageListProps) {
   const [loadingOlder, setLoadingOlder] = useState(false);
   const [back, setBack] = useState(resumeBack);
+  const previousMessages = useRef<{ room: string; ids: Set<string> } | null>(null);
+  useLayoutEffect(() => {
+    previousMessages.current = { room: conversationId, ids: new Set(messages.map(message => message.id)) };
+  }, [conversationId, messages]);
   const cursor = useChatStore((state) => state.readCursors[conversationId] ?? EMPTY_CURSOR);
   const readAt = useChatStore((state) => state.readTimes[conversationId] ?? EMPTY_CURSOR);
   const tail = useMemo(() => messages.slice(-Math.max(limit, MESSAGE_PAGE_SIZE)), [limit, messages]);
@@ -129,6 +133,7 @@ function MessageList({ messages, limit, showAuthor, group = false, direct = fals
               <EventMessage message={message} spotlight={message.id === spotlightId} />
             ) : (
             <MessageBubble
+              animateArrival={Boolean(previousMessages.current?.room === conversationId && !previousMessages.current.ids.has(message.id) && Date.now() - Date.parse(message.createdAt) >= 0 && Date.now() - Date.parse(message.createdAt) < 10_000)}
               message={message}
               mine={message.senderId === currentUserId}
               showAuthor={showAuthor && !continued}

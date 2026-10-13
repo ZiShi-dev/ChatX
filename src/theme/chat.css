@@ -1868,13 +1868,13 @@ ion-content.chat-scroll::part(scroll) {
 }
 
 @media (prefers-reduced-motion: no-preference) {
-  .bubble-stack.mine.is-new .swipe-shift {
-    animation: send-bubble 200ms ease-out;
+  .bubble-stack.is-new .bubble-row {
+    animation: send-bubble 160ms cubic-bezier(0.2, 0, 0, 1);
   }
 }
 
 @keyframes send-bubble {
-  from { opacity: 0; transform: translateY(8px); }
+  from { opacity: 0.65; transform: translateY(4px); }
   to { opacity: 1; transform: none; }
 }
 

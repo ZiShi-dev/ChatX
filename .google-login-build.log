@@ -1,0 +1,483 @@
+
+> chatx@0.0.1 apk:build
+> node scripts/build-apk.mjs
+
+
+> chatx@0.0.1 build
+> tsc && vite build
+
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - import "./scripts/offlineShell" without a file extension (vite.config.ts:1:30). Add the file extension
+  - import "./scripts/legacyCsp" without a file extension (vite.config.ts:2:27). Add the file extension
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+vite v8.3.3 building client environment for production...
+transforming...
+✓ 399 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/assets/p-ZjP4CjeZ-legacy-ClCrdaHU.js           0.17 kB │ gzip:   0.13 kB
+dist/assets/appReleasePlugin-legacy-dIB5tEa-.js     0.26 kB │ gzip:   0.21 kB
+dist/assets/esm-legacy-BFQrTWBq.js                  0.32 kB │ gzip:   0.24 kB
+dist/assets/preload-helper-legacy-Cz4LJ9k0.js       0.36 kB │ gzip:   0.26 kB
+dist/assets/esm-legacy-B0op3bpo.js                  0.38 kB │ gzip:   0.28 kB
+dist/assets/p-DD92Fw3n-legacy-C1o01PTI.js           0.59 kB │ gzip:   0.38 kB
+dist/assets/p-BMPN55of-legacy-D0AOxKae.js           0.64 kB │ gzip:   0.40 kB
+dist/assets/p-BVNUhOOf-legacy-BTKE7kTX.js           0.72 kB │ gzip:   0.49 kB
+dist/assets/rolldown-runtime-legacy-D-7HM2mt.js     0.80 kB │ gzip:   0.46 kB
+dist/assets/web-legacy-B8-DCJRZ.js                  0.93 kB │ gzip:   0.44 kB
+dist/assets/AccountTabs-legacy-BqEPl8Zp.js          0.97 kB │ gzip:   0.47 kB
+dist/assets/p-BmVRXR1y-legacy-CduuyTAj.js           1.00 kB │ gzip:   0.49 kB
+dist/assets/p-Uk13YgEc-legacy-CGeqjLj2.js           1.04 kB │ gzip:   0.55 kB
+dist/assets/p-V1THdfzs-legacy-BNwulXKh.js           1.12 kB │ gzip:   0.58 kB
+dist/assets/p-D7-vHX0A-legacy-DHeuzxiK.js           1.33 kB │ gzip:   0.69 kB
+dist/assets/p-CohRJRIu-legacy-DHPg1Dm4.js           1.41 kB │ gzip:   0.79 kB
+dist/assets/p-C1AxSUnp-legacy-DPPSGU1b.js           1.67 kB │ gzip:   0.84 kB
+dist/assets/web-legacy-BcDMOPDI.js                  1.70 kB │ gzip:   0.38 kB
+dist/assets/AccountPage-legacy-C75zRYI7.js          2.39 kB │ gzip:   1.18 kB
+dist/assets/DirectMediaPage-legacy-G1H4PHqO.js      2.69 kB │ gzip:   1.20 kB
+dist/assets/MediaLibrary-legacy-DqnbKcyA.js         3.24 kB │ gzip:   1.28 kB
+dist/assets/p-B4IBdPVJ-legacy-BPoMjaL3.js           3.51 kB │ gzip:   1.62 kB
+dist/assets/GroupMembersPage-legacy-CN7clGAu.js     3.55 kB │ gzip:   1.76 kB
+dist/assets/SavedPage-legacy-CdsksHIN.js            4.04 kB │ gzip:   1.91 kB
+dist/assets/NewChatPage-legacy-B9wUnVBX.js          4.23 kB │ gzip:   1.81 kB
+dist/assets/web-legacy-DY-nu4Gu.js                  4.60 kB │ gzip:   1.37 kB
+dist/assets/p-YNnH1_Hs-legacy-dkGsXNSV.js           4.86 kB │ gzip:   2.10 kB
+dist/assets/p-D0YpjgON-legacy-CUZtOzAW.js           5.73 kB │ gzip:   2.25 kB
+dist/assets/NotificationsPage-legacy-CaqcU9VO.js    7.52 kB │ gzip:   3.35 kB
+dist/assets/dist-legacy-C3HXyiH7.js                 8.10 kB │ gzip:   3.23 kB
+dist/assets/p-C7r5Gja6-legacy-CA047ViH.js           9.17 kB │ gzip:   3.70 kB
+dist/assets/p-Dvyv9SMk-legacy-5_EoeamO.js          10.19 kB │ gzip:   2.89 kB
+dist/assets/GroupProfilePage-legacy-Ci9y0MuR.js    14.59 kB │ gzip:   4.63 kB
+dist/assets/PeopleAdminPage-legacy-BA7Te0dX.js     16.11 kB │ gzip:   5.36 kB
+dist/assets/ProfilePage-legacy-DCRNA9F1.js         18.10 kB │ gzip:   5.46 kB
+dist/assets/SettingsPage-legacy-JRdfTtvk.js        18.44 kB │ gzip:   5.53 kB
+dist/assets/p-Ct2aBEue-legacy-DZumog0H.js          37.87 kB │ gzip:  14.43 kB
+dist/assets/polyfills-legacy-CVvKyxaz.js           76.77 kB │ gzip:  27.44 kB
+dist/assets/PageNav-legacy-DkyhNjFC.js            606.80 kB │ gzip: 159.06 kB
+dist/assets/index-legacy-cSyTnKHP.js              738.44 kB │ gzip: 177.59 kB
+
+[plugin builtin:vite-reporter] 
+(!) Some chunks are larger than 500 kB after minification. Consider:
+- Using dynamic import() to code-split the application
+- Use build.rolldownOptions.output.codeSplitting to improve chunking: https://rolldown.rs/reference/OutputOptions.codeSplitting
+- Adjust chunk size limit for this warning via build.chunkSizeWarningLimit.
+transforming...
+✓ 399 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/assets/compat-check.js                  0.07 kB
+dist/assets/compat-600f5cb0fcd0bcde.js       0.09 kB
+dist/index.html                              4.30 kB │ gzip:   1.64 kB
+dist/sw.js                                   5.28 kB
+dist/assets/SavedPage-Cd6P27E_.css           0.36 kB │ gzip:   0.25 kB
+dist/assets/index-C5qc1VzF.css             244.78 kB │ gzip:  32.42 kB
+dist/assets/p-ZjP4CjeZ-DJ1DGIsW.js           0.09 kB │ gzip:   0.09 kB
+dist/assets/appReleasePlugin-DFVpRGys.js     0.17 kB │ gzip:   0.16 kB
+dist/assets/esm-40d7ZgbB.js                  0.35 kB │ gzip:   0.24 kB
+dist/assets/esm-DJFLr9LF.js                  0.41 kB │ gzip:   0.28 kB
+dist/assets/p-DD92Fw3n-iQMlmsjY.js           0.49 kB │ gzip:   0.33 kB
+dist/assets/p-BMPN55of-BkAdVZyy.js           0.54 kB │ gzip:   0.36 kB
+dist/assets/p-BVNUhOOf-BhUWDyY5.js           0.62 kB │ gzip:   0.44 kB
+dist/assets/rolldown-runtime-hePW80VL.js     0.71 kB │ gzip:   0.42 kB
+dist/assets/web-HUlUQfOS.js                  0.84 kB │ gzip:   0.40 kB
+dist/assets/AccountTabs-BQbRPSJY.js          0.87 kB │ gzip:   0.42 kB
+dist/assets/p-BmVRXR1y-tEpWjZ2F.js           0.92 kB │ gzip:   0.45 kB
+dist/assets/p-Uk13YgEc-Ck5ujQpz.js           0.93 kB │ gzip:   0.50 kB
+dist/assets/p-V1THdfzs-vu26kukG.js           1.02 kB │ gzip:   0.54 kB
+dist/assets/p-D7-vHX0A-CzdOqDBR.js           1.19 kB │ gzip:   0.62 kB
+dist/assets/p-CohRJRIu-_gAfnwnC.js           1.29 kB │ gzip:   0.75 kB
+dist/assets/preload-helper-DjzSQ1t3.js       1.38 kB │ gzip:   0.75 kB
+dist/assets/p-C1AxSUnp-Wesvthlw.js           1.57 kB │ gzip:   0.79 kB
+dist/assets/web-DrZXv9KT.js                  1.61 kB │ gzip:   0.33 kB
+dist/assets/AccountPage-Bk8o9pzA.js          2.22 kB │ gzip:   1.11 kB
+dist/assets/DirectMediaPage-BNAn9d5J.js      2.56 kB │ gzip:   1.11 kB
+dist/assets/MediaLibrary-BsmNP2T-.js         3.13 kB │ gzip:   1.21 kB
+dist/assets/GroupMembersPage-B0C90ma5.js     3.40 kB │ gzip:   1.66 kB
+dist/assets/p-B4IBdPVJ-DdFtOzPi.js           3.43 kB │ gzip:   1.62 kB
+dist/assets/SavedPage-B3l0HR7O.js            3.44 kB │ gzip:   1.55 kB
+dist/assets/NewChatPage-DnID7SIz.js          4.09 kB │ gzip:   1.71 kB
+dist/assets/web-DrpoZsNI.js                  4.43 kB │ gzip:   1.28 kB
+dist/assets/p-YNnH1_Hs-B8XE8jaG.js           4.73 kB │ gzip:   2.06 kB
+dist/assets/p-D0YpjgON-37vsBefj.js           5.62 kB │ gzip:   2.21 kB
+dist/assets/NotificationsPage-DI39Dwd3.js    7.35 kB │ gzip:   3.23 kB
+dist/assets/dist-MYExSxS2.js                 7.78 kB │ gzip:   3.11 kB
+dist/assets/p-C7r5Gja6-CVQZLO-6.js           9.28 kB │ gzip:   3.74 kB
+dist/assets/p-Dvyv9SMk-DMAAj1Cm.js          10.09 kB │ gzip:   2.82 kB
+dist/assets/GroupProfilePage-B2dW1paY.js    14.41 kB │ gzip:   4.50 kB
+dist/assets/PeopleAdminPage-BF2zVTDE.js     15.96 kB │ gzip:   5.24 kB
+dist/assets/ProfilePage-RzP5GlSf.js         17.92 kB │ gzip:   5.34 kB
+dist/assets/SettingsPage-DgA73A2i.js        18.49 kB │ gzip:   5.49 kB
+dist/assets/p-Ct2aBEue-DzSl16za.js          36.74 kB │ gzip:  13.94 kB
+dist/assets/index-Dtc1RLAB.js              490.77 kB │ gzip: 145.32 kB
+dist/assets/PageNav-DVqVex1k.js            583.45 kB │ gzip: 146.82 kB
+
+[plugin builtin:vite-reporter] 
+(!) Some chunks are larger than 500 kB after minification. Consider:
+- Using dynamic import() to code-split the application
+- Use build.rolldownOptions.output.codeSplitting to improve chunking: https://rolldown.rs/reference/OutputOptions.codeSplitting
+- Adjust chunk size limit for this warning via build.chunkSizeWarningLimit.
+✓ built in 9.22s
+[PLUGIN_TIMINGS] JavaScript callbacks ran for 8.7s of this 9.2s build (95%).
+The slowest callbacks, timed inside each callback (the wait before a callback starts is excluded, the time it awaits is included):
+  - plugin vite:legacy-post-process renderChunk (53%, 4.9s, 78 calls)
+  - plugin vite:prepare-out-dir renderStart (39%, 3.6s, 2 calls)
+Additional callback time came from callbacks under 1s.
+See https://rolldown.rs/reference/InputOptions.checks#bundlertimings for more details.
+
+√ Copying web assets from dist to android\app\src\main\assets\public in 2.76s
+√ Creating capacitor.config.json in android\app\src\main\assets in 982.70μs
+√ copy android in 2.80s
+√ Updating Android plugins in 5.55ms
+[info] Found 9 Capacitor plugins for android:
+       @capacitor/app@8.1.2
+       @capacitor/camera@8.2.5
+       @capacitor/haptics@8.0.2
+       @capacitor/keyboard@8.0.6
+       @capacitor/local-notifications@8.3.1
+       @capacitor/push-notifications@8.0.2
+       @capacitor/status-bar@8.0.4
+       @capawesome/capacitor-file-picker@8.1.0
+       @capawesome/capacitor-live-update@8.6.0
+√ update android in 118.82ms
+[info] Sync finished in 2.986s
+
+> Configure project :app
+WARNING: Using flatDir should be avoided because it doesn't support any meta-data formats.
+
+> Configure project :capacitor-cordova-android-plugins
+WARNING: Using flatDir should be avoided because it doesn't support any meta-data formats.
+
+> Task :app:preBuild UP-TO-DATE
+> Task :app:preDebugBuild UP-TO-DATE
+> Task :app:mergeDebugNativeDebugMetadata NO-SOURCE
+> Task :app:javaPreCompileDebug UP-TO-DATE
+> Task :capacitor-android:preBuild UP-TO-DATE
+> Task :capacitor-android:preDebugBuild UP-TO-DATE
+> Task :capacitor-android:writeDebugAarMetadata UP-TO-DATE
+> Task :capacitor-app:preBuild UP-TO-DATE
+> Task :capacitor-app:preDebugBuild UP-TO-DATE
+> Task :capacitor-app:writeDebugAarMetadata UP-TO-DATE
+> Task :capacitor-camera:preBuild UP-TO-DATE
+> Task :capacitor-camera:preDebugBuild UP-TO-DATE
+> Task :capacitor-camera:writeDebugAarMetadata UP-TO-DATE
+> Task :capacitor-cordova-android-plugins:preBuild UP-TO-DATE
+> Task :capacitor-cordova-android-plugins:preDebugBuild UP-TO-DATE
+> Task :capacitor-haptics:preBuild UP-TO-DATE
+> Task :capacitor-haptics:preDebugBuild UP-TO-DATE
+> Task :capacitor-haptics:writeDebugAarMetadata UP-TO-DATE
+> Task :capacitor-keyboard:preBuild UP-TO-DATE
+> Task :capacitor-keyboard:preDebugBuild UP-TO-DATE
+> Task :capacitor-keyboard:writeDebugAarMetadata UP-TO-DATE
+> Task :capacitor-local-notifications:preBuild UP-TO-DATE
+> Task :capacitor-local-notifications:preDebugBuild UP-TO-DATE
+> Task :capacitor-local-notifications:writeDebugAarMetadata UP-TO-DATE
+> Task :capacitor-push-notifications:preBuild UP-TO-DATE
+> Task :capacitor-push-notifications:preDebugBuild UP-TO-DATE
+> Task :capacitor-push-notifications:writeDebugAarMetadata UP-TO-DATE
+> Task :capacitor-cordova-android-plugins:writeDebugAarMetadata
+> Task :capacitor-status-bar:preBuild UP-TO-DATE
+> Task :capacitor-status-bar:preDebugBuild UP-TO-DATE
+> Task :capacitor-status-bar:writeDebugAarMetadata UP-TO-DATE
+> Task :capawesome-capacitor-file-picker:preBuild UP-TO-DATE
+> Task :capawesome-capacitor-file-picker:preDebugBuild UP-TO-DATE
+> Task :capawesome-capacitor-file-picker:writeDebugAarMetadata UP-TO-DATE
+> Task :capawesome-capacitor-live-update:preBuild UP-TO-DATE
+> Task :capawesome-capacitor-live-update:preDebugBuild UP-TO-DATE
+> Task :capawesome-capacitor-live-update:writeDebugAarMetadata UP-TO-DATE
+> Task :app:checkDebugAarMetadata UP-TO-DATE
+> Task :capacitor-android:processDebugNavigationResources UP-TO-DATE
+> Task :capacitor-app:processDebugNavigationResources UP-TO-DATE
+> Task :capacitor-camera:processDebugNavigationResources UP-TO-DATE
+> Task :capacitor-cordova-android-plugins:processDebugNavigationResources
+> Task :capacitor-haptics:processDebugNavigationResources UP-TO-DATE
+> Task :capacitor-keyboard:processDebugNavigationResources UP-TO-DATE
+> Task :capacitor-local-notifications:processDebugNavigationResources UP-TO-DATE
+> Task :capacitor-push-notifications:processDebugNavigationResources UP-TO-DATE
+> Task :capacitor-status-bar:processDebugNavigationResources UP-TO-DATE
+> Task :capawesome-capacitor-file-picker:processDebugNavigationResources UP-TO-DATE
+> Task :capawesome-capacitor-live-update:processDebugNavigationResources UP-TO-DATE
+> Task :app:processDebugNavigationResources UP-TO-DATE
+> Task :app:compileDebugNavigationResources UP-TO-DATE
+> Task :app:generateDebugResValues UP-TO-DATE
+> Task :app:processDebugGoogleServices UP-TO-DATE
+> Task :capacitor-android:generateDebugResValues UP-TO-DATE
+> Task :capacitor-android:generateDebugResources UP-TO-DATE
+> Task :capacitor-android:packageDebugResources UP-TO-DATE
+> Task :capacitor-app:generateDebugResValues UP-TO-DATE
+> Task :capacitor-app:generateDebugResources UP-TO-DATE
+> Task :capacitor-app:packageDebugResources UP-TO-DATE
+> Task :capacitor-camera:generateDebugResValues UP-TO-DATE
+> Task :capacitor-camera:generateDebugResources UP-TO-DATE
+> Task :capacitor-camera:packageDebugResources UP-TO-DATE
+> Task :capacitor-cordova-android-plugins:generateDebugResValues
+> Task :capacitor-cordova-android-plugins:generateDebugResources
+> Task :capacitor-cordova-android-plugins:packageDebugResources
+> Task :capacitor-haptics:generateDebugResValues UP-TO-DATE
+> Task :capacitor-haptics:generateDebugResources UP-TO-DATE
+> Task :capacitor-haptics:packageDebugResources UP-TO-DATE
+> Task :capacitor-keyboard:generateDebugResValues UP-TO-DATE
+> Task :capacitor-keyboard:generateDebugResources UP-TO-DATE
+> Task :capacitor-keyboard:packageDebugResources UP-TO-DATE
+> Task :capacitor-local-notifications:generateDebugResValues UP-TO-DATE
+> Task :capacitor-local-notifications:generateDebugResources UP-TO-DATE
+> Task :capacitor-local-notifications:packageDebugResources UP-TO-DATE
+> Task :capacitor-push-notifications:generateDebugResValues UP-TO-DATE
+> Task :capacitor-push-notifications:generateDebugResources UP-TO-DATE
+> Task :capacitor-push-notifications:packageDebugResources UP-TO-DATE
+> Task :capacitor-status-bar:generateDebugResValues UP-TO-DATE
+> Task :capacitor-status-bar:generateDebugResources UP-TO-DATE
+> Task :capacitor-status-bar:packageDebugResources UP-TO-DATE
+> Task :capawesome-capacitor-file-picker:generateDebugResValues UP-TO-DATE
+> Task :capawesome-capacitor-file-picker:generateDebugResources UP-TO-DATE
+> Task :capawesome-capacitor-file-picker:packageDebugResources UP-TO-DATE
+> Task :capawesome-capacitor-live-update:generateDebugResValues UP-TO-DATE
+> Task :capawesome-capacitor-live-update:generateDebugResources UP-TO-DATE
+> Task :capawesome-capacitor-live-update:packageDebugResources UP-TO-DATE
+> Task :app:mapDebugSourceSetPaths UP-TO-DATE
+> Task :app:generateDebugResources UP-TO-DATE
+> Task :app:mergeDebugResources UP-TO-DATE
+> Task :app:packageDebugResources UP-TO-DATE
+> Task :app:parseDebugLocalResources UP-TO-DATE
+> Task :app:createDebugCompatibleScreenManifests
+> Task :app:extractDeepLinksDebug UP-TO-DATE
+> Task :capacitor-android:extractDeepLinksDebug UP-TO-DATE
+> Task :capacitor-android:processDebugManifest UP-TO-DATE
+> Task :capacitor-app:extractDeepLinksDebug UP-TO-DATE
+> Task :capacitor-app:processDebugManifest UP-TO-DATE
+> Task :capacitor-camera:extractDeepLinksDebug UP-TO-DATE
+> Task :capacitor-camera:processDebugManifest UP-TO-DATE
+> Task :capacitor-cordova-android-plugins:extractDeepLinksDebug
+> Task :capacitor-haptics:extractDeepLinksDebug UP-TO-DATE
+> Task :capacitor-haptics:processDebugManifest UP-TO-DATE
+> Task :capacitor-keyboard:extractDeepLinksDebug UP-TO-DATE
+> Task :capacitor-keyboard:processDebugManifest UP-TO-DATE
+> Task :capacitor-local-notifications:extractDeepLinksDebug UP-TO-DATE
+> Task :capacitor-local-notifications:processDebugManifest UP-TO-DATE
+> Task :capacitor-push-notifications:extractDeepLinksDebug UP-TO-DATE
+> Task :capacitor-push-notifications:processDebugManifest UP-TO-DATE
+> Task :capacitor-status-bar:extractDeepLinksDebug UP-TO-DATE
+> Task :capacitor-status-bar:processDebugManifest UP-TO-DATE
+> Task :capawesome-capacitor-file-picker:extractDeepLinksDebug UP-TO-DATE
+> Task :capawesome-capacitor-file-picker:processDebugManifest UP-TO-DATE
+> Task :capawesome-capacitor-live-update:extractDeepLinksDebug UP-TO-DATE
+> Task :capawesome-capacitor-live-update:processDebugManifest UP-TO-DATE
+> Task :capacitor-cordova-android-plugins:processDebugManifest
+> Task :capacitor-android:compileDebugLibraryResources UP-TO-DATE
+> Task :app:processDebugMainManifest
+> Task :app:processDebugManifest
+> Task :capacitor-android:parseDebugLocalResources UP-TO-DATE
+> Task :capacitor-android:generateDebugRFile UP-TO-DATE
+> Task :capacitor-app:compileDebugLibraryResources UP-TO-DATE
+> Task :capacitor-app:parseDebugLocalResources UP-TO-DATE
+> Task :capacitor-app:generateDebugRFile UP-TO-DATE
+> Task :capacitor-camera:compileDebugLibraryResources UP-TO-DATE
+> Task :capacitor-camera:parseDebugLocalResources UP-TO-DATE
+> Task :capacitor-camera:generateDebugRFile UP-TO-DATE
+> Task :capacitor-cordova-android-plugins:compileDebugLibraryResources
+> Task :capacitor-haptics:compileDebugLibraryResources UP-TO-DATE
+> Task :capacitor-haptics:parseDebugLocalResources UP-TO-DATE
+> Task :capacitor-haptics:generateDebugRFile UP-TO-DATE
+> Task :capacitor-cordova-android-plugins:parseDebugLocalResources
+> Task :capacitor-keyboard:compileDebugLibraryResources UP-TO-DATE
+> Task :capacitor-keyboard:parseDebugLocalResources UP-TO-DATE
+> Task :capacitor-keyboard:generateDebugRFile UP-TO-DATE
+> Task :capacitor-local-notifications:compileDebugLibraryResources UP-TO-DATE
+> Task :capacitor-local-notifications:parseDebugLocalResources UP-TO-DATE
+> Task :capacitor-local-notifications:generateDebugRFile UP-TO-DATE
+> Task :capacitor-push-notifications:compileDebugLibraryResources UP-TO-DATE
+> Task :capacitor-push-notifications:parseDebugLocalResources UP-TO-DATE
+> Task :capacitor-push-notifications:generateDebugRFile UP-TO-DATE
+> Task :capacitor-status-bar:compileDebugLibraryResources UP-TO-DATE
+> Task :capacitor-status-bar:parseDebugLocalResources UP-TO-DATE
+> Task :capacitor-status-bar:generateDebugRFile UP-TO-DATE
+> Task :capawesome-capacitor-file-picker:compileDebugLibraryResources UP-TO-DATE
+> Task :capawesome-capacitor-file-picker:parseDebugLocalResources UP-TO-DATE
+> Task :capawesome-capacitor-file-picker:generateDebugRFile UP-TO-DATE
+> Task :capawesome-capacitor-live-update:compileDebugLibraryResources UP-TO-DATE
+> Task :capawesome-capacitor-live-update:parseDebugLocalResources UP-TO-DATE
+> Task :capawesome-capacitor-live-update:generateDebugRFile UP-TO-DATE
+> Task :capacitor-android:javaPreCompileDebug UP-TO-DATE
+> Task :capacitor-cordova-android-plugins:generateDebugRFile
+> Task :capacitor-android:compileDebugJavaWithJavac UP-TO-DATE
+> Task :capacitor-android:bundleLibCompileToJarDebug UP-TO-DATE
+> Task :capacitor-app:javaPreCompileDebug UP-TO-DATE
+> Task :capacitor-app:compileDebugJavaWithJavac UP-TO-DATE
+> Task :capacitor-app:bundleLibCompileToJarDebug UP-TO-DATE
+> Task :capacitor-camera:checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :capacitor-camera:compileDebugKotlin UP-TO-DATE
+> Task :capacitor-camera:javaPreCompileDebug UP-TO-DATE
+> Task :capacitor-camera:compileDebugJavaWithJavac UP-TO-DATE
+> Task :capacitor-camera:bundleLibCompileToJarDebug UP-TO-DATE
+> Task :capacitor-haptics:javaPreCompileDebug UP-TO-DATE
+> Task :capacitor-cordova-android-plugins:javaPreCompileDebug
+> Task :capacitor-cordova-android-plugins:compileDebugJavaWithJavac NO-SOURCE
+> Task :capacitor-cordova-android-plugins:bundleLibCompileToJarDebug
+> Task :capacitor-haptics:compileDebugJavaWithJavac UP-TO-DATE
+> Task :capacitor-haptics:bundleLibCompileToJarDebug UP-TO-DATE
+> Task :capacitor-keyboard:javaPreCompileDebug UP-TO-DATE
+> Task :capacitor-keyboard:compileDebugJavaWithJavac UP-TO-DATE
+> Task :capacitor-keyboard:bundleLibCompileToJarDebug UP-TO-DATE
+> Task :capacitor-local-notifications:checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :capacitor-local-notifications:compileDebugKotlin UP-TO-DATE
+> Task :capacitor-local-notifications:javaPreCompileDebug UP-TO-DATE
+> Task :capacitor-local-notifications:compileDebugJavaWithJavac NO-SOURCE
+> Task :capacitor-local-notifications:bundleLibCompileToJarDebug UP-TO-DATE
+> Task :capacitor-push-notifications:javaPreCompileDebug UP-TO-DATE
+> Task :capacitor-push-notifications:compileDebugJavaWithJavac UP-TO-DATE
+> Task :capacitor-push-notifications:bundleLibCompileToJarDebug UP-TO-DATE
+> Task :capacitor-status-bar:javaPreCompileDebug UP-TO-DATE
+> Task :capacitor-status-bar:compileDebugJavaWithJavac UP-TO-DATE
+> Task :capacitor-status-bar:bundleLibCompileToJarDebug UP-TO-DATE
+> Task :capawesome-capacitor-file-picker:javaPreCompileDebug UP-TO-DATE
+> Task :capawesome-capacitor-file-picker:compileDebugJavaWithJavac UP-TO-DATE
+> Task :capawesome-capacitor-file-picker:bundleLibCompileToJarDebug UP-TO-DATE
+> Task :capawesome-capacitor-live-update:javaPreCompileDebug UP-TO-DATE
+> Task :capawesome-capacitor-live-update:compileDebugJavaWithJavac UP-TO-DATE
+> Task :capawesome-capacitor-live-update:bundleLibCompileToJarDebug UP-TO-DATE
+> Task :app:mergeDebugShaders UP-TO-DATE
+> Task :app:compileDebugShaders NO-SOURCE
+> Task :app:generateDebugAssets UP-TO-DATE
+> Task :capacitor-android:mergeDebugShaders UP-TO-DATE
+> Task :capacitor-android:compileDebugShaders NO-SOURCE
+> Task :capacitor-android:generateDebugAssets UP-TO-DATE
+> Task :capacitor-android:mergeDebugAssets UP-TO-DATE
+> Task :capacitor-app:mergeDebugShaders UP-TO-DATE
+> Task :capacitor-app:compileDebugShaders NO-SOURCE
+> Task :capacitor-app:generateDebugAssets UP-TO-DATE
+> Task :capacitor-app:mergeDebugAssets UP-TO-DATE
+> Task :capacitor-camera:mergeDebugShaders UP-TO-DATE
+> Task :capacitor-camera:compileDebugShaders NO-SOURCE
+> Task :capacitor-camera:generateDebugAssets UP-TO-DATE
+> Task :capacitor-camera:mergeDebugAssets UP-TO-DATE
+> Task :capacitor-cordova-android-plugins:mergeDebugShaders
+> Task :capacitor-cordova-android-plugins:compileDebugShaders NO-SOURCE
+> Task :capacitor-cordova-android-plugins:generateDebugAssets UP-TO-DATE
+> Task :capacitor-cordova-android-plugins:mergeDebugAssets
+> Task :capacitor-haptics:mergeDebugShaders UP-TO-DATE
+> Task :capacitor-haptics:compileDebugShaders NO-SOURCE
+> Task :capacitor-haptics:generateDebugAssets UP-TO-DATE
+> Task :capacitor-haptics:mergeDebugAssets UP-TO-DATE
+> Task :capacitor-keyboard:mergeDebugShaders UP-TO-DATE
+> Task :capacitor-keyboard:compileDebugShaders NO-SOURCE
+> Task :capacitor-keyboard:generateDebugAssets UP-TO-DATE
+> Task :capacitor-keyboard:mergeDebugAssets UP-TO-DATE
+> Task :capacitor-local-notifications:mergeDebugShaders UP-TO-DATE
+> Task :capacitor-local-notifications:compileDebugShaders NO-SOURCE
+> Task :capacitor-local-notifications:generateDebugAssets UP-TO-DATE
+> Task :capacitor-local-notifications:mergeDebugAssets UP-TO-DATE
+> Task :capacitor-push-notifications:mergeDebugShaders UP-TO-DATE
+> Task :capacitor-push-notifications:compileDebugShaders NO-SOURCE
+> Task :capacitor-push-notifications:generateDebugAssets UP-TO-DATE
+> Task :capacitor-push-notifications:mergeDebugAssets UP-TO-DATE
+> Task :capacitor-status-bar:mergeDebugShaders UP-TO-DATE
+> Task :capacitor-status-bar:compileDebugShaders NO-SOURCE
+> Task :capacitor-status-bar:generateDebugAssets UP-TO-DATE
+> Task :capacitor-status-bar:mergeDebugAssets UP-TO-DATE
+> Task :capawesome-capacitor-file-picker:mergeDebugShaders UP-TO-DATE
+> Task :capawesome-capacitor-file-picker:compileDebugShaders NO-SOURCE
+> Task :capawesome-capacitor-file-picker:generateDebugAssets UP-TO-DATE
+> Task :capawesome-capacitor-file-picker:mergeDebugAssets UP-TO-DATE
+> Task :capawesome-capacitor-live-update:mergeDebugShaders UP-TO-DATE
+> Task :capawesome-capacitor-live-update:compileDebugShaders NO-SOURCE
+> Task :capawesome-capacitor-live-update:generateDebugAssets UP-TO-DATE
+> Task :capawesome-capacitor-live-update:mergeDebugAssets UP-TO-DATE
+> Task :app:mergeDebugAssets
+> Task :capacitor-app:bundleLibRuntimeToJarDebug UP-TO-DATE
+> Task :capacitor-camera:bundleLibRuntimeToJarDebug UP-TO-DATE
+> Task :capacitor-haptics:bundleLibRuntimeToJarDebug UP-TO-DATE
+> Task :capacitor-keyboard:bundleLibRuntimeToJarDebug UP-TO-DATE
+> Task :app:processDebugManifestForPackage
+> Task :capacitor-local-notifications:bundleLibRuntimeToJarDebug UP-TO-DATE
+> Task :capacitor-push-notifications:bundleLibRuntimeToJarDebug UP-TO-DATE
+> Task :capacitor-status-bar:bundleLibRuntimeToJarDebug UP-TO-DATE
+> Task :capawesome-capacitor-file-picker:bundleLibRuntimeToJarDebug UP-TO-DATE
+> Task :capawesome-capacitor-live-update:bundleLibRuntimeToJarDebug UP-TO-DATE
+> Task :capacitor-android:bundleLibRuntimeToJarDebug UP-TO-DATE
+> Task :app:desugarDebugFileDependencies UP-TO-DATE
+> Task :app:processDebugJavaRes NO-SOURCE
+> Task :capacitor-cordova-android-plugins:bundleLibRuntimeToJarDebug
+> Task :capacitor-android:processDebugJavaRes NO-SOURCE
+> Task :capacitor-app:processDebugJavaRes NO-SOURCE
+> Task :capacitor-camera:processDebugJavaRes UP-TO-DATE
+> Task :capacitor-cordova-android-plugins:processDebugJavaRes NO-SOURCE
+> Task :capacitor-haptics:processDebugJavaRes NO-SOURCE
+> Task :capacitor-keyboard:processDebugJavaRes NO-SOURCE
+> Task :capacitor-local-notifications:processDebugJavaRes UP-TO-DATE
+> Task :capacitor-push-notifications:processDebugJavaRes NO-SOURCE
+> Task :capacitor-status-bar:processDebugJavaRes NO-SOURCE
+> Task :capawesome-capacitor-file-picker:processDebugJavaRes NO-SOURCE
+> Task :capawesome-capacitor-live-update:processDebugJavaRes NO-SOURCE
+> Task :app:mergeDebugJavaResource UP-TO-DATE
+> Task :app:checkDebugDuplicateClasses UP-TO-DATE
+> Task :app:mergeExtDexDebug UP-TO-DATE
+> Task :capacitor-app:bundleLibRuntimeToDirDebug UP-TO-DATE
+> Task :capacitor-camera:bundleLibRuntimeToDirDebug UP-TO-DATE
+> Task :capacitor-haptics:bundleLibRuntimeToDirDebug UP-TO-DATE
+> Task :capacitor-keyboard:bundleLibRuntimeToDirDebug UP-TO-DATE
+> Task :capacitor-local-notifications:bundleLibRuntimeToDirDebug UP-TO-DATE
+> Task :capacitor-push-notifications:bundleLibRuntimeToDirDebug UP-TO-DATE
+> Task :capacitor-status-bar:bundleLibRuntimeToDirDebug UP-TO-DATE
+> Task :capawesome-capacitor-file-picker:bundleLibRuntimeToDirDebug UP-TO-DATE
+> Task :capawesome-capacitor-live-update:bundleLibRuntimeToDirDebug UP-TO-DATE
+> Task :capacitor-android:bundleLibRuntimeToDirDebug UP-TO-DATE
+> Task :app:mergeDebugJniLibFolders UP-TO-DATE
+> Task :capacitor-cordova-android-plugins:bundleLibRuntimeToDirDebug
+> Task :capacitor-android:mergeDebugJniLibFolders UP-TO-DATE
+> Task :capacitor-android:mergeDebugNativeLibs NO-SOURCE
+> Task :capacitor-android:copyDebugJniLibsProjectOnly UP-TO-DATE
+> Task :capacitor-app:mergeDebugJniLibFolders UP-TO-DATE
+> Task :capacitor-app:mergeDebugNativeLibs NO-SOURCE
+> Task :capacitor-app:copyDebugJniLibsProjectOnly UP-TO-DATE
+> Task :capacitor-camera:mergeDebugJniLibFolders UP-TO-DATE
+> Task :capacitor-camera:mergeDebugNativeLibs NO-SOURCE
+> Task :capacitor-camera:copyDebugJniLibsProjectOnly UP-TO-DATE
+> Task :capacitor-cordova-android-plugins:mergeDebugJniLibFolders
+> Task :capacitor-cordova-android-plugins:mergeDebugNativeLibs NO-SOURCE
+> Task :capacitor-cordova-android-plugins:copyDebugJniLibsProjectOnly
+> Task :capacitor-haptics:mergeDebugJniLibFolders UP-TO-DATE
+> Task :app:mergeLibDexDebug UP-TO-DATE
+> Task :capacitor-haptics:mergeDebugNativeLibs NO-SOURCE
+> Task :capacitor-haptics:copyDebugJniLibsProjectOnly UP-TO-DATE
+> Task :capacitor-keyboard:mergeDebugJniLibFolders UP-TO-DATE
+> Task :capacitor-keyboard:mergeDebugNativeLibs NO-SOURCE
+> Task :capacitor-keyboard:copyDebugJniLibsProjectOnly UP-TO-DATE
+> Task :capacitor-local-notifications:mergeDebugJniLibFolders UP-TO-DATE
+> Task :capacitor-local-notifications:mergeDebugNativeLibs NO-SOURCE
+> Task :capacitor-local-notifications:copyDebugJniLibsProjectOnly UP-TO-DATE
+> Task :capacitor-push-notifications:mergeDebugJniLibFolders UP-TO-DATE
+> Task :capacitor-push-notifications:mergeDebugNativeLibs NO-SOURCE
+> Task :capacitor-push-notifications:copyDebugJniLibsProjectOnly UP-TO-DATE
+> Task :capacitor-status-bar:mergeDebugJniLibFolders UP-TO-DATE
+> Task :capacitor-status-bar:mergeDebugNativeLibs NO-SOURCE
+> Task :capacitor-status-bar:copyDebugJniLibsProjectOnly UP-TO-DATE
+> Task :capawesome-capacitor-file-picker:mergeDebugJniLibFolders UP-TO-DATE
+> Task :capawesome-capacitor-file-picker:mergeDebugNativeLibs NO-SOURCE
+> Task :capawesome-capacitor-file-picker:copyDebugJniLibsProjectOnly UP-TO-DATE
+> Task :capawesome-capacitor-live-update:mergeDebugJniLibFolders UP-TO-DATE
+> Task :capawesome-capacitor-live-update:mergeDebugNativeLibs NO-SOURCE
+> Task :capawesome-capacitor-live-update:copyDebugJniLibsProjectOnly UP-TO-DATE
+> Task :app:mergeDebugNativeLibs UP-TO-DATE
+> Task :app:stripDebugDebugSymbols UP-TO-DATE
+> Task :app:validateSigningDebug UP-TO-DATE
+> Task :app:writeDebugAppMetadata UP-TO-DATE
+> Task :app:writeDebugSigningConfigVersions UP-TO-DATE
+> Task :app:compressDebugAssets
+> Task :app:processDebugResources
+
+> Task :app:compileDebugJavaWithJavac
+Note: Some input files use or override a deprecated API.
+Note: Recompile with -Xlint:deprecation for details.
+
+> Task :app:dexBuilderDebug
+> Task :app:mergeDebugGlobalSynthetics UP-TO-DATE
+> Task :app:mergeProjectDexDebug
+> Task :app:packageDebug
+> Task :app:createDebugApkListingFileRedirect
+> Task :app:assembleDebug
+
+[Incubating] Problems report is available at: file:///C:/projet/chatX/android/build/reports/problems/problems-report.html
+
+BUILD SUCCESSFUL in 14s
+248 actionable tasks: 30 executed, 218 up-to-date
+APK signé : n4-79ed02e65404.apk
+APK signé prêt dans releases/. Inclure app-version.json et releases/ dans le commit/push pour le déploiement VPS.

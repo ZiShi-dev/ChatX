@@ -1,0 +1,13 @@
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - import "./scripts/offlineShell" without a file extension (vite.config.ts:1:30). Add the file extension
+  - import "./scripts/legacyCsp" without a file extension (vite.config.ts:2:27). Add the file extension
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v4.1.11 C:/projet/chatX
+
+
+ Test Files  3 passed (3)
+      Tests  17 passed (17)
+   Start at  22:29:19
+   Duration  1.60s (transform 589ms, setup 478ms, import 1.97s, tests 388ms, environment 1.36s)
+

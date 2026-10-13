@@ -60,7 +60,7 @@ function bottomTop(scroller: HTMLElement) {
   return Math.max(0, scroller.scrollHeight - scroller.clientHeight);
 }
 
-function glideBottom(scroller: HTMLElement, ms = 260) {
+function glideBottom(scroller: HTMLElement, ms = 180) {
   const token = ++glideToken;
   const targetNow = bottomTop(scroller);
   if (stillMotion() || ms <= 0 || Math.abs(targetNow - scroller.scrollTop) < 2) {
@@ -92,7 +92,7 @@ function glideBottom(scroller: HTMLElement, ms = 260) {
 
 function beginSendGlide(scroller: HTMLElement, followMs = 700) {
   followSendUntil = performance.now() + followMs;
-  glideBottom(scroller, 280);
+  glideBottom(scroller, 180);
 }
 
 function sendFollow(scroller: HTMLElement) {
@@ -111,7 +111,7 @@ function stickThread(scroller: HTMLElement, following: { current: boolean }) {
     return;
   }
   if (glideUntil > performance.now()) return;
-  glideBottom(scroller, 220);
+  glideBottom(scroller, 180);
 }
 
 function noteSendScroll(scrollTop: number) {

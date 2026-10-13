@@ -1,0 +1,124 @@
+
+> chatx@0.0.1 test
+> vitest run && npm test --prefix server
+
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - import "./scripts/offlineShell" without a file extension (vite.config.ts:1:30). Add the file extension
+  - import "./scripts/legacyCsp" without a file extension (vite.config.ts:2:27). Add the file extension
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v4.1.11 C:/projet/chatX
+
+
+ Test Files  53 passed (53)
+      Tests  204 passed (204)
+   Start at  23:42:09
+   Duration  13.85s (transform 25.85s, setup 37.93s, import 44.45s, tests 5.49s, environment 118.17s)
+
+
+> test
+> node --test test/auth.test.ts test/google.test.ts test/profile.test.ts test/presence.test.ts test/home.test.ts test/inbox.test.ts test/rooms.test.ts test/images.test.ts test/files.test.ts test/groupTurn.test.ts test/reliability.test.ts test/transport.test.ts test/lowBandwidth.test.ts test/security.test.ts test/eraseMember.test.ts test/owner.test.ts test/linkPreview.test.ts test/e2e.test.ts
+
+▶ API without administration
+  ✔ starts without an owner account (1.2178ms)
+  ✔ keeps health and refuses administration and invite routes (50.5143ms)
+✔ API without administration (53.4098ms)
+▶ end-to-end keys
+  ✔ stores one identity per user and refuses silent replacement (65.1906ms)
+  ✔ lets members exchange wrapped room keys and blocks outsiders (27.072ms)
+  ✔ accepts sealed text with hints and hides it from notification previews (5.6686ms)
+  ✔ stores sealed media bytes without inspecting them (8.2363ms)
+  ✔ stores a short sealed video and refuses one past the size limit (3.873ms)
+✔ end-to-end keys (111.9254ms)
+▶ eraseMember
+  ✔ refuses when the Google operator account is absent (2.3705ms)
+  ✔ refuses to erase the operator account (0.4014ms)
+  ✔ erases another account and the rows tied to it (0.8583ms)
+  ✔ keeps an empty selection from touching the database (0.3015ms)
+  ✔ forces authored content when the account itself is removed (0.2009ms)
+  ✔ deletes only the selected rows and refuses the operator (1.1053ms)
+  ✔ deletes a group and refuses the main ChatX room (1.1002ms)
+✔ eraseMember (8.0849ms)
+▶ chat files
+  ✔ stores a file for the other member and keeps the bytes out of the thread (99.4107ms)
+✔ chat files (100.9354ms)
+▶ Google account claims
+  ✔ accepts a verified Google account and ignores an unsafe photo (3.5462ms)
+  ✔ rejects an unverified, expired, or foreign token (0.4581ms)
+✔ Google account claims (10.8463ms)
+▶ group turn
+  ✔ covers every member once per cycle without repeating the previous holder (1.9912ms)
+  ✔ catches up multiple idle weeks while preserving the weekly deadline (1.3731ms)
+  ✔ describes a name and photo change in one line (43.5028ms)
+  ✔ gives the turn to the others, in a random order, before it returns (0.5442ms)
+  ✔ keeps the same person when only the description changes (0.279ms)
+  ✔ lets the only member edit without waiting (0.2291ms)
+  ✔ keeps a change for seven days and waits for the others before the same person returns (74.1189ms)
+  ✔ gives ChatX the same turn as the other groups (14.463ms)
+✔ group turn (138.5263ms)
+▶ home
+  ✔ validates unchanged responses only after authorization and sends changed data normally (79.0284ms)
+  ✔ shows ChatX for a signed-in member and counts an unread message (26.3311ms)
+✔ home (107.0913ms)
+▶ chat images
+  ✔ stores a small jpeg for the other member and hides the bytes from the thread (96.4109ms)
+✔ chat images (97.9317ms)
+▶ inbox
+  ✔ creates a mention, an everyone notice, and a reply for the other member (109.2151ms)
+  ✔ stores a reaction, tells the author, and records who has seen the room (8.9791ms)
+  ✔ notifies only the other person and keeps a cursor for older notices (23.5805ms)
+  ✔ treats both words of a name as one mention (0.7742ms)
+✔ inbox (144.3708ms)
+✔ rejects local and private link targets (1.7548ms)
+✔ reads the title, description and image from a page (1.6751ms)
+✔ loads a card and keeps a small image (42.4736ms)
+✔ falls back to the public image URL when download fails (1.5516ms)
+✔ does not fetch a private address (0.4157ms)
+✔ synchronizes changes and resumes binary uploads without duplicate messages (127.3204ms)
+✔ negotiates JSON compression and respects excluded encodings (19.2657ms)
+▶ owner tools
+  ✔ shows the member list only to the Google operator (44.3046ms)
+  ✔ deletes only the chosen data and refuses the operator account (19.215ms)
+  ✔ deletes a chosen group and keeps the main ChatX room (8.0155ms)
+  ✔ rejects an unbound operator email, a request without the app header, and a fast repeat (3.0032ms)
+✔ owner tools (76.3453ms)
+▶ presence
+  ✔ treats a fresh heartbeat as connected and an old one as disconnected (3.0952ms)
+  ✔ requires the signed-in session and records who is connected (48.247ms)
+✔ presence (53.0555ms)
+▶ known account
+  ✔ opens the existing member and leaves a new address on the profile step (3.3469ms)
+✔ known account (4.8595ms)
+▶ profile
+  ✔ keeps a short bio and a jpeg banner (0.9003ms)
+  ✔ stores the bio and banner only for the signed-in account (50.8629ms)
+  ✔ stores message color and font for every member (3.8172ms)
+  ✔ persists optional profile cosmetics, removes them, and rejects unknown assets (5.149ms)
+✔ profile (61.1775ms)
+✔ keeps stable pagination, scoped access, monotonic reads and immutable deletion (23.5376ms)
+✔ persists weekly group rights and rotates only once under concurrent reads (4.2215ms)
+✔ notifies every group member once and keeps read status private (1.2673ms)
+✔ preserves newer notifications across delayed mark-all and clear operations (1.0255ms)
+﹣ verifies PostgreSQL migrations, cursor SQL and transaction rollback (0.1829ms) # SKIP
+▶ rooms
+  ✔ opens one private chat, a group, and a private saved list (67.2265ms)
+  ✔ drops a private chat only after the other account is gone (1.282ms)
+  ✔ tells the other member who is typing and stops when asked (6.8636ms)
+  ✔ opens one chat with oneself and keeps it apart from a deleted peer (2.8753ms)
+✔ rooms (80.0173ms)
+✔ allows native and configured origins, rejects foreign writes and production LAN origins (14.5361ms)
+✔ limits bursts with Retry-After and accepts five users sharing the same connection (160.7498ms)
+✔ binds legacy accounts to stable Google subjects and refuses an identity collision (1.9982ms)
+✔ rejects malformed JPEGs and huge decoded dimensions (0.2986ms)
+✔ bounds failure tracking and discards expired entries (376.7706ms)
+✔ ignores spoofed proxy prefixes and sets finite HTTP resource limits (0.94ms)
+✔ runs five concurrent sessions and revokes access after logout (5.0618ms)
+✔ preserves conditional validation through the real HTTP header adapter (97.2895ms)
+ℹ tests 67
+ℹ suites 14
+ℹ pass 66
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 1
+ℹ todo 0
+ℹ duration_ms 1414.7834

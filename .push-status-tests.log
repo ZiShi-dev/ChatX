@@ -1,0 +1,28 @@
+▶ pushSuppressed
+  ✔ respects mute levels and hidden kinds (0.5582ms)
+✔ pushSuppressed (1.2713ms)
+✔ sends real FCM notification payloads, shares OAuth and removes unregistered devices (33.2977ms)
+✖ preserves conditional validation through the real HTTP header adapter (20.4471ms)
+ℹ tests 3
+ℹ suites 1
+ℹ pass 2
+ℹ fail 1
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 349.5066
+
+✖ failing tests:
+
+test at server\test\transport.test.ts:11:1
+✖ preserves conditional validation through the real HTTP header adapter (20.4471ms)
+  [TypeError: fetch failed] {
+    [cause]: Error: connect EACCES 127.0.0.1:64900
+        at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1706:16) {
+      errno: -4092,
+      code: 'EACCES',
+      syscall: 'connect',
+      address: '127.0.0.1',
+      port: 64900
+    }
+  }

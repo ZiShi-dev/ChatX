@@ -39,6 +39,7 @@ const NO_SEEN_USERS: User[] = [];
 const NO_RECEIPTS: ReceiptRow[] = [];
 
 type MessageBubbleProps = {
+  animateArrival?: boolean;
   message: Message;
   mine: boolean;
   showAuthor: boolean;
@@ -388,7 +389,7 @@ function PersonName({ user, onOpen }: { user: User; onOpen?: (user: User) => voi
   );
 }
 
-function MessageBubble({ message, mine, showAuthor, showAvatar = showAuthor, reserveAvatar = false, continued = false, group = false, direct = false, directSeen = false, groupSeen = false, seenHere = NO_SEEN_USERS, receiptRows = NO_RECEIPTS, author, spotlight = false, onOpenProfile }: MessageBubbleProps) {
+function MessageBubble({ message, mine, animateArrival = false, showAuthor, showAvatar = showAuthor, reserveAvatar = false, continued = false, group = false, direct = false, directSeen = false, groupSeen = false, seenHere = NO_SEEN_USERS, receiptRows = NO_RECEIPTS, author, spotlight = false, onOpenProfile }: MessageBubbleProps) {
   const currentUser = useAuthStore((state) => state.currentUser);
   const currentUserId = currentUser.id;
   const username = currentUser.username;
@@ -425,7 +426,7 @@ function MessageBubble({ message, mine, showAuthor, showAvatar = showAuthor, res
   const holdTimer = useRef<number | undefined>(undefined);
   const lastTap = useRef(0);
   const suppressClick = useRef(false);
-  const bornSending = useRef(mine && (message.status === 'pending' || message.status === 'sending'));
+  const bornSending = useRef(animateArrival);
   const stackRef = useRef<HTMLDivElement>(null);
   const shiftRef = useRef<HTMLDivElement>(null);
   const swipeIconRef = useRef<HTMLSpanElement>(null);

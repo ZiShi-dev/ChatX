@@ -1,0 +1,30 @@
+
+> chatx@0.0.1 lint
+> eslint
+
+
+C:\projet\chatX\src\components\chat\MediaLibrary.tsx
+  13:17  warning  Fast refresh only works when a file only exports components. Use a new file to share constants or functions between components  react-refresh/only-export-components
+
+C:\projet\chatX\src\components\chat\MediaViewer.tsx
+  62:5  warning  React Hook useEffect has missing dependencies: 'current', 'image', and 'playable'. Either include them or remove the dependency array     react-hooks/exhaustive-deps
+  65:5  warning  React Hook useEffect has a missing dependency: 'current'. Either include it or remove the dependency array                                react-hooks/exhaustive-deps
+  65:6  warning  React Hook useEffect has a complex expression in the dependency array. Extract it to a separate variable so it can be statically checked  react-hooks/exhaustive-deps
+  76:5  warning  React Hook useEffect has a missing dependency: 'move'. Either include it or remove the dependency array                                   react-hooks/exhaustive-deps
+
+C:\projet\chatX\src\components\chat\MessageComposer.tsx
+  244:6  warning  React Hook useEffect has a missing dependency: 'editing'. Either include it or remove the dependency array   react-hooks/exhaustive-deps
+  251:6  warning  React Hook useEffect has a missing dependency: 'replying'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+
+C:\projet\chatX\src\pages\ActivationPage.tsx
+  113:17  warning  The ref value 'googleRef.current' will likely have changed by the time this effect cleanup function runs. If this ref points to a node rendered by React, copy 'googleRef.current' to a variable inside the effect, and use that variable in the cleanup function  react-hooks/exhaustive-deps
+
+C:\projet\chatX\src\pages\ChatPage.tsx
+  389:50  warning  React Hook useEffect has a complex expression in the dependency array. Extract it to a separate variable so it can be statically checked  react-hooks/exhaustive-deps
+
+C:\projet\chatX\src\pages\GroupProfilePage.tsx
+  73:6  warning  React Hook useEffect has a missing dependency: 'loadTurn'. Either include it or remove the dependency array     react-hooks/exhaustive-deps
+  80:6  warning  React Hook useEffect has a missing dependency: 'refreshTurn'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+
+✖ 11 problems (0 errors, 11 warnings)
+
