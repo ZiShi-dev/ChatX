@@ -498,11 +498,10 @@ export default function MessageComposer({ conversationId, talk = 'open' }: Messa
           }
         }
       }
-      const quality = imageQuality === 'original' ? 90 : imageQuality === 'medium' ? 70 : 45;
+      const quality = imageQuality === 'hd' ? 100 : imageQuality === 'original' ? 90 : imageQuality === 'medium' ? 70 : 45;
       const photo = await Camera.takePhoto({
         quality,
-        targetWidth: imageQuality === 'saver' ? 640 : 960,
-        targetHeight: imageQuality === 'saver' ? 640 : 960,
+        ...(imageQuality === 'hd' ? {} : { targetWidth: imageQuality === 'saver' ? 640 : 960, targetHeight: imageQuality === 'saver' ? 640 : 960 }),
         saveToGallery: false,
         correctOrientation: true,
       });
@@ -647,7 +646,8 @@ export default function MessageComposer({ conversationId, talk = 'open' }: Messa
     if (text) sendMessage(conversationId, text);
     for (const item of queue) {
       if (item.kind === 'image') {
-        const source = item.displayUrl || item.previewUrl;
+        // The thumbnail is only for the attachment strip, never the upload source.
+        const source = item.previewUrl || item.displayUrl;
         let previewUrl = item.previewUrl;
         let fileSize = item.size;
         if (source) {
@@ -760,6 +760,7 @@ export default function MessageComposer({ conversationId, talk = 'open' }: Messa
                   { id: 'saver', label: 'توفير البيانات' },
                   { id: 'medium', label: 'متوسطة' },
                   { id: 'original', label: 'عالية' },
+                  { id: 'hd', label: 'HD · أفضل جودة' },
                 ]}
                 onChange={setImageQuality}
               />

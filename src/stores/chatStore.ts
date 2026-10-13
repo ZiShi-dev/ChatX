@@ -559,7 +559,7 @@ async function prepareAndSend(message: Message) {
   try {
     if (message.type === 'image' && !message.prepared) {
       const source = message.media?.localPreviewUrl;
-      const fitted = source ? await prepareMedia(() => fitChatImageFromSources(source, useSettingsStore.getState().imageQuality)) : null;
+      const fitted = source ? await prepareMedia(() => fitChatImageFromSources(source, message.media?.imageQuality ?? useSettingsStore.getState().imageQuality)) : null;
       if (!fitted || !message.media) throw new Error('invalid_image');
       patchMessage(message.id, { media: { ...message.media, localPreviewUrl: fitted.url, fileSize: fitted.bytes, width: fitted.width, height: fitted.height } });
       if (message.media.localPreviewUrl?.startsWith('blob:')) URL.revokeObjectURL(message.media.localPreviewUrl);
@@ -761,6 +761,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
       replyToId: takeReply(roomId),
       media: {
         fileName: picked?.fileName ?? 'photo.jpg',
+        imageQuality: quality,
         fileSize: Math.min(original, expectedImageSize(quality)),
         localPreviewUrl: picked?.previewUrl,
         width: 1200,

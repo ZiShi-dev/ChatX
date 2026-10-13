@@ -1,7 +1,8 @@
 import { Capacitor } from '@capacitor/core';
 import { yieldToInterface } from './deviceBudget';
-const IMAGE_URL_MAX = 80_000;
-const IMAGE_BYTES_MAX = 60_000;
+import type { ImageQuality } from '../types/settings';
+const IMAGE_BYTES_MAX = 2 * 1024 * 1024;
+const IMAGE_URL_MAX = Math.ceil(IMAGE_BYTES_MAX / 3) * 4 + 32;
 const JPEG_PREFIX = 'data:image/jpeg;base64,/9j/';
 
 export function jpegDataUrl(bytes: Uint8Array): string | null {
@@ -55,7 +56,7 @@ function imageSourceCandidates(source: string) {
   return candidates;
 }
 
-export async function fitChatImageFromSources(source: string, qualityLevel: 'saver' | 'medium' | 'original' = 'saver') {
+export async function fitChatImageFromSources(source: string, qualityLevel: ImageQuality = 'saver') {
   for (const candidate of imageSourceCandidates(source)) {
     const fitted = await fitChatImage(candidate, qualityLevel);
     if (fitted) return fitted;
@@ -63,17 +64,14 @@ export async function fitChatImageFromSources(source: string, qualityLevel: 'sav
   return null;
 }
 
-export async function fitChatImage(source: string, qualityLevel: 'saver' | 'medium' | 'original' = 'saver'): Promise<{ url: string; bytes: number; width: number; height: number } | null> {
-  const byteLimit = qualityLevel === 'saver' ? 20_000 : qualityLevel === 'medium' ? 40_000 : IMAGE_BYTES_MAX;
+export async function fitChatImage(source: string, qualityLevel: ImageQuality = 'saver'): Promise<{ url: string; bytes: number; width: number; height: number } | null> {
+  const byteLimit = qualityLevel === 'hd' ? IMAGE_BYTES_MAX : qualityLevel === 'saver' ? 20_000 : qualityLevel === 'medium' ? 40_000 : 60_000;
   const ready = readyJpeg(source);
-  if (ready && ready <= byteLimit) {
-    const image = await loadImage(source);
-    return { url: source, bytes: ready, width: image?.naturalWidth ?? 0, height: image?.naturalHeight ?? 0 };
-  }
   const image = await loadImage(source);
   if (!image || image.naturalWidth * image.naturalHeight > 24_000_000) return null;
-  let edge = qualityLevel === 'saver' ? 640 : qualityLevel === 'medium' ? 800 : 960;
-  let quality = qualityLevel === 'saver' ? 0.58 : qualityLevel === 'medium' ? 0.66 : 0.72;
+  if (ready && ready <= byteLimit && image.naturalWidth <= 4096 && image.naturalHeight <= 4096 && image.naturalWidth * image.naturalHeight <= 16_000_000) return { url: source, bytes: ready, width: image.naturalWidth, height: image.naturalHeight };
+  let edge = qualityLevel === 'hd' ? 4000 : qualityLevel === 'saver' ? 640 : qualityLevel === 'medium' ? 800 : 960;
+  let quality = qualityLevel === 'hd' ? 0.94 : qualityLevel === 'saver' ? 0.58 : qualityLevel === 'medium' ? 0.66 : 0.72;
   for (let attempt = 0; attempt < 6; attempt += 1) {
     await yieldToInterface();
     const drawn = drawJpeg(image, edge, quality);

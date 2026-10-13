@@ -1799,6 +1799,7 @@ ion-content.chat-scroll::part(scroll) {
 }
 
 .bubble-stack {
+  min-width: 0;
   position: relative;
   display: flex;
   flex-direction: column;
@@ -1853,6 +1854,7 @@ ion-content.chat-scroll::part(scroll) {
 }
 
 .swipe-shift {
+  min-width: 0;
   position: relative;
   z-index: 1;
   display: flex;
@@ -1912,6 +1914,7 @@ ion-content.chat-scroll::part(scroll) {
 }
 
 .bubble-row {
+  min-width: 0;
   display: flex;
   align-items: flex-end;
   gap: 6px;
@@ -1945,6 +1948,8 @@ ion-content.chat-scroll::part(scroll) {
 }
 
 .bubble {
+  min-width: 0;
+  box-sizing: border-box;
   position: relative;
   width: fit-content;
   max-width: 100%;
@@ -5066,6 +5071,8 @@ ion-toolbar.network-toolbar.setup {
 }
 
 .file-card {
+  max-width: 100%;
+  box-sizing: border-box;
   display: flex;
   align-items: center;
   gap: 10px;
@@ -5089,6 +5096,18 @@ ion-toolbar.network-toolbar.setup {
 .file-card strong,
 .file-card span {
   display: block;
+}
+
+.file-card > div {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.file-card strong {
+  white-space: normal;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .file-card span {

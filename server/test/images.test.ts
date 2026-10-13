@@ -96,10 +96,11 @@ describe('chat images', () => {
     }));
     const raw = await thread.text();
     assert.equal(raw.includes('/9j/'), false);
-    const body = JSON.parse(raw) as { messages: Array<{ type?: string; text: string; fileSize?: number }> };
-    assert.equal(body.messages[0]?.type, 'image');
-    assert.equal(body.messages[0]?.text, '');
-    assert.equal(body.messages[0]?.fileSize, jpeg.length);
+    const body = JSON.parse(raw) as { messages: Array<{ id: string; type?: string; text: string; fileSize?: number }> };
+    const photoMessage = body.messages.find(message => message.id === messageId);
+    assert.equal(photoMessage?.type, 'image');
+    assert.equal(photoMessage?.text, '');
+    assert.equal(photoMessage?.fileSize, jpeg.length);
 
     const picture = await handle(new Request(`http://127.0.0.1/api/rooms/${roomId}/messages/${messageId}/image`, {
       headers: { cookie: `chatx_session=${laylaToken}`, origin: 'https://localhost' },

@@ -16,6 +16,7 @@ const imageChoices: Array<{ value: ImageQuality; label: string; hint: string }> 
   { value: 'saver', label: 'صغيرة', hint: 'حتى 20 KB للصورة، مناسب لباقات الإنترنت الصغيرة.' },
   { value: 'medium', label: 'متوسطة', hint: 'توازن بين الوضوح والحجم، حتى 40 KB للصورة.' },
   { value: 'original', label: 'عالية', hint: 'وضوح أعلى، مع ضغط الصورة إلى 60 KB كحد أقصى.' },
+  { value: 'hd', label: 'HD', hint: 'أفضل جودة متاحة: حتى 2 MB و4096 بكسل، مع ضغط خفيف عند الحاجة. يستهلك بيانات أكثر.' },
 ];
 
 const videoChoices: Array<{ value: VideoQuality; label: string; hint: string }> = [

@@ -28,6 +28,7 @@ export function messagePreview(message?: Message, mine = false) {
 }
 
 export function expectedImageSize(quality: ImageQuality) {
+  if (quality === 'hd') return 2 * MB;
   if (quality === 'saver') return 20_000;
   if (quality === 'medium') return 40_000;
   return 60_000;

@@ -7,6 +7,7 @@ export type MediaState = 'remote' | 'downloading' | 'cached';
 export type LinkPreviewState = 'notLoaded' | 'loading' | 'loaded';
 
 export interface MessageMedia {
+  imageQuality?: import('./settings').ImageQuality;
   fileName?: string;
   fileSize: number;
   width?: number;

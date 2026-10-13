@@ -3,7 +3,7 @@ export const SEALED_PREFIX = 'e2e1.';
 export const SEALED_TEXT_MAX = 16_400;
 /** AES-GCM adds a 12-byte IV and a 16-byte tag to every sealed attachment. */
 export const SEALED_OVERHEAD = 28;
-export const IMAGE_BYTES_MAX = 60_000;
+export const IMAGE_BYTES_MAX = 2 * 1024 * 1024;
 export const FILE_BYTES_MAX = 262_144;
 /** Short clips only: a few users share one database, so a video cannot grow without a bound. */
 export const VIDEO_BYTES_MAX = 8 * 1024 * 1024;
