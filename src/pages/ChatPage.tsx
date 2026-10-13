@@ -26,6 +26,7 @@ import { resolveMessageFocus } from '../lib/inbox';
 import { scrollMessageForActions } from '../lib/messageFocusScroll';
 import { watchingRoom } from '../lib/liveInbox';
 import { observeComposerViewport } from '../lib/composerViewport';
+import { advancingScrollTop } from '../lib/chatScroll';
 import { dismissOverlayHistory, registerOverlayClose, useOverlayHistory } from '../lib/overlayBack';
 import '../components/chat/ComposerLayout.css';
 import { matchingMessages } from '../lib/messageSearch';
@@ -39,7 +40,11 @@ import { useUserStore } from '../stores/userStore';
 const NO_TYPING: string[] = [];
 
 function pinBottom(scroller: HTMLElement) {
+  // A keyboard/viewport correction supersedes an animation with an old origin.
+  glideToken += 1;
+  glideUntil = 0;
   scroller.scrollTop = scroller.scrollHeight;
+  glideTop = scroller.scrollTop;
 }
 
 let glideToken = 0;
@@ -70,9 +75,8 @@ function glideBottom(scroller: HTMLElement, ms = 260) {
   const step = (now: number) => {
     if (token !== glideToken) return;
     const t = Math.min(1, (now - start) / ms);
-    const ease = 1 - (1 - t) ** 3;
     const target = bottomTop(scroller);
-    const next = startTop + (target - startTop) * ease;
+    const next = advancingScrollTop(scroller.scrollTop, startTop, target, t);
     glideTop = next;
     scroller.scrollTop = next;
     if (t < 1) window.requestAnimationFrame(step);
