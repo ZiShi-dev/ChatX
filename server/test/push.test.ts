@@ -21,6 +21,13 @@ describe('pushSuppressed', () => {
 it('sends real FCM notification payloads, shares OAuth and removes unregistered devices', async (t) => {
   const saved = { ...process.env };
   const originalFetch = globalThis.fetch;
+  const originalLog = console.log;
+  const logs: Array<Record<string, unknown>> = [];
+  console.log = (...args: unknown[]) => {
+    if (args[0] === '[push]') logs.push(JSON.parse(String(args[1])));
+    else originalLog(...args);
+  };
+  t.after(() => { console.log = originalLog; });
   t.after(() => { globalThis.fetch = originalFetch; for (const name of ['FIREBASE_PROJECT_ID', 'FIREBASE_CLIENT_EMAIL', 'FIREBASE_PRIVATE_KEY']) { if (saved[name] === undefined) delete process.env[name]; else process.env[name] = saved[name]; } });
   process.env.FIREBASE_PROJECT_ID = 'synthetic-project';
   process.env.FIREBASE_CLIENT_EMAIL = 'synthetic@example.invalid';
@@ -69,4 +76,14 @@ it('sends real FCM notification payloads, shares OAuth and removes unregistered 
   assert.equal('collapse_key' in compatible.message.android, false);
   assert.equal(compatible.message.android.priority, 'HIGH');
   assert.equal(compatible.message.data.body, 'Second');
+  assert.ok(logs.some(log => log.event === 'message_triggered' && log.messageId === 'message-id'));
+  assert.ok(logs.some(log => log.event === 'fcm_accepted' && log.phoneDisplayConfirmed === false && log.httpStatus === 200));
+  assert.ok(logs.some(log => log.event === 'fcm_rejected' && log.errorCode === 'UNREGISTERED'));
+  assert.ok(logs.some(log => log.event === 'send_attempt' && log.payload === 'data'));
+  const serialized = JSON.stringify(logs);
+  for (const secret of ['valid-device', 'expired-device', 'synthetic-access', 'Hello', 'Second', 'BEGIN PRIVATE KEY']) assert.equal(serialized.includes(secret), false);
+  await sendMessagePush({ repo: { ...deps.repo, listPushTokens: async () => [] } } as unknown as Deps, { id: 'missing-device', roomId: 'private-room', senderId: 'sender', text: 'Secret message', createdAt: new Date(), deleted: false });
+  assert.ok(logs.some(log => log.event === 'recipient_skipped' && log.reason === 'no_registered_device'));
+  await sendMessagePush({ repo: { ...deps.repo, readPushPrefs: async () => ({ quiet: '', hiddenKinds: 'message' }) } } as unknown as Deps, { id: 'muted', roomId: 'private-room', senderId: 'sender', text: 'Secret message', createdAt: new Date(), deleted: false });
+  assert.ok(logs.some(log => log.event === 'recipient_skipped' && log.reason === 'muted_or_disabled'));
 });

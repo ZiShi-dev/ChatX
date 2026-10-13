@@ -28,13 +28,13 @@ function mount() {
   renderHook(useInboxAlerts);
   act(() => useChatStore.setState({ serverInbox: [item('history')] }));
 }
-it.each(['visible', 'hidden'])('keeps normal group messages in the inbox without a banner while %s', (visibility) => {
+it.each(['visible', 'hidden'])('alerts for normal group messages while %s', (visibility) => {
   vi.spyOn(document, 'visibilityState', 'get').mockReturnValue(visibility as DocumentVisibilityState);
   mount();
   const incoming = { ...item('ordinary-group'), conversationType: 'group' as const, unread: true, unreadCount: 1 };
   act(() => useChatStore.setState({ serverInbox: [incoming] }));
-  expect(notify).not.toHaveBeenCalled();
-  expect(useLiveInbox.getState().notices).toHaveLength(0);
+  if (visibility === 'hidden') expect(notify).toHaveBeenCalled();
+  else expect(useLiveInbox.getState().notices).toHaveLength(1);
   expect(useChatStore.getState().serverInbox[0].unread).toBe(true);
 });
 it.each(['reaction', 'signal'] as const)('keeps %s events in the inbox without background alerts', (kind) => {

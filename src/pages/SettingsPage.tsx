@@ -269,7 +269,7 @@ export default function SettingsPage({ embedded = false }: SettingsPageProps) {
         </section>
         <section className="settings-block">
           <h2>الإشعارات</h2>
-          <p className="settings-lead">تظهر اللافتات وإشعارات الهاتف للإشارات والردود والرسائل الخاصة فقط. رسائل المجموعات العادية والتفاعلات والأحداث تبقى في صفحة الإشعارات. عند قراءة الرسالة يزول التنبيه.</p>
+          <p className="settings-lead">تظهر اللافتات وإشعارات الهاتف للرسائل الخاصة ورسائل المجموعات والإشارات والردود، ما لم تكن المحادثة مكتومة. التفاعلات والأحداث تبقى في صفحة الإشعارات. عند قراءة الرسالة يزول التنبيه.</p>
           <NotificationPermissionCard />
           <PushConnectionCard />
           <div className="notify-types" role="group" aria-label="أنواع الإشعارات">
@@ -279,7 +279,7 @@ export default function SettingsPage({ embedded = false }: SettingsPageProps) {
                 <article key={kind} className="setting-card">
                   <div>
                     <strong dir={look.ltr ? 'ltr' : undefined}>{look.label}</strong>
-                    <p>{!notifyTypes[kind] ? 'التنبيه مكتوم، وتبقى الرسالة في الإشعارات' : kind === 'message' ? 'لافتات للرسائل الخاصة؛ رسائل المجموعات داخل التطبيق فقط' : kind === 'reaction' || kind === 'signal' ? 'داخل صفحة الإشعارات فقط، بدون لافتة أو تنبيه للهاتف' : 'لافتة داخل التطبيق وإشعار للهاتف في الخلفية'}</p>
+                    <p>{!notifyTypes[kind] ? 'التنبيه مكتوم، وتبقى الرسالة في الإشعارات' : kind === 'message' ? 'لافتات وإشعارات الهاتف للرسائل الخاصة ورسائل المجموعات' : kind === 'reaction' || kind === 'signal' ? 'داخل صفحة الإشعارات فقط، بدون لافتة أو تنبيه للهاتف' : 'لافتة داخل التطبيق وإشعار للهاتف في الخلفية'}</p>
                   </div>
                   <IonToggle
                     checked={notifyTypes[kind]}

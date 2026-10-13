@@ -58,9 +58,9 @@ function persistPrefs() {
   const lease = generation;
   const pending = (async () => {
     while (started && lease === generation) {
-      const body = JSON.stringify(pushPrefs());
+      const body = pushPrefs();
       await adminFetch('/api/push/prefs', { method: 'POST', body });
-      if (body === JSON.stringify(pushPrefs())) return;
+      if (JSON.stringify(body) === JSON.stringify(pushPrefs())) return;
     }
   })();
   prefsSyncing = pending;
@@ -80,7 +80,7 @@ function schedulePrefsRetry() {
 async function syncToken(value: string) {
   const lease = generation;
   const platform = Capacitor.getPlatform() === 'android' ? 'android-data-v1' : Capacitor.getPlatform();
-  const response = await adminFetch('/api/push/register', { method: 'POST', body: JSON.stringify({ token: value, platform }) }) as { pushEnabled?: boolean };
+  const response = await adminFetch('/api/push/register', { method: 'POST', body: { token: value, platform } }) as { pushEnabled?: boolean };
   if (!started || generation !== lease || candidate !== value) return;
   token = response.pushEnabled === true ? value : '';
   retryCount = 0;
@@ -228,7 +228,7 @@ export async function stopPushRegistration() {
   window.removeEventListener('online', syncPushPrefs);
   emitTokenChange();
   // Capture the old session before awaiting native listener removal or a new login.
-  const unregister = current ? adminFetch('/api/push/unregister', { method: 'POST', body: JSON.stringify({ token: current }) }) : Promise.resolve();
+  const unregister = current ? adminFetch('/api/push/unregister', { method: 'POST', body: { token: current } }) : Promise.resolve();
   await Promise.allSettled([
     ...handles.map(handle => handle.remove()),
     PushNotifications.removeAllDeliveredNotifications(),

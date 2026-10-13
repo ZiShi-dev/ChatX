@@ -5,6 +5,6 @@ final class InboxAlertPolicy {
     private InboxAlertPolicy() {}
     static boolean allows(String kind, String conversationType) {
         return "mention".equals(kind) || "everyone".equals(kind) || "reply".equals(kind)
-            || ("message".equals(kind) && "private".equals(conversationType));
+            || "message".equals(kind);
     }
 }

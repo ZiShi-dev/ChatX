@@ -4,6 +4,7 @@ import { noticeKind, SEALED_PREVIEW } from './inbox.ts';
 import { isSealed } from './sealed.ts';
 import type { InboxKind, RoomMessage } from './types.ts';
 import { deliverPush } from './pushDelivery.ts';
+import { pushDeviceId, pushLog } from './pushLog.ts';
 
 const CHANNEL = 'chatx-messages';
 const TOKEN_URL = 'https://oauth2.googleapis.com/token';
@@ -32,8 +33,12 @@ export function hasPushConfiguration() { return pushEnv() !== null; }
 
 export async function pushConfigured() {
   const env = pushEnv();
-  if (!env) return false;
-  try { return Boolean(await accessToken(env)); } catch { return false; }
+  if (!env) { pushLog('configuration_missing'); return false; }
+  try {
+    const ready = Boolean(await accessToken(env));
+    pushLog('configuration_checked', { ready });
+    return ready;
+  } catch { pushLog('authentication_failed', { reason: 'credentials_or_network' }); return false; }
 }
 
 async function accessToken(env: PushEnv) {
@@ -70,7 +75,7 @@ async function requestAccessToken(env: PushEnv) {
     headers: { 'content-type': 'application/x-www-form-urlencoded' },
     body: new URLSearchParams({ grant_type: 'urn:ietf:params:oauth:grant-type:jwt-bearer', assertion }),
   });
-  if (!response.ok) return null;
+  if (!response.ok) { pushLog('oauth_rejected', { httpStatus: response.status }); return null; }
   const payload = await response.json() as { access_token?: string; expires_in?: number };
   if (!payload.access_token) return null;
   cachedToken = payload.access_token;
@@ -101,7 +106,12 @@ export function pushSuppressed(quiet: string, hiddenKinds: string, conversationI
 }
 
 async function sendToken(env: PushEnv, token: string, title: string, body: string, data: Record<string, string>, stillAllowed: () => Promise<boolean>, dataOnly = false) {
+  const context = { messageId: data.messageId, conversationId: data.conversationId, kind: data.kind, deviceId: pushDeviceId(token), payload: dataOnly ? 'data' : 'notification' };
+  let attempt = 0;
   const response = await deliverPush(async () => {
+    attempt++;
+    pushLog('send_attempt', { ...context, attempt });
+    try {
     const auth = await accessToken(env);
     if (!auth) throw new Error('push_auth_unavailable');
     const result = await fetch(`https://fcm.googleapis.com/v1/projects/${env.projectId}/messages:send`, {
@@ -130,9 +140,21 @@ async function sendToken(env: PushEnv, token: string, title: string, body: strin
     }),
     });
     if (result.status === 401) { cachedToken = ''; tokenUntil = 0; }
+    const details = await result.clone().json().catch(() => null) as { error?: { status?: string; details?: Array<{ errorCode?: string }> }; name?: string } | null;
+    pushLog(result.ok ? 'fcm_accepted' : 'fcm_rejected', {
+      ...context, attempt, httpStatus: result.status,
+      fcmMessageName: result.ok ? details?.name : undefined,
+      errorCode: details?.error?.details?.map(item => item.errorCode).filter(Boolean).join(',') || details?.error?.status,
+      // Acceptance by Firebase is not an acknowledgement from the phone.
+      phoneDisplayConfirmed: false,
+    });
     return result;
+    } catch (error) {
+      pushLog('send_error', { ...context, attempt, reason: error instanceof Error && error.message === 'push_auth_unavailable' ? 'authentication_unavailable' : 'credentials_or_network' });
+      throw error;
+    }
   }, stillAllowed);
-  if (!response) return 'failed';
+  if (!response) { pushLog('delivery_stopped', context); return 'failed'; }
   if (response.ok) return 'sent';
   const error = await response.json().catch(() => null) as { error?: { details?: Array<{ errorCode?: string }> } } | null;
   console.warn('[push] FCM rejected delivery', response.status, error?.error?.details?.map(item => item.errorCode).filter(Boolean).join(',') || 'unknown');
@@ -141,13 +163,16 @@ async function sendToken(env: PushEnv, token: string, title: string, body: strin
 
 export async function sendMessagePush(deps: Deps, message: RoomMessage & { hints?: import('./sealed.ts').NoticeHints }) {
   try { await dispatchMessagePush(deps, message); }
-  catch { console.warn('[push] Message dispatch unavailable; inbox remains the source of truth.'); }
+  catch { pushLog('dispatch_failed', { messageId: message.id, conversationId: message.roomId }); }
 }
 
 async function dispatchMessagePush(deps: Deps, message: RoomMessage & { hints?: import('./sealed.ts').NoticeHints }) {
   const env = pushEnv();
-  if (!env) return;
+  const context = { messageId: message.id, conversationId: message.roomId };
+  pushLog('message_triggered', context);
+  if (!env) { pushLog('dispatch_skipped', { ...context, reason: 'configuration_missing' }); return; }
   const members = await deps.repo.listRoomNoticeMembers(message.roomId, message.senderId);
+  pushLog('recipients_found', { ...context, count: members.length });
   if (members.length === 0) return;
   const parent = message.replyToId
     ? await deps.repo.findRoomMessage(message.roomId, message.replyToId)
@@ -161,11 +186,13 @@ async function dispatchMessagePush(deps: Deps, message: RoomMessage & { hints?: 
     : isSealed(message.text) ? SEALED_PREVIEW : flat.length <= 80 ? flat : `${flat.slice(0, 80)}…`;
   for (const member of members) {
     const kind = noticeKind(message, member, parent?.senderId === member.id);
-    if (kind !== 'mention' && kind !== 'everyone' && kind !== 'reply' && !(kind === 'message' && room?.kind === 'private')) continue;
+    const recipient = { ...context, userId: member.id, kind };
+    if (kind !== 'mention' && kind !== 'everyone' && kind !== 'reply' && kind !== 'message') { pushLog('recipient_skipped', { ...recipient, reason: 'inbox_only_kind' }); continue; }
     const prefs = await deps.repo.readPushPrefs(member.id);
-    if (pushSuppressed(prefs.quiet, prefs.hiddenKinds, message.roomId, kind)) continue;
+    if (pushSuppressed(prefs.quiet, prefs.hiddenKinds, message.roomId, kind)) { pushLog('recipient_skipped', { ...recipient, reason: 'muted_or_disabled' }); continue; }
     const tokens = await deps.repo.listPushTokens(member.id);
-    if (tokens.length === 0) continue;
+    if (tokens.length === 0) { pushLog('recipient_skipped', { ...recipient, reason: 'no_registered_device' }); continue; }
+    pushLog('recipient_queued', { ...recipient, deviceCount: tokens.length });
     const devices = deps.repo.listPushDevices ? await deps.repo.listPushDevices(member.id) : [];
     const title = groupName || senderName || 'ChatX';
     const body = groupName && senderName ? `${senderName}: ${textPreview}` : textPreview;
@@ -180,16 +207,19 @@ async function dispatchMessagePush(deps: Deps, message: RoomMessage & { hints?: 
     };
     for (const token of tokens) {
       const stillAllowed = async () => {
+        const retryContext = { ...recipient, deviceId: pushDeviceId(token) };
         const latestPrefs = await deps.repo.readPushPrefs(member.id);
-        if (pushSuppressed(latestPrefs.quiet, latestPrefs.hiddenKinds, message.roomId, kind)) return false;
-        if (!(await deps.repo.listPushTokens(member.id)).includes(token)) return false;
+        if (pushSuppressed(latestPrefs.quiet, latestPrefs.hiddenKinds, message.roomId, kind)) { pushLog('retry_cancelled', { ...retryContext, reason: 'muted_or_disabled' }); return false; }
+        if (!(await deps.repo.listPushTokens(member.id)).includes(token)) { pushLog('retry_cancelled', { ...retryContext, reason: 'device_unregistered' }); return false; }
         const notices = await deps.repo.listNotifications(member.id, 100, null);
-        return notices.some(notice => notice.messageId === message.id && notice.roomId === message.roomId && !notice.read && !notice.deleted);
+        const allowed = notices.some(notice => notice.messageId === message.id && notice.roomId === message.roomId && !notice.read && !notice.deleted);
+        if (!allowed) pushLog('retry_cancelled', { ...retryContext, reason: 'notification_read_deleted_or_missing' });
+        return allowed;
       };
       void sendToken(env, token, title, body, data, stillAllowed, devices.some(device => device.token === token && device.platform === 'android-data-v1')).then(result => {
+        pushLog('delivery_finished', { ...recipient, deviceId: pushDeviceId(token), result });
         if (result === 'expired') return deps.repo.deletePushToken(member.id, token);
-        if (result === 'failed') console.warn('[push] Delivery failed after bounded retries.');
-      }).catch(() => { console.warn('[push] Delivery unavailable; inbox remains available.'); });
+      }).catch(() => { pushLog('delivery_failed', { ...recipient, deviceId: pushDeviceId(token) }); });
     }
   }
 }

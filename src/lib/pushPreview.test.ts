@@ -18,13 +18,14 @@ it('shows a received push immediately without waiting for inbox loading and does
   showPushPreview(incoming);
   expect(useLiveInbox.getState().notices).toHaveLength(0);
 });
-it('respects the open chat, disabled preferences and ordinary group-message policy', () => {
+it('respects the open chat and disabled preferences while allowing group messages', () => {
   vi.spyOn(document, 'visibilityState', 'get').mockReturnValue('visible');
   window.history.replaceState({}, '', `/chat/${room}`); showPushPreview(incoming);
   expect(useLiveInbox.getState().notices).toHaveLength(0);
   window.history.replaceState({}, '', '/home');
   showPushPreview({ ...incoming, conversationType: 'group' });
-  expect(useLiveInbox.getState().notices).toHaveLength(0);
+  expect(useLiveInbox.getState().notices).toHaveLength(1);
+  useLiveInbox.getState().clear();
   useSettingsStore.setState({ notifyTypes: { ...types, message: false } }); showPushPreview(incoming);
   expect(useLiveInbox.getState().notices).toHaveLength(0);
 });

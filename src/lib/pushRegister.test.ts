@@ -126,7 +126,7 @@ describe('pushRegister', () => {
     release({});
     await vi.waitFor(() => {
       const writes = vi.mocked(adminFetch).mock.calls.filter(([path]) => path === '/api/push/prefs');
-      expect(JSON.parse(String(writes.at(-1)![1]!.body)).hiddenKinds.split(',')).toContain('message');
+      expect((writes.at(-1)![1]!.body as { hiddenKinds: string }).hiddenKinds.split(',')).toContain('message');
     });
     expect(hasFcmToken()).toBe(true);
   });

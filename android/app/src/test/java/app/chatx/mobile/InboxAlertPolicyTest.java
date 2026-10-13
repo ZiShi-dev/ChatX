@@ -12,10 +12,10 @@ public class InboxAlertPolicyTest {
         }
         assertTrue(InboxAlertPolicy.allows("message", "private"));
     }
-    @Test public void keepsOrdinaryGroupMessagesAndOtherEventsInTheInboxOnly() {
-        assertFalse(InboxAlertPolicy.allows("message", "group"));
-        assertFalse(InboxAlertPolicy.allows("message", "global"));
-        assertFalse(InboxAlertPolicy.allows("message", ""));
+    @Test public void allowsGroupMessagesAndKeepsOtherEventsInTheInboxOnly() {
+        assertTrue(InboxAlertPolicy.allows("message", "group"));
+        assertTrue(InboxAlertPolicy.allows("message", "global"));
+        assertTrue(InboxAlertPolicy.allows("message", ""));
         for (String room : new String[] { "private", "group", "global" }) {
             assertFalse(InboxAlertPolicy.allows("reaction", room));
             assertFalse(InboxAlertPolicy.allows("signal", room));
