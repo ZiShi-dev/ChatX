@@ -14,6 +14,6 @@ if (!Number.isSafeInteger(version.versionCode) || version.versionCode > 1_000_00
 writeFileSync(path, `${JSON.stringify(version, null, 2)}\n`);
 run('npm run build');
 run('npx cap sync android');
-run(process.platform === 'win32' ? 'gradlew.bat :app:assembleDebug' : './gradlew :app:assembleDebug', resolve(root, 'android'));
-run('node scripts/publish-release.mjs apk android/app/build/outputs/apk/debug/app-debug.apk');
+run(process.platform === 'win32' ? 'gradlew.bat :app:assembleSideload' : './gradlew :app:assembleSideload', resolve(root, 'android'));
+run('node scripts/publish-release.mjs apk android/app/build/outputs/apk/sideload/app-sideload.apk');
 console.log('APK signé prêt dans releases/. Inclure app-version.json et releases/ dans le commit/push pour le déploiement VPS.');

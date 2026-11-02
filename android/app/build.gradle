@@ -43,6 +43,13 @@ android {
             }
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
         }
+        sideload {
+            initWith release
+            matchingFallbacks = ['release']
+            if (keystorePropertiesFile.exists()) {
+                signingConfig signingConfigs.release
+            }
+        }
     }
     packaging {
         jniLibs {

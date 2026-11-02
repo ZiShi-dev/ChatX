@@ -35,7 +35,7 @@ test('shows a failure without replacing the installed copy', async () => {
     return () => undefined;
   });
   render(<AppReleasePrompt />);
-  fireEvent.click(screen.getByRole('button', { name: 'فتح المتجر' }));
-  expect(await screen.findByText('تعذر فتح متجر Play. تبقى النسخة الحالية.')).toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: 'تثبيت' }));
+  expect(await screen.findByText('تعذر تثبيت التحديث. تبقى النسخة الحالية.')).toBeInTheDocument();
   expect(screen.getByRole('alertdialog')).toBeInTheDocument();
 });

@@ -176,8 +176,11 @@ export function postponeApk(versionCode: number) {
   localStorage.setItem(APK_LATER_KEY, String(versionCode));
 }
 
-export function installFailureMessage(_error: unknown) {
-  return 'تعذر فتح متجر Play. تبقى النسخة الحالية.';
+export function installFailureMessage(error: unknown) {
+  const text = error instanceof Error ? error.message : '';
+  if (text.includes('install_permission')) return 'اسمح لتطبيق ChatX بتثبيت التحديثات من الإعدادات، ثم أعد المحاولة.';
+  if (text.includes('unavailable') && text.includes('play')) return 'تعذر فتح متجر Play. تبقى النسخة الحالية.';
+  return 'تعذر تثبيت التحديث. تبقى النسخة الحالية.';
 }
 
 async function trustedCatalog(value: unknown) {
@@ -277,7 +280,17 @@ export function startAppUpdates(onNative: (offer: NativeOffer | null) => void) {
   };
 }
 
-export async function installNativeRelease(_offer?: NativeOffer) {
+export async function installNativeRelease(offer: NativeOffer) {
   const { AppRelease } = await import('./appReleasePlugin');
-  await AppRelease.openPlayStore();
+  const source = await AppRelease.installedFromPlay().catch(() => ({ play: false }));
+  if (source.play) {
+    try {
+      await AppRelease.openPlayStore();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'unavailable';
+      throw new Error(`${message} play`);
+    }
+    return;
+  }
+  await AppRelease.installApk(offer);
 }
