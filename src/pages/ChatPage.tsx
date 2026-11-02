@@ -1,4 +1,5 @@
 import { returnFromNotificationChat } from '../lib/notificationNavigation';
+import { useI18n } from '../lib/i18n';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { IonContent, IonFooter, IonHeader, IonIcon, IonPage } from '@ionic/react';
 import { arrowDown, bookmarkOutline, peopleOutline, searchOutline } from 'ionicons/icons';
@@ -161,6 +162,7 @@ export default function ChatPage() {
   const [spotlight, setSpotlight] = useState('');
   const [focusMiss, setFocusMiss] = useState(false);
   const navigate = useNavigate();
+  const { t } = useI18n();
   const endRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLIonContentElement>(null);
   const stickRef = useRef(true);
@@ -301,7 +303,7 @@ export default function ChatPage() {
       if (!alive) return;
       window.clearTimeout(skeletonTimer);
       const hasMessages = useChatStore.getState().messages.some((message) => message.conversationId === id);
-      setNotice(loaded || hasMessages ? '' : 'تعذر تحميل الرسائل.');
+      setNotice(loaded || hasMessages ? '' : t('chat.loadFailed'));
       setReady(true);
     });
     return () => {
@@ -846,10 +848,10 @@ export default function ChatPage() {
       <IonPage>
         <IonHeader>
           <NetworkStatusBanner />
-          <PageNav title="المحادثة" fallback="/home" />
+          <PageNav title={t('chat.title')} fallback="/home" />
         </IonHeader>
         <IonContent>
-          {waiting ? <PageSkeleton kind="chat" /> : <EmptyState title="المحادثة غير موجودة" />}
+          {waiting ? <PageSkeleton kind="chat" /> : <EmptyState title={t('chat.missing')} />}
         </IonContent>
       </IonPage>
     );
@@ -864,9 +866,9 @@ export default function ChatPage() {
   const onlineCount = members.filter((user) => getUserPresence(user.id, users) === 'online').length;
   const groupSubtitle = currentUser.status === 'online'
     ? onlineCount === 0
-      ? 'لا أحد متصل'
-      : `${onlineCount} متصل`
-    : `${onlineCount === 0 ? 'لا أحد متصل' : `${onlineCount} متصل`} · ${connectionLabel(currentUser)}`;
+      ? t('chat.noneOnline')
+      : t('chat.online', { count: onlineCount })
+    : `${onlineCount === 0 ? t('chat.noneOnline') : t('chat.online', { count: onlineCount })} · ${connectionLabel(currentUser)}`;
   const privateSubtitle = other ? connectionLabel(other) : '';
   const pendingUnread = unreadAbove(arrivalUnread, messages.length, Math.min(messages.length, historyLimit[id] ?? MESSAGE_PAGE_SIZE));
   const reactionTarget = reactionKeyboardId ? messages.find((item) => item.id === reactionKeyboardId) : undefined;
@@ -884,26 +886,26 @@ export default function ChatPage() {
           onBack={() => returnFromNotificationChat(navigate)}
           title={
             conversation.type !== 'private' ? (
-              <button ref={profileRef} type="button" className="chat-nav-main" aria-label="ملف المجموعة">
-                <Avatar name={conversation.name ?? 'مجموعة'} color="#3d9b84" size={44} src={conversation.avatarUrl} />
+              <button ref={profileRef} type="button" className="chat-nav-main" aria-label={t('chat.groupProfile')}>
+                <Avatar name={conversation.name ?? t('chat.group')} color="#3d9b84" size={44} src={conversation.avatarUrl} />
                 <GroupHeader
-                  title={conversation.name ?? 'مجموعة'}
+                  title={conversation.name ?? t('chat.group')}
                   subtitle={groupSubtitle}
                   online={onlineCount > 0}
                 />
               </button>
             ) : conversation.self ? (
-              <button type="button" className="chat-nav-main" aria-label="ملف المحادثة" onClick={openConversationProfile}>
+              <button type="button" className="chat-nav-main" aria-label={t('chat.chatProfile')} onClick={openConversationProfile}>
                 <Avatar name={currentUser.displayName} color={currentUser.color} size={44} src={currentUser.avatarUrl} decoration={currentUser.avatarDecoration} />
-                <GroupHeader title={currentUser.displayName} subtitle="رسائلك" online={false} />
+                <GroupHeader title={currentUser.displayName} subtitle={t('home.self')} online={false} />
               </button>
             ) : peerGone ? (
               <div className="chat-nav-main">
-                <Avatar name="حساب محذوف" color="#8ea099" size={44} />
-                <GroupHeader title="حساب محذوف" subtitle="تم حذف هذا الحساب" online={false} />
+                <Avatar name={t('chat.deletedAccount')} color="#8ea099" size={44} />
+                <GroupHeader title={t('chat.deletedAccount')} subtitle={t('chat.deletedSubtitle')} online={false} />
               </div>
             ) : other ? (
-              <button type="button" className="chat-nav-main" aria-label={`ملف ${other.displayName}`} onClick={openConversationProfile}>
+              <button type="button" className="chat-nav-main" aria-label={t('chat.profileOf', { name: other.displayName })} onClick={openConversationProfile}>
                 <Avatar name={other.displayName} color={other.color} size={44} src={other.avatarUrl} decoration={other.avatarDecoration} />
                 <GroupHeader
                   title={other.displayName}
@@ -918,7 +920,7 @@ export default function ChatPage() {
               <button
                 type="button"
                 className={searchOpen ? 'home-nav-menu is-on' : 'home-nav-menu'}
-                aria-label="بحث"
+                aria-label={t('chat.search')}
                 aria-expanded={searchOpen}
                 onClick={() => {
                   setSearchOpen((open) => {
@@ -934,12 +936,12 @@ export default function ChatPage() {
               >
                 <IonIcon icon={searchOutline} />
               </button>
-              <button ref={savedRef} type="button" className="home-nav-menu saved-nav" aria-label="المحفوظات">
+              <button ref={savedRef} type="button" className="home-nav-menu saved-nav" aria-label={t('chat.saved')}>
                 <IonIcon icon={bookmarkOutline} />
                 {savedHere > 0 && <span className="nav-count">{savedHere > 9 ? '9+' : savedHere}</span>}
               </button>
               {conversation.type !== 'private' && (
-                <button ref={membersRef} type="button" className="home-nav-menu" aria-label="الأعضاء">
+                <button ref={membersRef} type="button" className="home-nav-menu" aria-label={t('chat.members')}>
                   <IonIcon icon={peopleOutline} />
                 </button>
               )}
@@ -951,12 +953,12 @@ export default function ChatPage() {
       </IonHeader>
       <IonContent ref={contentRef} className="chat-scroll">
         {notice ? <p className="focus-miss" role="status">{notice}</p> : null}
-        {focusMiss && <p className="focus-miss" role="status">تعذر العثور على الرسالة</p>}
+        {focusMiss && <p className="focus-miss" role="status">{t('chat.focusMiss')}</p>}
         <div className="chat-thread">
           {!ready ? (
             skeleton ? <PageSkeleton kind="chat" /> : null
           ) : thread.length === 0 ? (
-            <EmptyState title={searching ? 'لا توجد رسائل' : 'لا توجد رسائل بعد'} />
+            <EmptyState title={searching ? t('chat.noResults') : t('chat.noMessages')} />
           ) : (
             <MessageList
               messages={thread}
@@ -1035,7 +1037,7 @@ export default function ChatPage() {
         )}
         {peerGone ? (
           <div className="deleted-peer">
-            <p>تم حذف هذا الحساب</p>
+            <p>{t('chat.deletedSubtitle')}</p>
             <button
               type="button"
               onClick={() => {
@@ -1051,10 +1053,10 @@ export default function ChatPage() {
           <>
             {talk === 'locked' && otherId && conversation.friend !== 'incoming' ? (
               <div className="friend-bar is-invite">
-                <p>{conversation.friend === 'outgoing' ? 'تم إرسال الدعوة. المحادثة تنتظر القبول.' : 'أرسل دعوة لمتابعة هذه المحادثة.'}</p>
+                <p>{conversation.friend === 'outgoing' ? t('chat.inviteSent') : t('chat.invitePrompt')}</p>
                 <div className="friend-actions">
                   {conversation.friend !== 'outgoing' && (
-                    <button type="button" className="is-invite" onClick={() => void changeFriend(otherId, 'ask')}>إرسال دعوة</button>
+                    <button type="button" className="is-invite" onClick={() => void changeFriend(otherId, 'ask')}>{t('chat.sendInvite')}</button>
                   )}
                   <button
                     type="button"
@@ -1073,17 +1075,17 @@ export default function ChatPage() {
               <div className="friend-bar">
                 {conversation.friend === 'incoming' ? (
                   <>
-                    <p>طلب صداقة</p>
+                    <p>{t('chat.friendRequest')}</p>
                     <div className="friend-actions">
-                      <button type="button" className="is-accept" onClick={() => void changeFriend(otherId, 'accept')}>قبول</button>
-                      <button type="button" onClick={() => void changeFriend(otherId, 'decline')}>تجاهل</button>
+                      <button type="button" className="is-accept" onClick={() => void changeFriend(otherId, 'accept')}>{t('home.accept')}</button>
+                      <button type="button" onClick={() => void changeFriend(otherId, 'decline')}>{t('home.ignore')}</button>
                     </div>
                   </>
                 ) : (
                   <>
-                    <p>رسالة نصية واحدة قبل قبول الصداقة</p>
+                    <p>{t('chat.oneText')}</p>
                     <div className="friend-actions">
-                      <button type="button" className="is-accept" onClick={() => void changeFriend(otherId, 'ask')}>طلب صداقة</button>
+                      <button type="button" className="is-accept" onClick={() => void changeFriend(otherId, 'ask')}>{t('chat.askFriend')}</button>
                     </div>
                   </>
                 )}
@@ -1097,7 +1099,7 @@ export default function ChatPage() {
         <UserProfileModal
           user={profile}
           isSelf={profile?.id === currentUser.id}
-          room={{ name: conversation.name ?? 'مجموعة', adminId: conversation.adminId }}
+          room={{ name: conversation.name ?? t('chat.group'), adminId: conversation.adminId }}
           onClose={() => setProfile(undefined)}
           onMessage={(userId) => {
             setProfile(undefined);

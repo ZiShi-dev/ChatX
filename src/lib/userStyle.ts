@@ -1,5 +1,6 @@
 import type { CSSProperties } from 'react';
 import type { MessageFontId } from '../types/user';
+import { t, type MessageKey } from './i18n';
 
 export const USER_COLOR_OPTIONS = [
   '#3d9b84',
@@ -63,5 +64,5 @@ export function displayNameStyleForUser(colorInput: string, fontId?: MessageFont
 }
 
 export function fontLabel(id?: MessageFontId) {
-  return MESSAGE_FONT_OPTIONS.find((item) => item.id === sanitizeMessageFont(id))?.label ?? MESSAGE_FONT_OPTIONS[0].label;
+  return t(`font.${sanitizeMessageFont(id)}` as MessageKey);
 }

@@ -10,6 +10,7 @@ import CustomRoleBadge from '../components/common/CustomRoleBadge';
 import NameColorField from '../components/common/NameColorField';
 import { useProfileMotion } from '../hooks/useProfileMotion';
 import { AVATAR_DECORATIONS, type AvatarDecoration } from '../lib/profileCosmetics';
+import { useI18n, type MessageKey } from '../lib/i18n';
 import { connectionLabel, getUserPresence } from '../lib/presence';
 import { roleLabel } from '../lib/roles';
 import { readBanner, readPhoto } from '../lib/photo';
@@ -32,6 +33,7 @@ type ProfilePageProps = {
 
 export default function ProfilePage({ embedded = false, onShowSettings, scrollHold }: ProfilePageProps) {
   const navigate = useNavigate();
+  const { t } = useI18n();
   const currentUser = useAuthStore((state) => state.currentUser);
   const animate = useProfileMotion();
   const saveAccountProfile = useAuthStore((state) => state.saveAccountProfile);
@@ -196,7 +198,7 @@ export default function ProfilePage({ embedded = false, onShowSettings, scrollHo
             </dd>
           </div>
           <div>
-            <dt>خط الاسم</dt>
+            <dt>{t('profile.font')}</dt>
             <dd>{fontLabel(currentUser.messageFont)}</dd>
           </div>
         </dl>
@@ -216,7 +218,7 @@ export default function ProfilePage({ embedded = false, onShowSettings, scrollHo
           {!embedded && (
             <button type="button" onClick={openSettings}>
               <IonIcon icon={settingsOutline} />
-              <span>الإعدادات</span>
+              <span>{t('profile.settings')}</span>
             </button>
           )}
           <button type="button" className="is-leave" onClick={() => setConfirmLeave(true)}>
@@ -352,9 +354,9 @@ export default function ProfilePage({ embedded = false, onShowSettings, scrollHo
                 )}
               </div>
               <div className="profile-style-block">
-                <span className="profile-style-title">خط الاسم</span>
-                <p className="profile-style-hint">نفس الخط لاسمك في المجموعات. نص الرسالة يبقى بخط التطبيق.</p>
-                <div className="profile-font-grid" role="listbox" aria-label="خط الاسم">
+                <span className="profile-style-title">{t('profile.font')}</span>
+                <p className="profile-style-hint">{t('profile.fontHint')}</p>
+                <div className="profile-font-grid" role="listbox" aria-label={t('profile.font')}>
                   {MESSAGE_FONT_OPTIONS.map((font) => (
                     <button
                       key={font.id}
@@ -364,26 +366,26 @@ export default function ProfilePage({ embedded = false, onShowSettings, scrollHo
                       className={[draftFont === font.id ? 'is-on' : '', displayNameFontClass(font.id)].filter(Boolean).join(' ')}
                       onClick={() => setDraftFont(font.id)}
                     >
-                      {font.label}
+                      {t(`font.${font.id}` as MessageKey)}
                     </button>
                   ))}
                 </div>
               </div>
               </section>
-              <section id="profile-panel-effects" role="tabpanel" aria-labelledby="profile-tab-effects" hidden={editorTab !== 'effects'} className="profile-editor-section"><h3>الزينة</h3>
+              <section id="profile-panel-effects" role="tabpanel" aria-labelledby="profile-tab-effects" hidden={editorTab !== 'effects'} className="profile-editor-section"><h3>{t('profile.decor')}</h3>
               <div className="profile-style-block">
-                <span className="profile-style-title">زينة الصورة</span>
-                <p className="profile-style-hint">المعاينة تبقى أمامك، والحركة تتوقف في وضع التوفير وعلى الأجهزة الضعيفة.</p>
-                <div className="cosmetic-options" role="group" aria-label="زينة الصورة">
-                  {AVATAR_DECORATIONS.map(item => <button key={item.id} type="button" aria-pressed={draftDecoration === item.id} className={draftDecoration === item.id ? 'is-on' : ''} onClick={() => setDraftDecoration(item.id)}><Avatar name={displayName || currentUser.displayName} color={draftColor} size={48} src={currentUser.avatarUrl} decoration={item.id} /><span>{item.label}</span></button>)}
+                <span className="profile-style-title">{t('profile.decorTitle')}</span>
+                <p className="profile-style-hint">{t('profile.decorHint')}</p>
+                <div className="cosmetic-options" role="group" aria-label={t('profile.decorTitle')}>
+                  {AVATAR_DECORATIONS.map(item => <button key={item.id} type="button" aria-pressed={draftDecoration === item.id} className={draftDecoration === item.id ? 'is-on' : ''} onClick={() => setDraftDecoration(item.id)}><Avatar name={displayName || currentUser.displayName} color={draftColor} size={48} src={currentUser.avatarUrl} decoration={item.id} /><span>{t(`decor.${item.id}` as MessageKey)}</span></button>)}
                 </div>
               </div>
               </section>
               </div>
               {saveError ? <p className="form-error">{saveError}</p> : null}
               <div className="account-actions profile-editor-footer">
-                <button type="button" onClick={() => setEditing(false)}>إلغاء</button>
-                <button type="button" className="profile-save" disabled={!colorValid || displayName.trim().length < 2} onClick={save}>حفظ</button>
+                <button type="button" onClick={() => setEditing(false)}>{t('profile.cancel')}</button>
+                <button type="button" className="profile-save" disabled={!colorValid || displayName.trim().length < 2} onClick={save}>{t('profile.save')}</button>
               </div>
             </div>
           </div>,
@@ -425,7 +427,7 @@ export default function ProfilePage({ embedded = false, onShowSettings, scrollHo
     <IonPage>
       <IonHeader>
         <NetworkStatusBanner />
-        <PageNav title="الملف الشخصي" fallback="/home" />
+        <PageNav title={t('profile.title')} fallback="/home" />
       </IonHeader>
       <IonContent className="profile-page">{body}</IonContent>
     </IonPage>

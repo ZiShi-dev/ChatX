@@ -1,4 +1,5 @@
 import type { UserRole } from '../types/user';
+import { t } from './i18n';
 
 export function hasAdminAccess(role: UserRole) {
   return role === 'creator' || role === 'admin';
@@ -23,7 +24,7 @@ export function canTakeGroupTurn(userId: string, room: { participantIds: string[
 }
 
 export function roleLabel(role: UserRole) {
-  if (role === 'creator') return 'المنشئ';
-  if (role === 'admin') return 'Admin';
+  if (role === 'creator') return t('role.creator');
+  if (role === 'admin') return t('role.admin');
   return '';
 }

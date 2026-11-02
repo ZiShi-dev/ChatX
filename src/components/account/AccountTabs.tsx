@@ -1,4 +1,5 @@
 import { useNavigate } from 'react-router-dom';
+import { useI18n } from '../../lib/i18n';
 
 export type AccountTabId = 'profile' | 'settings' | 'admin';
 
@@ -9,8 +10,9 @@ type AccountTabsProps = {
 
 export default function AccountTabs({ active, owner }: AccountTabsProps) {
   const navigate = useNavigate();
+  const { t } = useI18n();
   return (
-    <div className={`group-tabs account-tabs ${owner ? 'is-three' : 'is-two'}`} role="tablist" aria-label="الحساب">
+    <div className={`group-tabs account-tabs ${owner ? 'is-three' : 'is-two'}`} role="tablist" aria-label={t('account.title')}>
       <button
         type="button"
         role="tab"
@@ -18,7 +20,7 @@ export default function AccountTabs({ active, owner }: AccountTabsProps) {
         className={active === 'profile' ? 'is-on' : undefined}
         onClick={() => active !== 'profile' && navigate('/account', { replace: true })}
       >
-        الملف الشخصي
+        {t('account.profile')}
       </button>
       <button
         type="button"
@@ -27,7 +29,7 @@ export default function AccountTabs({ active, owner }: AccountTabsProps) {
         className={active === 'settings' ? 'is-on' : undefined}
         onClick={() => active !== 'settings' && navigate('/account?tab=settings', { replace: true })}
       >
-        الإعدادات
+        {t('account.settings')}
       </button>
       {owner ? (
         <button
@@ -37,7 +39,7 @@ export default function AccountTabs({ active, owner }: AccountTabsProps) {
           className={active === 'admin' ? 'is-on' : undefined}
           onClick={() => active !== 'admin' && navigate('/admin', { replace: true })}
         >
-          الإدارة
+          {t('account.admin')}
         </button>
       ) : null}
     </div>

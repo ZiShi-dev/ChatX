@@ -21,16 +21,17 @@ import { useChatStore } from '../stores/chatStore';
 import { useMuteStore } from '../stores/muteStore';
 import { useNetworkStore } from '../stores/networkStore';
 import { useSettingsStore } from '../stores/settingsStore';
+import { useI18n, type MessageKey } from '../lib/i18n';
 import { useUserStore } from '../stores/userStore';
 
-const FILTERS: { id: 'all' | InboxKind; label: string; ltr?: boolean }[] = [
-  { id: 'all', label: 'الكل' },
-  { id: 'mention', label: 'الإشارات' },
-  { id: 'everyone', label: '@everyone', ltr: true },
-  { id: 'reply', label: 'الردود' },
-  { id: 'signal', label: 'التنبيهات' },
-  { id: 'message', label: 'الرسائل' },
-  { id: 'reaction', label: 'التفاعلات' },
+const FILTERS: { id: 'all' | InboxKind; label: MessageKey; ltr?: boolean }[] = [
+  { id: 'all', label: 'inbox.all' },
+  { id: 'mention', label: 'inbox.mentions' },
+  { id: 'everyone', label: 'inbox.all', ltr: true },
+  { id: 'reply', label: 'inbox.replies' },
+  { id: 'signal', label: 'inbox.signals' },
+  { id: 'message', label: 'inbox.messages' },
+  { id: 'reaction', label: 'inbox.reactions' },
 ];
 
 const KIND_ICON = {
@@ -57,6 +58,7 @@ const NotificationRow = memo(function NotificationRow({
   room: string;
   onOpen: (item: InboxItem) => void;
 }) {
+  const { t } = useI18n();
   const look = notificationPresentation(item.kind);
   const label = `${name}، ${room}، ${look.label}${item.suppressed ? '، مكتوم' : ''}${item.unread ? '، غير مقروء' : ''}`;
   return (
@@ -86,7 +88,7 @@ const NotificationRow = memo(function NotificationRow({
             </span>
           )}
         </span>
-        <span className="inbox-preview" dir="auto"><EmojiText text={item.count > 1 ? `${item.count} رسائل · ${item.preview}` : item.preview} /></span>
+        <span className="inbox-preview" dir="auto"><EmojiText text={item.count > 1 ? `${t('inbox.count', { count: item.count })} · ${item.preview}` : item.preview} /></span>
       </span>
     </button>
   );
@@ -94,6 +96,7 @@ const NotificationRow = memo(function NotificationRow({
 
 export default function NotificationsPage() {
   const navigate = useNavigate();
+  const { t } = useI18n();
   const contentRef = useRef<HTMLIonContentElement>(null);
   const currentUser = useAuthStore((state) => state.currentUser);
   const users = useUserStore((state) => state.users);
@@ -180,7 +183,7 @@ export default function NotificationsPage() {
     <IonPage>
       <IonHeader>
         <NetworkStatusBanner />
-        <PageNav title="الإشعارات" fallback="/home" />
+        <PageNav title={t('inbox.title')} fallback="/home" />
       </IonHeader>
       <IonContent
         ref={contentRef}
@@ -199,11 +202,11 @@ export default function NotificationsPage() {
           <IonRefresherContent pullingText="جارٍ التحديث" refreshingText="جارٍ التحديث" />
         </IonRefresher>
         <div className="inbox-tools">
-          <p className="inbox-lead">كل الإشعارات تظهر هنا، حتى لو كان النوع أو المحادثة مكتومين.</p>
+          <p className="inbox-lead">{t('inbox.lead')}</p>
           <div className="inbox-actions">
             <button
               type="button"
-              aria-label="قراءة الكل"
+              aria-label={t('inbox.readAll')}
               disabled={!unread}
               onClick={() => {
                 markAllRead();
@@ -211,18 +214,18 @@ export default function NotificationsPage() {
             >
               <IonIcon icon={checkmarkDoneOutline} />
             </button>
-            <button type="button" className="danger" aria-label="حذف الكل" disabled={items.length === 0} onClick={() => setConfirmClear(true)}>
+            <button type="button" className="danger" aria-label={t('inbox.deleteAll')} disabled={items.length === 0} onClick={() => setConfirmClear(true)}>
               <IonIcon icon={trashOutline} />
             </button>
           </div>
         </div>
         {notice ? <p className="form-error account-notice">{notice}</p> : null}
-        {offline && <p className="inbox-offline" role="status">أنت غير متصل</p>}
+        {offline && <p className="inbox-offline" role="status">{t('inbox.offline')}</p>}
         {!ready ? (
           <PageSkeleton kind="notices" />
         ) : (
         <>
-        <div className="inbox-filters" role="tablist" aria-label="أنواع الإشعارات">
+        <div className="inbox-filters" role="tablist" aria-label={t('inbox.filters')}>
           {FILTERS.map((item) => (
             <button
               key={item.id}
@@ -233,7 +236,7 @@ export default function NotificationsPage() {
               className={filter === item.id ? 'is-on' : undefined}
               onClick={() => choose(item.id)}
             >
-              {item.label}
+              {item.id === 'everyone' ? '@everyone' : t(item.label)}
             </button>
           ))}
         </div>

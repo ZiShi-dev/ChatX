@@ -37,6 +37,7 @@ import { isServerId } from '../lib/home';
 import { startPolling } from '../lib/poll';
 import { brandName, textDirection } from '../lib/appearance';
 import { messagePreview } from '../lib/media';
+import { t, useI18n } from '../lib/i18n';
 import { useAuthStore } from '../stores/authStore';
 import { useChatStore } from '../stores/chatStore';
 import { useSavedStore } from '../stores/savedStore';
@@ -49,6 +50,7 @@ type Filter = 'all' | Extract<ConversationType, 'private' | 'group'>;
 
 export default function HomePage() {
   const navigate = useNavigate();
+  const { t } = useI18n();
   const currentUser = useAuthStore((state) => state.currentUser);
   const users = useUserStore((state) => state.users);
   const conversations = useChatStore((state) => state.conversations);
@@ -163,12 +165,12 @@ export default function HomePage() {
         color={other?.color ?? '#8ea099'}
         photo={conversation.type === 'private' ? other?.avatarUrl : conversation.avatarUrl}
         decoration={other?.avatarDecoration}
-        preview={gone ? 'لا يمكن مراسلته بعد الآن' : messagePreview(last, last?.senderId === currentUser.id)}
+        preview={gone ? t('home.gone') : messagePreview(last, last?.senderId === currentUser.id)}
         deleted={Boolean(last?.deletedForEveryone)}
         time={last ? formatConversationTime(last.createdAt) : undefined}
         unread={gone ? 0 : conversation.unreadCount}
         type={conversation.type}
-        detail={self ? 'رسائلك' : conversation.friend === 'outgoing' ? 'بانتظار القبول' : people.length > 0 ? roomSummary(people.length, online) : undefined}
+        detail={self ? t('home.self') : conversation.friend === 'outgoing' ? t('home.waiting') : people.length > 0 ? roomSummary(people.length, online) : undefined}
         muted={gone ? undefined : muteHint(conversation.id, mutes)}
         gone={gone}
         onRemove={gone ? () => setRemoveTarget(conversation) : undefined}
@@ -189,7 +191,7 @@ export default function HomePage() {
               <strong dir="auto">{brandName(brandTitle)}</strong>
             </div>
             <div className="home-nav-actions">
-              <button type="button" className="home-nav-new" aria-label="محادثة جديدة" onClick={() => navigate('/new')}>
+              <button type="button" className="home-nav-new" aria-label={t('home.newChat')} onClick={() => navigate('/new')}>
                 <IonIcon icon={createOutline} />
               </button>
             </div>
@@ -204,24 +206,24 @@ export default function HomePage() {
           {notice ? <p className="form-error account-notice">{notice}</p> : null}
           <IonSegment className="home-filters" value={filter} onIonChange={(event) => setFilter((event.detail.value as Filter) || 'all')}>
             <IonSegmentButton value="all">
-              <IonLabel>الكل</IonLabel>
+              <IonLabel>{t('home.all')}</IonLabel>
             </IonSegmentButton>
             <IonSegmentButton value="private">
-              <IonLabel>الخاص</IonLabel>
+              <IonLabel>{t('home.private')}</IonLabel>
             </IonSegmentButton>
             <IonSegmentButton value="group">
-              <IonLabel>المجموعات</IonLabel>
+              <IonLabel>{t('home.groups')}</IonLabel>
             </IonSegmentButton>
           </IonSegment>
           {showGlobal && globalChat && (
             <section className="home-section">
-              <h2>المجموعة الرئيسية</h2>
+              <h2>{t('home.mainGroup')}</h2>
               {renderConversation(globalChat)}
             </section>
           )}
           {requests.length > 0 && (
             <section className="home-section">
-              <h2>الطلبات <span>{requests.length}</span></h2>
+              <h2>{t('home.requests')} <span>{requests.length}</span></h2>
               {requests.map((conversation) => {
                 const person = otherParticipant(conversation, currentUser.id, users);
                 if (!person) return null;
@@ -231,12 +233,12 @@ export default function HomePage() {
                       <Avatar name={person.displayName} color={person.color} size={48} src={person.avatarUrl} decoration={person.avatarDecoration} animate={false} />
                       <span>
                         <strong dir="auto">{person.displayName}</strong>
-                        <small>يريد مراسلتك</small>
+                        <small>{t('home.wants')}</small>
                       </span>
                     </button>
                     <div className="friend-actions">
-                      <button type="button" className="is-accept" onClick={() => void changeFriend(person.id, 'accept')}>قبول</button>
-                      <button type="button" onClick={() => void changeFriend(person.id, 'decline')}>تجاهل</button>
+                      <button type="button" className="is-accept" onClick={() => void changeFriend(person.id, 'accept')}>{t('home.accept')}</button>
+                      <button type="button" onClick={() => void changeFriend(person.id, 'decline')}>{t('home.ignore')}</button>
                     </div>
                   </article>
                 );
@@ -245,17 +247,17 @@ export default function HomePage() {
           )}
           {waiting.length > 0 && (
             <section className="home-section">
-              <h2>بانتظار القبول <span>{waiting.length}</span></h2>
+              <h2>{t('home.waiting')} <span>{waiting.length}</span></h2>
               <div className="home-list">
                 {waiting.map((conversation) => renderConversation(conversation))}
               </div>
             </section>
           )}
           {listed.length === 0 && requests.length === 0 && waiting.length === 0 && !showGlobal ? (
-            <EmptyState title="لا توجد محادثات حتى الآن" />
+            <EmptyState title={t('home.empty')} />
           ) : listed.length > 0 ? (
             <section className="home-section">
-              {(showGlobal || requests.length > 0 || waiting.length > 0) && <h2>المحادثات الأخيرة</h2>}
+              {(showGlobal || requests.length > 0 || waiting.length > 0) && <h2>{t('home.recent')}</h2>}
               <div className="home-list">
                 {listed.map((conversation) => renderConversation(conversation))}
               </div>
@@ -278,21 +280,21 @@ export default function HomePage() {
             <em>{connectionLabel(currentUser, { self: true })}</em>
           </span>
         </button>
-        <button type="button" className="user-dock-bell" aria-label={inboxBadge ? `الإشعارات، ${inboxBadge} غير مقروءة` : 'الإشعارات'} onClick={() => navigate('/notifications')}>
+        <button type="button" className="user-dock-bell" aria-label={inboxBadge ? t('home.notificationsUnread', { count: inboxBadge }) : t('home.notifications')} onClick={() => navigate('/notifications')}>
           <IonIcon icon={notificationsOutline} />
           {inboxBadge && <span className="dock-badge">{inboxBadge}</span>}
         </button>
       </div>
       {removeTarget && (
         <PermissionDialog
-          title="إزالة المحادثة"
-          body="ستختفي من المحادثات الأخيرة والخاصة. الحساب محذوف ولن تعود الرسائل."
-          allowLabel="إزالة"
+          title={t('home.removeTitle')}
+          body={t('home.removeBody')}
+          allowLabel={t('home.remove')}
           onAllow={() => {
             const id = removeTarget.id;
             setRemoveTarget(undefined);
             void dismissDeletedChat(id).then((ok) => {
-              if (!ok) setNotice('تعذر إزالة المحادثة.');
+              if (!ok) setNotice(t('home.removeFailed'));
             });
           }}
           onLater={() => setRemoveTarget(undefined)}
@@ -311,9 +313,9 @@ export default function HomePage() {
 
 function muteHint(conversationId: string, mutes: ChatMute[]) {
   const level = notifyLevel(mutes, conversationId);
-  if (level === 'none') return 'بدون إشعارات';
-  if (level === 'mentions') return '@ فقط';
+  if (level === 'none') return t('home.noNotify');
+  if (level === 'mentions') return t('home.mentionsOnly');
   if (level === 'everyone') return '@everyone';
-  if (level === 'custom') return 'مخصص';
+  if (level === 'custom') return t('home.custom');
   return undefined;
 }

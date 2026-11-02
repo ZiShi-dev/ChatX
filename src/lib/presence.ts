@@ -1,4 +1,5 @@
 import { formatClock } from './conversation';
+import { currentLocale, t } from './i18n';
 import type { UserStatus } from '../types/user';
 
 function seenWhen(iso: string, now: number) {
@@ -8,8 +9,8 @@ function seenWhen(iso: string, now: number) {
   if (date.toDateString() === today.toDateString()) return clock;
   const yesterday = new Date(now);
   yesterday.setDate(today.getDate() - 1);
-  if (date.toDateString() === yesterday.toDateString()) return `أمس ${clock}`;
-  const day = new Intl.DateTimeFormat('ar', { day: 'numeric', month: 'short' }).format(date);
+  if (date.toDateString() === yesterday.toDateString()) return t('presence.yesterday', { clock });
+  const day = new Intl.DateTimeFormat(currentLocale() === 'ar' ? 'ar' : currentLocale(), { day: 'numeric', month: 'short' }).format(date);
   return `${day} ${clock}`;
 }
 
@@ -42,8 +43,8 @@ export function connectionLabel(
   options?: { self?: boolean; now?: number },
 ) {
   const now = options?.now ?? Date.now();
-  if (user.status === 'online') return 'متصل';
-  if (user.status === 'away') return 'بعيد';
-  if (!user.lastSeenAt) return 'غير متصل';
-  return `آخر اتصال ${seenWhen(user.lastSeenAt, now)}`;
+  if (user.status === 'online') return t('presence.online');
+  if (user.status === 'away') return t('presence.away');
+  if (!user.lastSeenAt) return t('presence.offline');
+  return t('presence.lastSeen', { when: seenWhen(user.lastSeenAt, now) });
 }

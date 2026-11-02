@@ -3,6 +3,7 @@ import { App } from '@capacitor/app';
 import { getApiOrigin, isValidApiOrigin } from './apiOrigin';
 import { UPDATE_PUBLIC_KEY } from './updatePublicKey';
 import { useNetworkStore } from '../stores/networkStore';
+import { t } from './i18n';
 
 const BLOCKED_KEY = 'chatx.blockedBundles';
 const WEB_AT_KEY = 'chatx.webPublishedAt';
@@ -178,9 +179,9 @@ export function postponeApk(versionCode: number) {
 
 export function installFailureMessage(error: unknown) {
   const text = error instanceof Error ? error.message : '';
-  if (text.includes('install_permission')) return 'اسمح لتطبيق ChatX بتثبيت التحديثات من الإعدادات، ثم أعد المحاولة.';
-  if (text.includes('unavailable') && text.includes('play')) return 'تعذر فتح متجر Play. تبقى النسخة الحالية.';
-  return 'تعذر تثبيت التحديث. تبقى النسخة الحالية.';
+  if (text.includes('install_permission')) return t('release.permission');
+  if (text.includes('unavailable') && text.includes('play')) return t('release.playFail');
+  return t('release.installFail');
 }
 
 async function trustedCatalog(value: unknown) {

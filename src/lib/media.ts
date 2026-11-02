@@ -1,5 +1,6 @@
 import type { Message } from '../types/message';
 import type { ImageQuality, VideoQuality } from '../types/settings';
+import { t } from './i18n';
 
 const KB = 1024;
 const MB = 1024 * 1024;
@@ -18,12 +19,12 @@ export function formatDuration(seconds: number) {
 }
 
 export function messagePreview(message?: Message, mine = false) {
-  if (!message) return 'لا توجد رسائل بعد';
-  if (message.deletedForEveryone) return mine ? 'لقد حذفت هذه الرسالة' : 'تم حذف هذه الرسالة';
-  if (message.type === 'image') return 'صورة';
-  if (message.type === 'video') return 'فيديو';
-  if (message.type === 'file') return message.media?.fileName || 'ملف';
-  if (message.type === 'link') return message.link?.title || message.link?.url || 'رابط';
+  if (!message) return t('preview.empty');
+  if (message.deletedForEveryone) return mine ? t('preview.deletedMine') : t('preview.deleted');
+  if (message.type === 'image') return t('preview.image');
+  if (message.type === 'video') return t('preview.video');
+  if (message.type === 'file') return message.media?.fileName || t('preview.file');
+  if (message.type === 'link') return message.link?.title || message.link?.url || t('preview.link');
   return message.text ?? '';
 }
 

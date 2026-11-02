@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { applyAppearance, DEFAULT_APPEARANCE, sanitizeAppearance, type Appearance } from '../lib/appearance';
 import { DEFAULT_NOTIFY_TYPES, type InboxKind, type NotifyTypePrefs } from '../lib/inbox';
+import { applyLocale, isLocale, type Locale } from '../lib/locale';
 import type { ImageQuality, VideoQuality } from '../types/settings';
 
 type Usage = { images: number; videos: number; other: number };
@@ -14,6 +15,7 @@ type SettingsStore = {
   notifyTypes: NotifyTypePrefs;
   showTyping: boolean;
   appearance: Appearance;
+  locale: Locale;
   usage: Usage;
   setDataSaver: (value: boolean) => void;
   setAutoDownloadImages: (value: boolean) => void;
@@ -24,6 +26,7 @@ type SettingsStore = {
   setShowTyping: (value: boolean) => void;
   setAppearance: (patch: Partial<Appearance>) => void;
   resetAppearance: () => void;
+  setLocale: (locale: Locale) => void;
   addUsage: (kind: keyof Usage, bytes: number) => void;
   clearCache: () => void;
 };
@@ -39,6 +42,7 @@ type SavedSettings = {
   notifyTypes: NotifyTypePrefs;
   showTyping: boolean;
   appearance: Appearance;
+  locale: Locale;
 };
 
 function readSaved(): Partial<SavedSettings> {
@@ -53,6 +57,7 @@ function readSaved(): Partial<SavedSettings> {
     if (typeof parsed.showTyping !== 'boolean') delete parsed.showTyping;
     if (parsed.appearance && typeof parsed.appearance === 'object') parsed.appearance = sanitizeAppearance(parsed.appearance);
     else delete parsed.appearance;
+    if (!isLocale(parsed.locale)) delete parsed.locale;
     return parsed;
   } catch {
     return {};
@@ -77,6 +82,7 @@ function writeSaved(state: Pick<SettingsStore, keyof SavedSettings>) {
     notifyTypes: state.notifyTypes,
     showTyping: state.showTyping,
     appearance: state.appearance,
+    locale: state.locale,
   };
   try {
     localStorage.setItem(SETTINGS_KEY, JSON.stringify(payload));
@@ -115,6 +121,7 @@ export const useSettingsStore = create<SettingsStore>((set) => ({
   notifyTypes: saved.notifyTypes ?? DEFAULT_NOTIFY_TYPES,
   showTyping: saved.showTyping ?? true,
   appearance: saved.appearance ?? DEFAULT_APPEARANCE,
+  locale: saved.locale ?? 'ar',
   usage: { images: 0, videos: 0, other: 0 },
   setDataSaver: (dataSaver) => set((state) => {
     const next = { ...state, dataSaver };
@@ -163,11 +170,18 @@ export const useSettingsStore = create<SettingsStore>((set) => ({
     writeSavedNow({ ...state, appearance });
     return { appearance };
   }),
+  setLocale: (locale) => set((state) => {
+    const next = isLocale(locale) ? locale : state.locale;
+    applyLocale(next);
+    writeSavedNow({ ...state, locale: next });
+    return { locale: next };
+  }),
   addUsage: (kind, bytes) =>
     set((state) => ({ usage: { ...state.usage, [kind]: state.usage[kind] + bytes } })),
   clearCache: () => set({ usage: { images: 0, videos: 0, other: 0 } }),
 }));
 
 applyAppearance(useSettingsStore.getState().appearance);
+applyLocale(useSettingsStore.getState().locale);
 
 window.addEventListener('pagehide', flushAppearanceWrite);

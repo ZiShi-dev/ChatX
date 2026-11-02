@@ -5,6 +5,7 @@ import { offlineBannerLabel, serverBannerLabel } from '../../lib/queue';
 import { useChatStore } from '../../stores/chatStore';
 import { useNetworkStore } from '../../stores/networkStore';
 import { useSavedStore } from '../../stores/savedStore';
+import { useI18n } from '../../lib/i18n';
 
 const ERROR_DISMISS_MS = 12_000;
 
@@ -14,6 +15,7 @@ export default function NetworkStatusBanner() {
   const savedError = useSavedStore((state) => state.lastError);
   const error = chatError || savedError;
   const pending = useChatStore((state) => state.messages.reduce((count, message) => count + (message.status === 'pending' ? 1 : 0), 0));
+  const { t } = useI18n();
 
   useEffect(() => {
     if (!error) return;
@@ -27,7 +29,7 @@ export default function NetworkStatusBanner() {
   if (nativeNeedsApiOrigin()) {
     return (
       <IonToolbar className="network-toolbar setup">
-        <p className="network-banner" role="status">تعذر الاتصال بالخادم. راجع المسؤول أو أعد تثبيت التطبيق.</p>
+        <p className="network-banner" role="status">{t('network.setup')}</p>
       </IonToolbar>
     );
   }
@@ -43,7 +45,7 @@ export default function NetworkStatusBanner() {
               useChatStore.setState({ lastError: '' });
               useSavedStore.setState({ lastError: '' });
             }}
-            aria-label="إغلاق"
+            aria-label={t('network.close')}
           >
             ×
           </button>
@@ -57,7 +59,7 @@ export default function NetworkStatusBanner() {
   const deviceOffline = typeof navigator !== 'undefined' && navigator.onLine === false;
   const bannerText = offline
     ? deviceOffline ? offlineBannerLabel(pending) : serverBannerLabel(pending)
-    : 'الاتصال ضعيف';
+    : t('network.weak');
   return (
     <IonToolbar className={offline ? 'network-toolbar' : 'network-toolbar slow'}>
       <p className="network-banner">{bannerText}</p>

@@ -9,6 +9,7 @@ import AccountTabs from '../components/account/AccountTabs';
 import { createScrollHold } from '../lib/ionScrollHold';
 import ProfilePage from './ProfilePage';
 import SettingsPage from './SettingsPage';
+import { useI18n } from '../lib/i18n';
 
 type AccountTab = 'profile' | 'settings';
 
@@ -17,6 +18,7 @@ function tabFromQuery(value: string | null): AccountTab {
 }
 
 export default function AccountPage() {
+  const { t } = useI18n();
   const [params, setParams] = useSearchParams();
   const tab = tabFromQuery(params.get('tab'));
   const loadAccount = useAuthStore((state) => state.loadAccount);
@@ -80,7 +82,7 @@ export default function AccountPage() {
     <IonPage>
       <IonHeader>
         <NetworkStatusBanner />
-        <PageNav title="الحساب" fallback="/home" />
+        <PageNav title={t('account.title')} fallback="/home" />
       </IonHeader>
       <IonContent ref={contentRef} className={tab === 'settings' ? 'settings-page account-scroll' : 'profile-page account-scroll'}>
         {tab === 'profile' && notice ? <p className="form-error account-notice">{notice}</p> : null}

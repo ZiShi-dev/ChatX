@@ -1,6 +1,7 @@
 import { useEffect, useRef, type ReactNode } from 'react';
 import { IonIcon, IonToolbar } from '@ionic/react';
-import { chevronForwardOutline } from 'ionicons/icons';
+import { chevronBackOutline, chevronForwardOutline } from 'ionicons/icons';
+import { useI18n } from '../../lib/i18n';
 import { useNavigate } from 'react-router-dom';
 
 type PageNavProps = {
@@ -14,6 +15,7 @@ type PageNavProps = {
 
 export default function PageNav({ title, fallback, action, sub = false, quiet = false, onBack }: PageNavProps) {
   const navigate = useNavigate();
+  const { t, dir } = useI18n();
   const backRef = useRef<HTMLButtonElement>(null);
   const onBackRef = useRef(onBack);
   onBackRef.current = onBack;
@@ -36,8 +38,8 @@ export default function PageNav({ title, fallback, action, sub = false, quiet = 
       <div className="home-nav">
         <div className="page-nav-title">
           {!sub && (
-            <button ref={backRef} type="button" className="home-nav-menu" aria-label="رجوع">
-              <IonIcon icon={chevronForwardOutline} />
+            <button ref={backRef} type="button" className="home-nav-menu" aria-label={t('nav.back')}>
+              <IonIcon icon={dir === 'rtl' ? chevronForwardOutline : chevronBackOutline} />
             </button>
           )}
           {typeof title === 'string' ? <strong dir="auto">{title}</strong> : title}

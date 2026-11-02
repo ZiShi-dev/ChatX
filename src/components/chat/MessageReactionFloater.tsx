@@ -112,7 +112,7 @@ export default function MessageReactionFloater({ anchorRef, mineEmojis, keyboard
       ref={root}
       className={`message-reaction-float${box?.flip ? ' is-below' : ''}`}
       style={style}
-      dir="rtl"
+      dir={document.documentElement.dir === 'ltr' ? 'ltr' : 'rtl'}
       onPointerDown={(event) => event.stopPropagation()}
     >
       <MessageReactionPicker mineEmojis={mineEmojis} keyboardOpen={keyboardOpen} onPick={onPick} onExpand={onExpand} />

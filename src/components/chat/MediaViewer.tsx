@@ -145,7 +145,7 @@ export default function MediaViewer({ messageId, conversationId, onClose }: { me
     if (window.history.state?.chatxOverlay) dismissOverlayHistory();
     else end();
   }} aria-label="عارض الوسائط">
-    <div ref={root} className={`media-viewer ${chrome?'':'hide-chrome'}`} dir="rtl" onPointerDown={(event)=>event.stopPropagation()} onPointerMove={(event)=>event.stopPropagation()} onPointerUp={(event)=>event.stopPropagation()} onClick={(event)=>event.stopPropagation()} onContextMenu={(event)=>event.stopPropagation()}>
+    <div ref={root} className={`media-viewer ${chrome?'':'hide-chrome'}`} onPointerDown={(event)=>event.stopPropagation()} onPointerMove={(event)=>event.stopPropagation()} onPointerUp={(event)=>event.stopPropagation()} onClick={(event)=>event.stopPropagation()} onContextMenu={(event)=>event.stopPropagation()}>
       <header className="mv-header">
         <button type="button" onClick={close} aria-label="إغلاق العارض"><IonIcon icon={closeOutline}/></button>
         <div className="mv-author"><strong>{sender}</strong><time>{formatNotificationTime(current.createdAt)}</time></div>

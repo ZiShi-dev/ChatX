@@ -6,6 +6,8 @@ import Avatar from '../components/common/Avatar';
 import { useDataSaver } from '../hooks/useDataSaver';
 import { useProfileMotion } from '../hooks/useProfileMotion';
 import { brandName, DEFAULT_LOGO } from '../lib/appearance';
+import LanguagePicker from '../components/common/LanguagePicker';
+import { useI18n, type MessageKey } from '../lib/i18n';
 import { readBanner, readPhoto } from '../lib/photo';
 import { AVATAR_DECORATIONS, type AvatarDecoration } from '../lib/profileCosmetics';
 import { displayNameFontClass, displayNameStyleForUser, MESSAGE_FONT_OPTIONS, normalizeUserColorInput, sanitizeUserColor } from '../lib/userStyle';
@@ -52,6 +54,7 @@ function imageProblem(error: unknown, kind: 'photo' | 'banner') {
 
 export default function ActivationPage() {
   const navigate = useNavigate();
+  const { t } = useI18n();
   const dataSaver = useDataSaver();
   const signInWithGoogle = useAuthStore((state) => state.signInWithGoogle);
   const finishGoogleProfile = useAuthStore((state) => state.finishGoogleProfile);
@@ -197,7 +200,7 @@ export default function ActivationPage() {
   const continueProfile = () => {
     if (part === 'details') {
       if (name.trim().length < 2) {
-        setError('الاسم يحتاج حرفين على الأقل.');
+        setError(t('activation.nameShort'));
         nameRef.current?.focus();
         return;
       }
@@ -224,7 +227,7 @@ export default function ActivationPage() {
     const displayName = name.trim();
     if (displayName.length < 2) {
       setPart('details');
-      setError('الاسم يحتاج حرفين على الأقل.');
+      setError(t('activation.nameShort'));
       return;
     }
     if (!colorValid) {
@@ -247,10 +250,10 @@ export default function ActivationPage() {
       if (connected) setError(connected);
       else if (result === 'username_taken') {
         setPart('details');
-        setError('هذا الاسم مستخدم. اختر اسمًا آخر.');
-      } else if (result === 'profile') setError('تم إنشاء الحساب، لكن تعذر حفظ الصورة أو المظهر. أعد المحاولة.');
+        setError(t('activation.nameTaken'));
+      } else if (result === 'profile') setError(t('activation.profilePartial'));
       else {
-        setError('انتهت جلسة Google. ارجع وسجّل الدخول من جديد.');
+        setError(t('activation.googleExpired'));
         setStep('google');
       }
       return;
@@ -266,6 +269,7 @@ export default function ActivationPage() {
             <img src={brandLogo || DEFAULT_LOGO} alt="" width="96" height="96" decoding="async" />
             <strong dir="auto">{brandName(brandTitle)}</strong>
           </div>
+          <LanguagePicker />
           <div className="gate-card">
             <span className="gate-dots" aria-hidden="true">
               <i className={step === 'google' ? 'on' : 'done'} />
@@ -273,8 +277,8 @@ export default function ActivationPage() {
             </span>
             {step === 'google' ? (
               <div key="google-step">
-                <h1>الدخول</h1>
-                <p className="muted">سجّل الدخول بحساب Google. إذا كان الحساب صالحًا، تنتقل إلى الخطوة التالية.</p>
+                <h1>{t('activation.enter')}</h1>
+                <p className="muted">{t('activation.lead')}</p>
                 {CLIENT_ID ? (
                   <div className="google-login" aria-busy={connecting} style={connecting ? { pointerEvents: 'none', opacity: 0.65 } : undefined}>
                     <button type="button" className="google-login-face" tabIndex={-1} aria-hidden="true">
@@ -284,7 +288,7 @@ export default function ActivationPage() {
                         <path fill="#4CAF50" d="M24 44c5.2 0 10-2 13.6-5.2l-6.3-5.3C29.3 35.1 26.8 36 24 36c-5.3 0-9.7-3.3-11.3-8l-6.5 5C9.5 39.6 16.2 44 24 44z" />
                         <path fill="#1976D2" d="M43.6 20.5H42V20H24v8h11.3c-1.1 3.2-3.5 5.7-6.6 7.2l6.3 5.3C37.4 38.4 44 34 44 24c0-1.2-.1-2.3-.4-3.5z" />
                       </svg>
-                      المواصلة بحساب Google
+                      {t('activation.google')}
                     </button>
                     <div ref={googleRef} className="google-slot" />
                   </div>
@@ -294,7 +298,7 @@ export default function ActivationPage() {
               </div>
             ) : (
               <div key="profile-step" className="account-setup">
-                <h1>{part === 'details' ? 'حسابك' : part === 'look' ? 'مظهر الاسم' : 'الزينة'}</h1>
+                <h1>{part === 'details' ? t('activation.account') : part === 'look' ? t('activation.look') : t('activation.effects')}</h1>
                 <p className="muted">{part === 'details' ? 'أكّد اسمك، ثم أضف صورة وغلافًا ونبذة إن شئت.' : part === 'look' ? 'اللون والخط يظهران لاسمك في المجموعات.' : 'اختر زينة الصورة. يمكن تغييرها لاحقًا.'}</p>
                 <div className="account-hero">
                   {part === 'details' ? (
@@ -331,7 +335,7 @@ export default function ActivationPage() {
                     {remotePreview ? <p className="profile-style-hint">صورة Google للمعاينة فقط. لحفظ صورة في ChatX، اختر واحدة من جهازك.</p> : null}
                     {dataSaver && !photo ? <p className="profile-style-hint">وضع التوفير لا يجلب صورة Google. يمكنك اختيار صورة من جهازك.</p> : null}
                     <label className="gate-field">
-                      <span className="field-line"><span>الاسم</span><b>{name.trim().length}/40</b></span>
+                      <span className="field-line"><span>{t('activation.name')}</span><b>{name.trim().length}/40</b></span>
                       <input
                         ref={nameRef}
                         value={name}
@@ -339,13 +343,13 @@ export default function ActivationPage() {
                         maxLength={40}
                         placeholder="اسمك"
                         autoFocus
-                        aria-label="الاسم"
+                        aria-label={t('activation.name')}
                         aria-invalid={name.trim().length > 0 && name.trim().length < 2}
                         aria-describedby="setup-name-hint"
                         onChange={(event) => { setName(event.target.value); setError(''); }}
                       />
                     </label>
-                    <p id="setup-name-hint" className="profile-style-hint">حرفان على الأقل. هذا الاسم يظهر للجميع.</p>
+                    <p id="setup-name-hint" className="profile-style-hint">{t('activation.nameHint')}</p>
                     <label className="gate-field">
                       <span className="field-line"><span>النبذة</span><b>{bio.length}/160</b></span>
                       <textarea value={bio} dir="auto" maxLength={160} aria-label="النبذة" placeholder="اكتب نبذة قصيرة" onChange={(event) => { setBio(event.target.value); setError(''); }} />
@@ -354,12 +358,12 @@ export default function ActivationPage() {
                 ) : null}
                 {part === 'look' ? (
                   <div className="profile-style-block">
-                    <span className="profile-style-title">لون الاسم</span>
+                    <span className="profile-style-title">{t('activation.colorLabel')}</span>
                     <div className="look-colors profile-name-colors">
                       <label className="look-color">
                         لونك
                         <span className="look-chip" style={{ background: colorValid ? color : '#3d9b84' }}>
-                          <input type="color" aria-label="لون الاسم" value={colorValid ? color : '#3d9b84'} onChange={(event) => chooseColor(event.target.value.toLowerCase())} />
+                          <input type="color" aria-label={t('activation.colorLabel')} value={colorValid ? color : '#3d9b84'} onChange={(event) => chooseColor(event.target.value.toLowerCase())} />
                         </span>
                       </label>
                       <label className="gate-field profile-hex">
@@ -367,11 +371,11 @@ export default function ActivationPage() {
                         <input dir="ltr" maxLength={7} value={colorInput} aria-invalid={!colorValid} aria-label="رمز اللون" onChange={(event) => { setColorInput(event.target.value); setColor(normalizeUserColorInput(event.target.value, color)); setError(''); }} />
                       </label>
                     </div>
-                    <span className="profile-style-title">خط الاسم</span>
-                    <div className="profile-font-grid" role="listbox" aria-label="خط الاسم">
+                    <span className="profile-style-title">{t('activation.font')}</span>
+                    <div className="profile-font-grid" role="listbox" aria-label={t('activation.font')}>
                       {MESSAGE_FONT_OPTIONS.map((item) => (
                         <button key={item.id} type="button" role="option" aria-selected={font === item.id} className={[font === item.id ? 'is-on' : '', displayNameFontClass(item.id)].filter(Boolean).join(' ')} onClick={() => setFont(item.id)}>
-                          {item.label}
+                          {t(`font.${item.id}` as MessageKey)}
                         </button>
                       ))}
                     </div>
@@ -379,21 +383,21 @@ export default function ActivationPage() {
                 ) : null}
                 {part === 'effects' ? (
                   <div className="profile-style-block">
-                    <span className="profile-style-title">زينة الصورة</span>
-                    <p className="profile-style-hint">الحركة تتوقف في وضع التوفير وعلى الأجهزة الضعيفة.</p>
-                    <div className="cosmetic-options" role="group" aria-label="زينة الصورة">
-                      {AVATAR_DECORATIONS.map((item) => <button key={item.id} type="button" aria-pressed={decoration === item.id} className={decoration === item.id ? 'is-on' : ''} onClick={() => setDecoration(item.id)}><Avatar name={name || '؟'} color={color} size={48} src={photo || undefined} decoration={item.id} /><span>{item.label}</span></button>)}
+                    <span className="profile-style-title">{t('activation.decor')}</span>
+                    <p className="profile-style-hint">{t('activation.decorHint')}</p>
+                    <div className="cosmetic-options" role="group" aria-label={t('activation.decor')}>
+                      {AVATAR_DECORATIONS.map((item) => <button key={item.id} type="button" aria-pressed={decoration === item.id} className={decoration === item.id ? 'is-on' : ''} onClick={() => setDecoration(item.id)}><Avatar name={name || '؟'} color={color} size={48} src={photo || undefined} decoration={item.id} /><span>{t(`decor.${item.id}` as MessageKey)}</span></button>)}
                     </div>
                   </div>
                 ) : null}
                 </div>
                 {error ? <p className="form-error" role="alert">{error}</p> : null}
                 {part === 'effects' ? (
-                  <button type="button" className="gate-go" disabled={saving} onClick={() => void submitProfile()}>{saving ? 'جارٍ الحفظ' : 'إنشاء الحساب'}</button>
+                  <button type="button" className="gate-go" disabled={saving} onClick={() => void submitProfile()}>{saving ? t('activation.saving') : t('activation.create')}</button>
                 ) : (
-                  <button type="button" className="gate-go" disabled={saving} onClick={continueProfile}>التالي</button>
+                  <button type="button" className="gate-go" disabled={saving} onClick={continueProfile}>{t('activation.next')}</button>
                 )}
-                <button type="button" className="setup-back" disabled={saving} onClick={backProfile}>رجوع</button>
+                <button type="button" className="setup-back" disabled={saving} onClick={backProfile}>{t('activation.back')}</button>
               </div>
             )}
           </div>

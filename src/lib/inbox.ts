@@ -1,4 +1,5 @@
 import { MAX_NOTIFICATION_PREVIEW_LENGTH, MESSAGE_PAGE_SIZE, NOTIFICATION_GROUP_WINDOW_MS } from '../constants/chat';
+import { t } from './i18n';
 import { unreadStart } from './conversation';
 import { messagePreview } from './media';
 import { mentionTone } from './mention';
@@ -49,12 +50,12 @@ export type InboxItem = {
 const ROOM = new Set<Conversation['type']>(['group', 'global']);
 
 export function notificationPresentation(kind: InboxKind): { label: string; tone: NotificationTone; ltr?: boolean } {
-  if (kind === 'mention') return { label: 'إشارة', tone: 'high' };
-  if (kind === 'reply') return { label: 'رد', tone: 'high' };
+  if (kind === 'mention') return { label: t('notify.mention'), tone: 'high' };
+  if (kind === 'reply') return { label: t('notify.reply'), tone: 'high' };
   if (kind === 'everyone') return { label: '@everyone', tone: 'mid', ltr: true };
-  if (kind === 'signal') return { label: 'تنبيه', tone: 'note' };
-  if (kind === 'reaction') return { label: 'تفاعل', tone: 'high' };
-  return { label: 'رسالة', tone: 'plain' };
+  if (kind === 'signal') return { label: t('notify.signal'), tone: 'note' };
+  if (kind === 'reaction') return { label: t('notify.reaction'), tone: 'high' };
+  return { label: t('notify.message'), tone: 'plain' };
 }
 
 export function notificationPreview(text: string) {

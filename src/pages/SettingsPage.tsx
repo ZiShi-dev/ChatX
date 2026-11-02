@@ -11,35 +11,37 @@ import { notificationPresentation, type InboxKind } from '../lib/inbox';
 import { AdminApiError, adminFetch } from '../lib/adminApi';
 import { formatBytes } from '../lib/media';
 import { isSafeExternalUrl } from '../lib/url';
+import LanguagePicker from '../components/common/LanguagePicker';
+import { useI18n, type MessageKey } from '../lib/i18n';
 import { useAuthStore } from '../stores/authStore';
 import { useChatStore } from '../stores/chatStore';
 import { useSettingsStore } from '../stores/settingsStore';
 import type { ImageQuality, VideoQuality } from '../types/settings';
 
-const imageChoices: Array<{ value: ImageQuality; label: string; hint: string }> = [
-  { value: 'saver', label: 'صغيرة', hint: 'حتى 20 KB للصورة، مناسب لباقات الإنترنت الصغيرة.' },
-  { value: 'medium', label: 'متوسطة', hint: 'توازن بين الوضوح والحجم، حتى 40 KB للصورة.' },
-  { value: 'original', label: 'عالية', hint: 'وضوح أعلى، مع ضغط الصورة إلى 60 KB كحد أقصى.' },
-  { value: 'hd', label: 'HD', hint: 'أفضل جودة متاحة: حتى 2 MB و4096 بكسل، مع ضغط خفيف عند الحاجة. يستهلك بيانات أكثر.' },
+const imageChoices: Array<{ value: ImageQuality; label: MessageKey; hint: MessageKey }> = [
+  { value: 'saver', label: 'quality.saver', hint: 'quality.saverHint' },
+  { value: 'medium', label: 'quality.medium', hint: 'quality.mediumHint' },
+  { value: 'original', label: 'quality.high', hint: 'quality.highHint' },
+  { value: 'hd', label: 'quality.hd', hint: 'quality.hdHint' },
 ];
 
-const videoChoices: Array<{ value: VideoQuality; label: string; hint: string }> = [
-  { value: '480', label: '480p', hint: 'يُرسل الملف كما هو، حتى 8 MB.' },
-  { value: '720', label: '720p', hint: 'يُرسل الملف كما هو، حتى 8 MB.' },
-  { value: 'original', label: 'أصلي', hint: 'يُرسل الملف كما هو، حتى 8 MB.' },
+const videoChoices: Array<{ value: VideoQuality; label: string; hint: MessageKey }> = [
+  { value: '480', label: '480p', hint: 'quality.videoHint' },
+  { value: '720', label: '720p', hint: 'quality.videoHint' },
+  { value: 'original', label: 'original', hint: 'quality.videoHint' },
 ];
 
 type SettingsPageProps = { embedded?: boolean };
 type SettingsSection = 'look' | 'privacy' | 'alerts' | 'receive' | 'send' | 'storage' | 'account';
 
-const settingsSections: Array<{ id: SettingsSection; label: string }> = [
-  { id: 'look', label: 'المظهر' },
-  { id: 'privacy', label: 'الخصوصية' },
-  { id: 'alerts', label: 'الإشعارات' },
-  { id: 'receive', label: 'الاستقبال' },
-  { id: 'send', label: 'الإرسال' },
-  { id: 'storage', label: 'التخزين' },
-  { id: 'account', label: 'الحساب' },
+const settingsSections: Array<{ id: SettingsSection; label: MessageKey }> = [
+  { id: 'look', label: 'settings.look' },
+  { id: 'privacy', label: 'settings.privacy' },
+  { id: 'alerts', label: 'settings.alerts' },
+  { id: 'receive', label: 'settings.receive' },
+  { id: 'send', label: 'settings.send' },
+  { id: 'storage', label: 'settings.storage' },
+  { id: 'account', label: 'settings.account' },
 ];
 
 function scrollSettings(node: HTMLElement | null) {
@@ -63,6 +65,7 @@ function DeleteAccountSection() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const privacy = privacyHref();
+  const { t } = useI18n();
   const remove = async () => {
     if (busy) return;
     setBusy(true);
@@ -74,28 +77,28 @@ function DeleteAccountSection() {
     } catch (failure: unknown) {
       setBusy(false);
       setError(failure instanceof AdminApiError && failure.code === 'forbidden'
-        ? 'لا يمكن حذف حساب المشغّل من التطبيق.'
-        : 'تعذر حذف الحساب. تحقق من الاتصال ثم أعد المحاولة.');
+        ? t('settings.deleteOwner')
+        : t('settings.deleteFailed'));
     }
   };
   return (
     <section className="settings-block">
-      <h2>الحساب</h2>
+      <h2>{t('settings.account')}</h2>
       <article className="setting-card column">
-        <strong>حذف الحساب</strong>
-        <p>يحذف الحساب والرسائل والصور والملفات والجلسات من خادم ChatX. لا يمكن التراجع.</p>
-        {privacy ? <a href={privacy} target="_blank" rel="noreferrer">سياسة الخصوصية</a> : null}
-        <button type="button" className="storage-clear" onClick={() => { setError(''); setOpen(true); }}>حذف حسابي</button>
+        <strong>{t('settings.deleteCard')}</strong>
+        <p>{t('settings.deleteBody')}</p>
+        {privacy ? <a href={privacy} target="_blank" rel="noreferrer">{t('settings.privacyPolicy')}</a> : null}
+        <button type="button" className="storage-clear" onClick={() => { setError(''); setOpen(true); }}>{t('settings.deleteMine')}</button>
         {error ? <p className="form-error" role="alert">{error}</p> : null}
       </article>
       {open && createPortal(
         <div className="wa-scrim center" onClick={() => { if (!busy) setOpen(false); }}>
           <div className="account-dialog" role="alertdialog" aria-labelledby="delete-account-title" onClick={(event) => event.stopPropagation()}>
-            <h2 id="delete-account-title">حذف الحساب؟</h2>
-            <p className="account-warn">ستُحذف رسائلك وصورك وملفاتك وجلساتك. هذا الإجراء نهائي.</p>
+            <h2 id="delete-account-title">{t('settings.deleteAsk')}</h2>
+            <p className="account-warn">{t('settings.deleteWarn')}</p>
             <div className="account-actions">
-              <button type="button" disabled={busy} onClick={() => setOpen(false)}>إلغاء</button>
-              <button type="button" className="danger" disabled={busy} onClick={() => void remove()}>{busy ? 'جارٍ الحذف' : 'حذف الحساب'}</button>
+              <button type="button" disabled={busy} onClick={() => setOpen(false)}>{t('settings.cancel')}</button>
+              <button type="button" className="danger" disabled={busy} onClick={() => void remove()}>{busy ? t('settings.deleting') : t('settings.delete')}</button>
             </div>
           </div>
         </div>,
@@ -105,11 +108,11 @@ function DeleteAccountSection() {
   );
 }
 
-const colorFields: Array<{ key: 'accent' | 'link' | 'bg' | 'frame'; label: string; aria: string }> = [
-  { key: 'accent', label: 'التمييز', aria: 'لون التمييز' },
-  { key: 'link', label: 'الروابط', aria: 'لون الروابط' },
-  { key: 'bg', label: 'الخلفية', aria: 'لون الخلفية' },
-  { key: 'frame', label: 'الإطار', aria: 'لون الإطار' },
+const colorFields: Array<{ key: 'accent' | 'link' | 'bg' | 'frame'; label: MessageKey; aria: MessageKey }> = [
+  { key: 'accent', label: 'settings.accent', aria: 'settings.accentLabel' },
+  { key: 'link', label: 'settings.link', aria: 'settings.linkLabel' },
+  { key: 'bg', label: 'settings.bg', aria: 'settings.bgLabel' },
+  { key: 'frame', label: 'settings.frame', aria: 'settings.frameLabel' },
 ];
 
 function AppearanceSettings() {
@@ -122,13 +125,15 @@ function AppearanceSettings() {
   const [wallpaperError, setWallpaperError] = useState('');
   const opacity = Math.round(appearance.wallpaperOpacity * 100);
   const title = appearance.name.trim() || 'ChatX';
+  const { t } = useI18n();
+  const presetLabel: Record<string, MessageKey> = { night: 'preset.night', sand: 'preset.sand', plum: 'preset.plum' };
 
   return (
     <section className="settings-block settings-appearance">
-      <h2>المظهر</h2>
-      <p className="settings-lead">يُحفظ على هذا الجهاز فقط. لون الكتابة يتبع إضاءة الخلفية تلقائيًا.</p>
+      <h2>{t('settings.lookTitle')}</h2>
+      <p className="settings-lead">{t('settings.lookLead')}</p>
       <div className="appearance-stack">
-        <div className="appearance-preview" aria-label="معاينة مظهر التطبيق">
+        <div className="appearance-preview" aria-label={t('settings.preview')}>
           <div
             className="appearance-preview-wall"
             style={appearance.wallpaper ? { backgroundImage: `url(${appearance.wallpaper})`, opacity: appearance.wallpaperOpacity } : undefined}
@@ -141,16 +146,16 @@ function AppearanceSettings() {
         </div>
 
         <section className="profile-editor-section">
-          <h3>هوية التطبيق</h3>
-          <p className="profile-style-hint">الاسم والشعار يظهران في الصفحة الرئيسية وشاشة البدء.</p>
+          <h3>{t('settings.identity')}</h3>
+          <p className="profile-style-hint">{t('settings.identityHint')}</p>
           <label className="group-name">
-            <span>اسم التطبيق</span>
+            <span>{t('settings.appName')}</span>
             <input
               className="look-name"
               dir="auto"
               maxLength={24}
               value={appearance.name}
-              aria-label="اسم التطبيق"
+              aria-label={t('settings.appName')}
               placeholder="ChatX"
               onChange={(event) => setAppearance({ name: event.target.value })}
             />
@@ -158,9 +163,9 @@ function AppearanceSettings() {
           <div className="appearance-logo-row">
             <img src={appearance.logo || DEFAULT_LOGO} alt="" width="56" height="56" decoding="async" />
             <div className="profile-media-actions appearance-logo-actions">
-              <button type="button" className="profile-photo-action" onClick={() => logoRef.current?.click()}>تغيير الشعار</button>
+              <button type="button" className="profile-photo-action" onClick={() => logoRef.current?.click()}>{t('settings.changeLogo')}</button>
               {appearance.logo ? (
-                <button type="button" className="profile-photo-action" onClick={() => { setLogoError(''); setAppearance({ logo: '' }); }}>إزالة</button>
+                <button type="button" className="profile-photo-action" onClick={() => { setLogoError(''); setAppearance({ logo: '' }); }}>{t('settings.remove')}</button>
               ) : null}
             </div>
             <input
@@ -168,7 +173,7 @@ function AppearanceSettings() {
               type="file"
               accept="image/*"
               hidden
-              aria-label="اختيار الشعار"
+              aria-label={t('settings.pickLogo')}
               onChange={(event) => {
                 const file = event.target.files?.[0];
                 event.target.value = '';
@@ -178,7 +183,7 @@ function AppearanceSettings() {
                     setLogoError('');
                     setAppearance({ logo });
                   },
-                  () => setLogoError('تعذر استخدام هذه الصورة. اختر صورة أصغر.'),
+                  () => setLogoError(t('settings.logoError')),
                 );
               }}
             />
@@ -187,19 +192,19 @@ function AppearanceSettings() {
         </section>
 
         <section className="profile-editor-section">
-          <h3>خلفية المحادثات</h3>
-          <p className="profile-style-hint">صورة خفيفة خلف فقاعات الرسائل. اتركها فارغة لاستخدام اللون فقط.</p>
+          <h3>{t('settings.wallpaperTitle')}</h3>
+          <p className="profile-style-hint">{t('settings.wallpaperHint')}</p>
           <div className="appearance-wall-banner">
             {appearance.wallpaper
               ? <img src={appearance.wallpaper} alt="" decoding="async" style={{ opacity: appearance.wallpaperOpacity }} />
-              : <span>بدون صورة</span>}
+              : <span>{t('settings.noWallpaper')}</span>}
           </div>
           <div className="profile-media-actions">
             <button type="button" className="profile-photo-action" onClick={() => wallpaperRef.current?.click()}>
-              {appearance.wallpaper ? 'تغيير الصورة' : 'اختيار صورة'}
+              {appearance.wallpaper ? t('settings.changeWallpaper') : t('settings.pickWallpaper')}
             </button>
             {appearance.wallpaper ? (
-              <button type="button" className="profile-photo-action" onClick={() => { setWallpaperError(''); setAppearance({ wallpaper: '' }); }}>إزالة</button>
+              <button type="button" className="profile-photo-action" onClick={() => { setWallpaperError(''); setAppearance({ wallpaper: '' }); }}>{t('settings.remove')}</button>
             ) : null}
           </div>
           <input
@@ -207,7 +212,7 @@ function AppearanceSettings() {
             type="file"
             accept="image/*"
             hidden
-            aria-label="اختيار صورة الخلفية"
+              aria-label={t('settings.pickWallpaperLabel')}
             onChange={(event) => {
               const file = event.target.files?.[0];
               event.target.value = '';
@@ -217,20 +222,20 @@ function AppearanceSettings() {
                   setWallpaperError('');
                   setAppearance({ wallpaper });
                 },
-                () => setWallpaperError('تعذر استخدام هذه الصورة. اختر صورة أصغر.'),
+                () => setWallpaperError(t('settings.wallpaperError')),
               );
             }}
           />
           {appearance.wallpaper ? (
             <label className="look-opacity">
-              <span>الشفافية <b dir="ltr">{opacity}%</b></span>
+              <span>{t('settings.opacity')} <b dir="ltr">{opacity}%</b></span>
               <input
                 type="range"
                 min={15}
                 max={80}
                 step={5}
                 value={opacity}
-                aria-label="شفافية الخلفية"
+                aria-label={t('settings.opacityLabel')}
                 onChange={(event) => setAppearance({ wallpaperOpacity: Number(event.target.value) / 100 })}
               />
             </label>
@@ -239,9 +244,9 @@ function AppearanceSettings() {
         </section>
 
         <section className="profile-editor-section">
-          <h3>الألوان</h3>
-          <p className="profile-style-hint">اختر نمطًا جاهزًا أو عدّل الألوان يدويًا.</p>
-          <div className="setting-choices look-presets appearance-presets" role="radiogroup" aria-label="أنماط جاهزة">
+          <h3>{t('settings.colors')}</h3>
+          <p className="profile-style-hint">{t('settings.colorsHint')}</p>
+          <div className="setting-choices look-presets appearance-presets" role="radiogroup" aria-label={t('settings.presets')}>
             {APPEARANCE_PRESETS.map((preset) => {
               const selected = appearance.accent === preset.look.accent && appearance.bg === preset.look.bg && appearance.frame === preset.look.frame;
               return (
@@ -257,23 +262,23 @@ function AppearanceSettings() {
                   <span className="look-swatch" style={{ background: preset.look.bg, borderColor: preset.look.frame }}>
                     <span style={{ background: preset.look.accent }} />
                   </span>
-                  {preset.label}
+                  {presetLabel[preset.id] ? t(presetLabel[preset.id]) : preset.label}
                 </button>
               );
             })}
           </div>
           <div className="profile-style-block">
-            <span className="profile-style-title">تخصيص الألوان</span>
+            <span className="profile-style-title">{t('settings.customColors')}</span>
             <div className="appearance-color-grid">
               {colorFields.map((field) => {
                 const value = appearance[field.key];
                 return (
                   <label key={field.key} className="look-color">
-                    {field.label}
+                    {t(field.label)}
                     <span className="look-chip" style={{ background: value }}>
                       <input
                         type="color"
-                        aria-label={field.aria}
+                        aria-label={t(field.aria)}
                         value={value}
                         onChange={(event) => {
                           const next = event.target.value;
@@ -290,7 +295,7 @@ function AppearanceSettings() {
             </div>
           </div>
           <button type="button" className="storage-clear appearance-reset" onClick={() => { setLogoError(''); setWallpaperError(''); resetAppearance(); }}>
-            استعادة المظهر الافتراضي
+            {t('settings.reset')}
           </button>
         </section>
       </div>
@@ -329,6 +334,7 @@ export default function SettingsPage({ embedded = false }: SettingsPageProps) {
   const setShowTyping = useSettingsStore((state) => state.setShowTyping);
   const shellRef = useRef<HTMLDivElement>(null);
   const [section, setSection] = useState<SettingsSection>('look');
+  const { t } = useI18n();
 
   const openSection = (next: SettingsSection, tab: HTMLButtonElement) => {
     if (next === section) return;
@@ -339,7 +345,8 @@ export default function SettingsPage({ embedded = false }: SettingsPageProps) {
 
   const body = (
     <div ref={shellRef} className="settings-shell profile-frame">
-        <div className="group-tabs is-scroll settings-tabs" role="tablist" aria-label="أقسام الإعدادات">
+        <LanguagePicker />
+        <div className="group-tabs is-scroll settings-tabs" role="tablist" aria-label={t('settings.sections')}>
           {settingsSections.map((item) => (
             <button
               key={item.id}
@@ -351,39 +358,39 @@ export default function SettingsPage({ embedded = false }: SettingsPageProps) {
               className={section === item.id ? 'is-on' : undefined}
               onClick={(event) => openSection(item.id, event.currentTarget)}
             >
-              {item.label}
+              {t(item.label)}
             </button>
           ))}
         </div>
         <div className="settings-panel" role="tabpanel" id={`settings-panel-${section}`} aria-labelledby={`settings-tab-${section}`}>
         {section === 'look' && <AppearanceSettings />}
         {section === 'privacy' && <section className="settings-block">
-          <h2>الخصوصية</h2>
+          <h2>{t('settings.privacyTitle')}</h2>
           <article className="setting-card">
             <div>
-              <strong>أظهر عندما أكتب</strong>
-              <p>يرى أعضاء المحادثة أنك تكتب. أوقفه ليبقى ذلك مخفيًا.</p>
+              <strong>{t('settings.typing')}</strong>
+              <p>{t('settings.typingHint')}</p>
             </div>
             <IonToggle
               checked={showTyping}
-              aria-label="العرض أثناء الكتابة"
+              aria-label={t('settings.typingLabel')}
               onIonChange={(event) => setShowTyping(event.detail.checked)}
             />
           </article>
         </section>}
         {section === 'alerts' && <section className="settings-block">
-          <h2>الإشعارات</h2>
-          <p className="settings-lead">تظهر اللافتات وإشعارات الهاتف للرسائل الخاصة ورسائل المجموعات والإشارات والردود، ما لم تكن المحادثة مكتومة. التفاعلات والأحداث تبقى في صفحة الإشعارات. عند قراءة الرسالة يزول التنبيه.</p>
+          <h2>{t('settings.alertsTitle')}</h2>
+          <p className="settings-lead">{t('settings.alertsLead')}</p>
           <NotificationPermissionCard />
           <PushConnectionCard />
-          <div className="notify-types" role="group" aria-label="أنواع الإشعارات">
+          <div className="notify-types" role="group" aria-label={t('settings.notifyTypes')}>
             {(Object.keys(notifyTypes) as InboxKind[]).map((kind) => {
               const look = notificationPresentation(kind);
               return (
                 <article key={kind} className="setting-card">
                   <div>
                     <strong dir={look.ltr ? 'ltr' : undefined}>{look.label}</strong>
-                    <p>{!notifyTypes[kind] ? 'التنبيه مكتوم، وتبقى الرسالة في الإشعارات' : kind === 'message' ? 'لافتات وإشعارات الهاتف للرسائل الخاصة ورسائل المجموعات' : kind === 'reaction' || kind === 'signal' ? 'داخل صفحة الإشعارات فقط، بدون لافتة أو تنبيه للهاتف' : 'لافتة داخل التطبيق وإشعار للهاتف في الخلفية'}</p>
+                    <p>{!notifyTypes[kind] ? t('settings.mutedHint') : kind === 'message' ? t('settings.messageHint') : kind === 'reaction' || kind === 'signal' ? t('settings.quietHint') : t('settings.alertHint')}</p>
                   </div>
                   <IonToggle
                     checked={notifyTypes[kind]}
@@ -396,47 +403,47 @@ export default function SettingsPage({ embedded = false }: SettingsPageProps) {
           </div>
         </section>}
         {section === 'receive' && <section className="settings-block">
-          <h2>الاستقبال</h2>
-          <p className="settings-lead">ما يحدث للصور والفيديو التي يصلك.</p>
+          <h2>{t('settings.receiveTitle')}</h2>
+          <p className="settings-lead">{t('settings.receiveLead')}</p>
           <article className="setting-card">
             <div>
-              <strong>توفير البيانات</strong>
-              <p>{dataSaver ? 'الوضع الموفّر مفعّل، وهو الاختيار الأول. تتوقف حركة زينة الملف وتنزيل الوسائط. تتباعد تحديثات القائمة والتنبيهات إلى 40 ثانية، وتبقى المحادثة المفتوحة كل 20 ثانية.' : 'الوضع العادي. تعود حركة زينة الملف. الصور والفيديو تتبعان الإعدادين أسفل.'}</p>
+              <strong>{t('settings.dataSaver')}</strong>
+              <p>{dataSaver ? t('settings.dataSaverOn') : t('settings.dataSaverOff')}</p>
             </div>
-            <IonToggle checked={dataSaver} aria-label="توفير البيانات" onIonChange={(event) => setDataSaver(event.detail.checked)} />
+            <IonToggle checked={dataSaver} aria-label={t('settings.dataSaver')} onIonChange={(event) => setDataSaver(event.detail.checked)} />
           </article>
           <article className={dataSaver ? 'setting-card is-paused' : 'setting-card'}>
             <div>
-              <strong>تنزيل الصور تلقائيًا</strong>
-              <p>{dataSaver ? 'متوقف لأن توفير البيانات مفعّل.' : 'تُفتح الصور وحدها عند عرض الرسالة.'}</p>
+              <strong>{t('settings.autoImages')}</strong>
+              <p>{dataSaver ? t('settings.paused') : t('settings.autoImagesOn')}</p>
             </div>
             <IonToggle
               checked={!dataSaver && autoImages}
               disabled={dataSaver}
-              aria-label="تنزيل الصور تلقائيًا"
+              aria-label={t('settings.autoImages')}
               onIonChange={(event) => setAutoImages(event.detail.checked)}
             />
           </article>
           <article className={dataSaver ? 'setting-card is-paused' : 'setting-card'}>
             <div>
-              <strong>تنزيل الفيديو تلقائيًا</strong>
-              <p>{dataSaver ? 'متوقف لأن توفير البيانات مفعّل.' : 'يبدأ الفيديو بالتحميل عند عرض الرسالة.'}</p>
+              <strong>{t('settings.autoVideos')}</strong>
+              <p>{dataSaver ? t('settings.paused') : t('settings.autoVideosOn')}</p>
             </div>
             <IonToggle
               checked={!dataSaver && autoVideos}
               disabled={dataSaver}
-              aria-label="تنزيل الفيديو تلقائيًا"
+              aria-label={t('settings.autoVideos')}
               onIonChange={(event) => setAutoVideos(event.detail.checked)}
             />
           </article>
         </section>}
 
         {section === 'send' && <section className="settings-block">
-          <h2>الإرسال</h2>
-          <p className="settings-lead">حجم الصور والفيديو التي ترسلها. هذا مستقل عن توفير البيانات.</p>
+          <h2>{t('settings.sendTitle')}</h2>
+          <p className="settings-lead">{t('settings.sendLead')}</p>
           <article className="setting-card column">
-            <strong>جودة الصور</strong>
-            <div className="setting-choices" role="radiogroup" aria-label="جودة الصور">
+            <strong>{t('settings.imageQuality')}</strong>
+            <div className="setting-choices" role="radiogroup" aria-label={t('settings.imageQuality')}>
               {imageChoices.map((choice) => (
                 <button
                   key={choice.value}
@@ -446,15 +453,15 @@ export default function SettingsPage({ embedded = false }: SettingsPageProps) {
                   className={imageQuality === choice.value ? 'is-on' : ''}
                   onClick={() => setImageQuality(choice.value)}
                 >
-                  {choice.label}
+                  {t(choice.label)}
                 </button>
               ))}
             </div>
-            <p>{imageHint}</p>
+            <p>{imageHint ? t(imageHint) : ''}</p>
           </article>
           <article className="setting-card column">
-            <strong>جودة الفيديو</strong>
-            <div className="setting-choices" role="radiogroup" aria-label="جودة الفيديو">
+            <strong>{t('settings.videoQuality')}</strong>
+            <div className="setting-choices" role="radiogroup" aria-label={t('settings.videoQuality')}>
               {videoChoices.map((choice) => (
                 <button
                   key={choice.value}
@@ -464,21 +471,21 @@ export default function SettingsPage({ embedded = false }: SettingsPageProps) {
                   className={videoQuality === choice.value ? 'is-on' : ''}
                   onClick={() => setVideoQuality(choice.value)}
                 >
-                  {choice.label}
+                  {choice.value === 'original' ? t('quality.original') : choice.label}
                 </button>
               ))}
             </div>
-            <p>{videoHint}</p>
+            <p>{videoHint ? t(videoHint) : ''}</p>
           </article>
         </section>}
 
         {section === 'storage' && <section className="settings-block">
-          <h2>التخزين</h2>
-          <p className="settings-lead">الملفات المحفوظة على هذا الهاتف. مسحها يطلب تنزيلها من جديد.</p>
+          <h2>{t('settings.storageTitle')}</h2>
+          <p className="settings-lead">{t('settings.storageLead')}</p>
           <article className="setting-card column">
             <div className="storage-head">
-              <strong>{total > 0 ? formatBytes(total) : 'فارغ'}</strong>
-              <span>الملفات المؤقتة</span>
+              <strong>{total > 0 ? formatBytes(total) : t('settings.empty')}</strong>
+              <span>{t('settings.temp')}</span>
             </div>
             {total > 0 && (
               <div className="storage-bar" aria-hidden="true">
@@ -488,9 +495,9 @@ export default function SettingsPage({ embedded = false }: SettingsPageProps) {
               </div>
             )}
             <ul className="storage-list">
-              <li><i className="images" /> الصور <b>{formatBytes(usage.images)}</b></li>
-              <li><i className="videos" /> الفيديو <b>{formatBytes(usage.videos)}</b></li>
-              <li><i className="other" /> ملفات أخرى <b>{formatBytes(usage.other)}</b></li>
+              <li><i className="images" /> {t('settings.images')} <b>{formatBytes(usage.images)}</b></li>
+              <li><i className="videos" /> {t('settings.videos')} <b>{formatBytes(usage.videos)}</b></li>
+              <li><i className="other" /> {t('settings.other')} <b>{formatBytes(usage.other)}</b></li>
             </ul>
             <button
               type="button"
@@ -501,7 +508,7 @@ export default function SettingsPage({ embedded = false }: SettingsPageProps) {
                 resetMediaCache();
               }}
             >
-              مسح الملفات المؤقتة
+              {t('settings.clear')}
             </button>
           </article>
         </section>}
@@ -516,7 +523,7 @@ export default function SettingsPage({ embedded = false }: SettingsPageProps) {
     <IonPage>
       <IonHeader>
         <NetworkStatusBanner />
-        <PageNav title="الإعدادات" fallback="/account" />
+        <PageNav title={t('account.settings')} fallback="/account" />
       </IonHeader>
       <IonContent className="settings-page">{body}</IonContent>
     </IonPage>

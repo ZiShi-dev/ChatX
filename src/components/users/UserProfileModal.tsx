@@ -9,6 +9,7 @@ import { useProfileMotion } from '../../hooks/useProfileMotion';
 import { connectionLabel } from '../../lib/presence';
 import { roleLabel } from '../../lib/roles';
 import { displayNameStyleForUser } from '../../lib/userStyle';
+import { t, useI18n } from '../../lib/i18n';
 import type { User } from '../../types/user';
 
 type RoomContext = {
@@ -27,14 +28,15 @@ type UserProfileModalProps = {
 
 function chipsFor(user: User, isSelf: boolean, room?: RoomContext) {
   return [
-    isSelf ? 'أنت' : '',
+    isSelf ? t('member.you') : '',
     roleLabel(user.role),
-    room?.adminId === user.id ? 'مشرف المجموعة' : '',
+    room?.adminId === user.id ? t('member.mod') : '',
   ].filter((label): label is string => Boolean(label));
 }
 
 export default function UserProfileModal({ user, isSelf, room, onClose, onMessage, onMedia }: UserProfileModalProps) {
   const animate = useProfileMotion();
+  useI18n();
   if (!user) return null;
   const chips = chipsFor(user, isSelf, room);
   const showChips = customRoleReady(user) || chips.length > 0;
@@ -61,22 +63,22 @@ export default function UserProfileModal({ user, isSelf, room, onClose, onMessag
               {chips.map((label) => <span key={label} className="kind-pill">{label}</span>)}
             </p>
           )}
-          {room && <p className="member-room">عضو في {room.name}</p>}
+          {room && <p className="member-room">{t('member.inRoom', { name: room.name })}</p>}
           <section className="profile-bio member-bio">
-            <span>النبذة</span>
-            {user.bio ? <p dir="auto">{user.bio}</p> : <p>لا توجد نبذة</p>}
+            <span>{t('member.bio')}</span>
+            {user.bio ? <p dir="auto">{user.bio}</p> : <p>{t('member.noBio')}</p>}
           </section>
         </section>
         {isSelf ? (
-          <p className="member-self">{room ? 'هذا حسابك في هذه المجموعة.' : 'هذا حسابك.'}</p>
+          <p className="member-self">{room ? t('member.selfRoom') : t('member.self')}</p>
         ) : (
           <button type="button" className="profile-pop-action" onClick={() => onMessage(user.id)}>
-            <span>إرسال رسالة</span>
+            <span>{t('member.message')}</span>
             <IonIcon icon={chatbubbleOutline} />
           </button>
         )}
-        {onMedia && <button type="button" className="cancel" onClick={onMedia}>وسائط المحادثة</button>}
-        <button type="button" className="cancel" onClick={onClose}>إغلاق</button>
+        {onMedia && <button type="button" className="cancel" onClick={onMedia}>{t('member.media')}</button>}
+        <button type="button" className="cancel" onClick={onClose}>{t('member.close')}</button>
       </div>
     </div>,
     document.body,

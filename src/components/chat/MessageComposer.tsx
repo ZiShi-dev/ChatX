@@ -29,6 +29,7 @@ import { expectedImageSize, expectedVideoSize, formatBytes, messagePreview } fro
 import { useDataSaver } from '../../hooks/useDataSaver';
 import { StorageAccess, type StorageFile } from '../../lib/storageAccess';
 import { useAuthStore } from '../../stores/authStore';
+import { useI18n } from '../../lib/i18n';
 import { useChatStore } from '../../stores/chatStore';
 import { useNetworkStore } from '../../stores/networkStore';
 import { useSettingsStore } from '../../stores/settingsStore';
@@ -107,6 +108,7 @@ function kindOf(name: string, mimeType = ''): Attachment['kind'] {
 }
 
 export default function MessageComposer({ conversationId, talk = 'open' }: MessageComposerProps) {
+  const { t } = useI18n();
   const sendMessage = useChatStore((state) => state.sendMessage);
   const sendImage = useChatStore((state) => state.sendImage);
   const sendVideo = useChatStore((state) => state.sendVideo);
@@ -701,7 +703,7 @@ export default function MessageComposer({ conversationId, talk = 'open' }: Messa
               <strong>الرد على {replyingAuthor || 'عضو'}</strong>
               <p><EmojiText text={replying.preview} /></p>
             </div>
-            <button type="button" className="edit-close" aria-label="إلغاء الرد" onClick={() => cancelReply()}>
+            <button type="button" className="edit-close" aria-label={t('composer.cancelReply')} onClick={() => cancelReply()}>
               <IonIcon icon={closeOutline} />
             </button>
           </div>
@@ -715,7 +717,7 @@ export default function MessageComposer({ conversationId, talk = 'open' }: Messa
             <button
               type="button"
               className="edit-close"
-              aria-label="إلغاء التعديل"
+              aria-label={t('composer.cancelEdit')}
               onClick={() => {
                 cancelEdit();
                 setDraft('');
@@ -795,7 +797,7 @@ export default function MessageComposer({ conversationId, talk = 'open' }: Messa
                     <em>{item.name}</em>
                   </span>
                 )}
-                <button type="button" className="attach-remove" aria-label="إزالة" onClick={() => removeAttachment(item.id)}>
+                <button type="button" className="attach-remove" aria-label={t('composer.remove')} onClick={() => removeAttachment(item.id)}>
                   <IonIcon icon={closeOutline} />
                 </button>
                 <span className="attach-size">{formatBytes(item.size)}</span>
@@ -828,7 +830,7 @@ export default function MessageComposer({ conversationId, talk = 'open' }: Messa
             <button
               type="button"
               className={emojiOpen ? 'composer-icon is-on' : 'composer-icon'}
-              aria-label="إيموجي"
+              aria-label={t('composer.emoji')}
               aria-expanded={emojiOpen}
               onClick={() => {
                 setMenuOpen(false);
@@ -849,7 +851,7 @@ export default function MessageComposer({ conversationId, talk = 'open' }: Messa
               maxLength={MESSAGE_TEXT_MAX}
               value={draft}
               disabled={talk === 'locked'}
-              placeholder="اكتب رسالة"
+              placeholder={t('composer.placeholder')}
               enterKeyHint="send"
               onChange={(event) => {
                 setDraft(event.target.value);
@@ -879,7 +881,7 @@ export default function MessageComposer({ conversationId, talk = 'open' }: Messa
             {talk === 'open' && !editing && <button
               type="button"
               className={menuOpen ? 'composer-icon open' : 'composer-icon'}
-              aria-label={menuOpen ? 'إغلاق' : 'مرفق'}
+              aria-label={menuOpen ? t('composer.close') : t('composer.attach')}
               aria-expanded={menuOpen}
               disabled={Boolean(editing)}
               onClick={() => {
@@ -893,7 +895,7 @@ export default function MessageComposer({ conversationId, talk = 'open' }: Messa
               <button
                 type="button"
                 className="composer-icon"
-                aria-label="الكاميرا"
+                aria-label={t('composer.camera')}
                 onClick={() => {
                   setMenuOpen(false);
                   setEmojiOpen(false);
@@ -908,7 +910,7 @@ export default function MessageComposer({ conversationId, talk = 'open' }: Messa
             type="submit"
             className={editing ? 'composer-send is-edit' : 'composer-send'}
             disabled={!canSend}
-            aria-label={editing ? 'حفظ' : 'إرسال'}
+            aria-label={editing ? t('composer.save') : t('composer.send')}
             onMouseDown={(event) => event.preventDefault()}
             onPointerDown={(event) => event.preventDefault()}
           >

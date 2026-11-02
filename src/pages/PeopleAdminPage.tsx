@@ -13,6 +13,7 @@ import { readDirectoryUsers } from '../lib/directory';
 import { formatBytes } from '../lib/media';
 import { formatPurgeCountdown, nextMediaPurgeAt } from '../lib/mediaRetention';
 import { roleLabel } from '../lib/roles';
+import { useI18n } from '../lib/i18n';
 import { useChatStore } from '../stores/chatStore';
 import { useUserStore } from '../stores/userStore';
 import type { Message } from '../types/message';
@@ -67,10 +68,10 @@ const GROUP_COLOR = '#3d9b84';
 
 type AdminSection = 'people' | 'groups' | 'server';
 
-const adminSections: Array<{ id: AdminSection; label: string }> = [
-  { id: 'people', label: 'الأعضاء' },
-  { id: 'groups', label: 'المجموعات' },
-  { id: 'server', label: 'الخادم' },
+const adminSections: Array<{ id: AdminSection; label: 'admin.people' | 'admin.groups' | 'admin.server' }> = [
+  { id: 'people', label: 'admin.people' },
+  { id: 'groups', label: 'admin.groups' },
+  { id: 'server', label: 'admin.server' },
 ];
 
 function scrollAdmin(node: HTMLElement | null) {
@@ -372,6 +373,7 @@ function ChoiceSheet({
 }
 
 export default function PeopleAdminPage() {
+  const { t } = useI18n();
   const loadHome = useChatStore((state) => state.loadHome);
   const setMainOpen = useChatStore((state) => state.setMainOpen);
   const removeUser = useUserStore((state) => state.removeUser);
@@ -529,7 +531,7 @@ export default function PeopleAdminPage() {
     <IonPage>
       <IonHeader>
         <NetworkStatusBanner />
-        <PageNav title="الإدارة" fallback="/account" />
+        <PageNav title={t('admin.title')} fallback="/account" />
       </IonHeader>
       <IonContent className="people-admin account-scroll">
         {access === 'pending' ? <PageSkeleton kind="settings" /> : null}
@@ -553,7 +555,7 @@ export default function PeopleAdminPage() {
                   className={section === item.id ? 'is-on' : undefined}
                   onClick={() => openSection(item.id)}
                 >
-                  {item.label}
+                  {t(item.label)}
                 </button>
               ))}
             </div>

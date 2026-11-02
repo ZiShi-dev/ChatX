@@ -62,7 +62,7 @@ export default function MessageActionBar({ children, onClose, fallback = false }
   const actions = items.filter((item): item is Action => isValidElement<{ role?: string }>(item) && item.props.role === 'menuitem');
   const primary = actions.filter((item) => PRIMARY.has(label(item))).sort((a, b) => primaryRank(label(a)) - primaryRank(label(b)));
   const secondary = actions.filter((item) => !PRIMARY.has(label(item)));
-  return <div ref={root} className={fallback ? 'message-selection message-selection-fallback' : 'message-selection'} dir="rtl">
+  return <div ref={root} className={fallback ? 'message-selection message-selection-fallback' : 'message-selection'}>
     <div className="message-selection-toolbar" role="toolbar" aria-label="إجراءات الرسالة المحددة">
       <button type="button" aria-label="إلغاء التحديد" onClick={close}><IonIcon icon={chevronForwardOutline} /></button>
       <strong aria-label="رسالة واحدة محددة">1</strong>

@@ -738,6 +738,10 @@ ion-page > ion-content.inbox-page {
   font-weight: 700;
 }
 
+.language-choices button {
+  height: 44px;
+}
+
 .look-presets {
   grid-template-columns: 1fr 1fr;
 }

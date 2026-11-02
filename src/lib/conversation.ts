@@ -1,6 +1,7 @@
 import type { Conversation } from '../types/conversation';
 import type { Message } from '../types/message';
 import type { User, UserStatus } from '../types/user';
+import { dateLocale, t } from './i18n';
 
 export function initials(name: string) {
   return name
@@ -12,7 +13,7 @@ export function initials(name: string) {
 }
 
 export function formatMessageTime(iso: string) {
-  return new Intl.DateTimeFormat('ar', {
+  return new Intl.DateTimeFormat(dateLocale(), {
     hour: '2-digit',
     minute: '2-digit',
   }).format(new Date(iso));
@@ -26,19 +27,19 @@ export function formatConversationTime(iso: string) {
   const date = new Date(iso);
   const today = new Date();
   if (date.toDateString() === today.toDateString()) return formatClock(iso);
-  return new Intl.DateTimeFormat('ar', { day: 'numeric', month: 'short' }).format(date);
+  return new Intl.DateTimeFormat(dateLocale(), { day: 'numeric', month: 'short' }).format(date);
 }
 
 export function formatNotificationTime(iso: string, now = Date.now()) {
   const date = new Date(iso);
   const delta = now - date.getTime();
-  if (delta >= 0 && delta < 60_000) return 'الآن';
-  if (delta >= 0 && delta < 60 * 60_000) return `منذ ${Math.max(1, Math.round(delta / 60_000))} د`;
+  if (delta >= 0 && delta < 60_000) return t('time.now');
+  if (delta >= 0 && delta < 60 * 60_000) return t('time.minutes', { count: Math.max(1, Math.round(delta / 60_000)) });
   const today = new Date(now);
-  if (date.toDateString() === today.toDateString()) return `اليوم ${formatClock(iso)}`;
+  if (date.toDateString() === today.toDateString()) return t('time.today', { clock: formatClock(iso) });
   const yesterday = new Date(now);
   yesterday.setDate(today.getDate() - 1);
-  if (date.toDateString() === yesterday.toDateString()) return 'أمس';
+  if (date.toDateString() === yesterday.toDateString()) return t('time.yesterday');
   return formatConversationTime(iso);
 }
 
@@ -47,15 +48,15 @@ export function formatMessageDay(iso: string) {
   const today = new Date();
   const yesterday = new Date();
   yesterday.setDate(today.getDate() - 1);
-  if (date.toDateString() === today.toDateString()) return 'اليوم';
-  if (date.toDateString() === yesterday.toDateString()) return 'أمس';
-  return new Intl.DateTimeFormat('ar', { weekday: 'long', day: 'numeric', month: 'long' }).format(date);
+  if (date.toDateString() === today.toDateString()) return t('time.todayWord');
+  if (date.toDateString() === yesterday.toDateString()) return t('time.yesterday');
+  return new Intl.DateTimeFormat(dateLocale(), { weekday: 'long', day: 'numeric', month: 'long' }).format(date);
 }
 
 export function statusLabel(status: UserStatus) {
-  if (status === 'online') return 'متصل';
-  if (status === 'away') return 'بعيد';
-  return 'غير متصل';
+  if (status === 'online') return t('presence.online');
+  if (status === 'away') return t('presence.away');
+  return t('presence.offline');
 }
 
 export function isSelfChat(conversation: Pick<Conversation, 'self'>) {
@@ -76,12 +77,12 @@ export function deletedPrivatePeer(conversation: Conversation, currentUserId: st
 }
 
 export function conversationTitle(conversation: Conversation, currentUserId: string, users: User[]) {
-  if (isSelfChat(conversation)) return users.find((user) => user.id === currentUserId)?.displayName ?? 'أنت';
+  if (isSelfChat(conversation)) return users.find((user) => user.id === currentUserId)?.displayName ?? t('chat.you');
   if (conversation.type === 'private') {
-    if (deletedPrivatePeer(conversation, currentUserId, users)) return 'حساب محذوف';
-    return otherParticipant(conversation, currentUserId, users)?.displayName ?? 'محادثة خاصة';
+    if (deletedPrivatePeer(conversation, currentUserId, users)) return t('chat.deletedAccount');
+    return otherParticipant(conversation, currentUserId, users)?.displayName ?? t('chat.private');
   }
-  return conversation.name ?? 'مجموعة';
+  return conversation.name ?? t('chat.group');
 }
 
 export function membersOf(conversation: Conversation, users: User[]) {
@@ -186,22 +187,22 @@ export function resumeMessageId(messageIds: string[], cursorId: string, unread: 
 
 export function catchUpLabel(count: number) {
   if (count <= 0) return '';
-  if (count === 1) return 'رسالة جديدة';
-  if (count === 2) return 'رسالتان جديدتان';
-  if (count <= 10) return `${count} رسائل جديدة`;
-  return `${count} رسالة جديدة`;
+  if (count === 1) return t('unread.new.one');
+  if (count === 2) return t('unread.new.two');
+  if (count <= 10) return t('unread.new.few', { count });
+  return t('unread.new.many', { count });
 }
 
 export function unreadDividerLabel(count: number) {
   if (count <= 0) return '';
-  if (count === 1) return 'رسالة واحدة غير مقروءة';
-  if (count === 2) return 'رسالتان غير مقروءتين';
-  if (count <= 10) return `${count} رسائل غير مقروءة`;
-  return `${count} رسالة غير مقروءة`;
+  if (count === 1) return t('unread.old.one');
+  if (count === 2) return t('unread.old.two');
+  if (count <= 10) return t('unread.old.few', { count });
+  return t('unread.old.many', { count });
 }
 
 export function roomSummary(members: number, online: number) {
-  const people = members === 1 ? 'عضو واحد' : members === 2 ? 'عضوان' : `${members} أعضاء`;
-  const presence = online === 1 ? 'متصل واحد' : online === 2 ? 'متصلان' : `${online} متصلون`;
+  const people = members === 1 ? t('members.one') : members === 2 ? t('members.two') : t('members.many', { count: members });
+  const presence = online === 1 ? t('online.one') : online === 2 ? t('online.two') : t('online.many', { count: online });
   return `${people} • ${presence}`;
 }
