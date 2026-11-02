@@ -79,7 +79,7 @@ test('walks through name, appearance and decoration before creating the account'
   fireEvent.click(screen.getByRole('option', { name: 'واضح' }));
   fireEvent.click(screen.getByRole('button', { name: 'التالي' }));
   expect(screen.getByRole('heading', { name: 'الزينة' })).toBeInTheDocument();
-  fireEvent.click(screen.getByRole('button', { name: /التنين$/ }));
+  fireEvent.click(screen.getByRole('button', { name: /قبعة الكاوبوي$/ }));
   fireEvent.click(screen.getByRole('button', { name: 'إنشاء الحساب' }));
   expect(await screen.findByRole('button', { name: 'إنشاء الحساب' })).toBeEnabled();
   expect(finish).toHaveBeenCalledWith('token', 'ليلى', {

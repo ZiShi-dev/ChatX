@@ -65,6 +65,22 @@ const USER_OPTIONS = CHOICES.map((item) => ({ key: item.key, label: item.label, 
 const GROUP_OPTIONS = GROUP_CHOICES.map((item) => ({ key: item.key, label: item.label, forced: item.withGroup }));
 const GROUP_COLOR = '#3d9b84';
 
+type AdminSection = 'people' | 'groups' | 'server';
+
+const adminSections: Array<{ id: AdminSection; label: string }> = [
+  { id: 'people', label: 'الأعضاء' },
+  { id: 'groups', label: 'المجموعات' },
+  { id: 'server', label: 'الخادم' },
+];
+
+function scrollAdmin(node: HTMLElement | null) {
+  const content = node?.closest('ion-content');
+  if (!content || !('getScrollElement' in content)) return;
+  void (content as { getScrollElement: () => Promise<HTMLElement> }).getScrollElement().then((scroller) => {
+    scroller.scrollTop = 0;
+  });
+}
+
 const GROUP_ID = /^[0-9a-f-]{36}$/i;
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -371,7 +387,14 @@ export default function PeopleAdminPage() {
   const [systemError, setSystemError] = useState('');
   const [wipeAsk, setWipeAsk] = useState(false);
   const [wiping, setWiping] = useState(false);
+  const [section, setSection] = useState<AdminSection>('people');
   const systemRequest = useRef(0);
+  const shellRef = useRef<HTMLDivElement>(null);
+  const openSection = (next: AdminSection) => {
+    if (next === section) return;
+    setSection(next);
+    scrollAdmin(shellRef.current);
+  };
 
   useEffect(() => {
     alive.current = true;
@@ -511,92 +534,116 @@ export default function PeopleAdminPage() {
       <IonContent className="people-admin account-scroll">
         {access === 'pending' ? <PageSkeleton kind="settings" /> : null}
         {access === 'ready' ? (
-          <>
+          <div ref={shellRef} className="admin-frame">
             <section className="admin-stats" aria-label="ملخص">
               <p><strong>{users.length}</strong><span>الأعضاء</span></p>
               <p><strong>{groups.length}</strong><span>المجموعات</span></p>
               <p><strong dir="ltr">{system ? formatBytes(system.diskBytes) : '…'}</strong><span>الوسائط</span></p>
             </section>
             {done ? <p className="owner-done" role="status">{done}</p> : null}
-            <h2>الأعضاء <span>{users.length}</span></h2>
-            {users.length === 0 ? <EmptyState title="لا يوجد أعضاء آخرون" /> : (
-              <div className="owner-list">
-                {users.map((user) => (
-                  <OwnerRow
-                    key={user.id}
-                    id={user.id}
-                    title={user.displayName}
-                    detail={`@${user.username}`}
-                    color={user.color}
-                    photo={user.avatarUrl}
-                    decoration={user.avatarDecoration}
-                    status={user.status}
-                    badge={roleLabel(user.role) || 'عضو'}
-                    label={`حذف ${user.displayName}`}
-                    onOpen={openUser}
-                  />
-                ))}
-              </div>
-            )}
-            <h2>المجموعات <span>{groups.length}</span></h2>
-            {groups.length === 0 ? <EmptyState title="لا توجد مجموعات" /> : (
-              <div className="owner-list">
-                {groups.map((item) => (
-                  <OwnerRow
-                    key={item.id}
-                    id={item.id}
-                    title={item.name}
-                    detail=""
-                    color={GROUP_COLOR}
-                    badge="مجموعة"
-                    label={`حذف ${item.name}`}
-                    onOpen={openGroup}
-                  />
-                ))}
-              </div>
-            )}
-            <section className="owner-system" aria-labelledby="owner-main-title">
-              <h2 id="owner-main-title">المجموعة الرئيسية</h2>
-              <p className="owner-system-hint">إخفاؤها يبقيها لمن هم داخلها فقط. إظهارها يعيد كل الحسابات إلى المجموعة.</p>
-              <div className="account-actions">
-                <button type="button" onClick={() => void setMainOpen(false).then((ok) => setDone(ok ? 'أُخفيت عن غير الأعضاء.' : 'تعذر إخفاء المجموعة.'))}>إخفاء عن غير الأعضاء</button>
-                <button type="button" className="is-allow" onClick={() => void setMainOpen(true).then((ok) => setDone(ok ? 'ظهرت لكل الحسابات.' : 'تعذر إظهار المجموعة.'))}>إظهار للجميع</button>
-              </div>
-            </section>
-            <section className="owner-system" aria-labelledby="owner-system-title">
-              <h2 id="owner-system-title">حذف الوسائط من القرص</h2>
-              {systemError ? <p className="owner-system-alert" role="alert">{systemError}</p> : null}
-              {system?.lastPurgeError ? <p className="owner-system-alert" role="alert">آخر تنظيف للوسائط فشل: {system.lastPurgeError}</p> : null}
-              {system && (system.legacyImageRows > 0 || system.legacyFileRows > 0) ? (
-                <p className="owner-system-alert" role="alert">ما زالت هناك وسائط قديمة داخل قاعدة البيانات. أعد تشغيل الخادم لإكمال النقل إلى القرص.</p>
-              ) : null}
-              {system ? <MediaPurgeClock system={system} /> : !systemError ? <p className="owner-system-hint">جارٍ قراءة حالة الوسائط…</p> : null}
-              {system ? (
-                <ul className="owner-system-list">
-                  <li>على القرص الآن: <span dir="ltr">{system.diskImageFiles}</span> صورة · <span dir="ltr">{system.diskFileFiles}</span> ملف أو فيديو · {formatBytes(system.diskBytes)}</li>
-                  <li>في قاعدة البيانات: <span dir="ltr">{system.metadataImages}</span> صورة · <span dir="ltr">{system.metadataFiles}</span> ملف أو فيديو</li>
-                  <li>آخر فحص: {system.lastPurgeAt ? new Date(system.lastPurgeAt).toLocaleString('ar') : 'لم يُنفَّذ بعد'}</li>
-                  {system.lastPurgeAt ? (
-                    <li>آخر حذف: <span dir="ltr">{system.lastExpiredImages}</span> صورة · <span dir="ltr">{system.lastExpiredFiles}</span> ملف أو فيديو · <span dir="ltr">{system.lastOrphans}</span> ملف بلا سجل</li>
-                  ) : null}
-                </ul>
-              ) : null}
-              {wipeAsk ? (
-                <div className="owner-system-confirm">
-                  <p className="owner-system-alert" role="alert">يُحذف الآن كل الصور والملفات والفيديو من القرص. الرسائل تبقى، ومؤقت الحذف التلقائي لا يعود إلى البداية.</p>
-                  <div className="owner-system-actions">
-                    <button type="button" onClick={() => setWipeAsk(false)} disabled={wiping}>إلغاء</button>
-                    <button type="button" className="danger" onClick={() => void wipeDisk()} disabled={wiping}>{wiping ? 'جارٍ الحذف' : 'حذف الآن'}</button>
+            <div className="group-tabs is-three admin-tabs" role="tablist" aria-label="أقسام الإدارة">
+              {adminSections.map((item) => (
+                <button
+                  key={item.id}
+                  type="button"
+                  role="tab"
+                  id={`admin-tab-${item.id}`}
+                  aria-selected={section === item.id}
+                  aria-controls={`admin-panel-${item.id}`}
+                  className={section === item.id ? 'is-on' : undefined}
+                  onClick={() => openSection(item.id)}
+                >
+                  {item.label}
+                </button>
+              ))}
+            </div>
+            <div className="admin-panel" role="tabpanel" id={`admin-panel-${section}`} aria-labelledby={`admin-tab-${section}`}>
+            {section === 'people' ? (
+              users.length === 0 ? <EmptyState title="لا يوجد أعضاء آخرون" /> : (
+                <div className="owner-list">
+                  {users.map((user) => (
+                    <OwnerRow
+                      key={user.id}
+                      id={user.id}
+                      title={user.displayName}
+                      detail={`@${user.username}`}
+                      color={user.color}
+                      photo={user.avatarUrl}
+                      decoration={user.avatarDecoration}
+                      status={user.status}
+                      badge={roleLabel(user.role) || 'عضو'}
+                      label={`حذف ${user.displayName}`}
+                      onOpen={openUser}
+                    />
+                  ))}
+                </div>
+              )
+            ) : null}
+            {section === 'groups' ? (
+              groups.length === 0 ? <EmptyState title="لا توجد مجموعات" /> : (
+                <div className="owner-list">
+                  {groups.map((item) => (
+                    <OwnerRow
+                      key={item.id}
+                      id={item.id}
+                      title={item.name}
+                      detail=""
+                      color={GROUP_COLOR}
+                      badge="مجموعة"
+                      label={`حذف ${item.name}`}
+                      onOpen={openGroup}
+                    />
+                  ))}
+                </div>
+              )
+            ) : null}
+            {section === 'server' ? (
+              <>
+                <section className="owner-system" aria-labelledby="owner-main-title">
+                  <h2 id="owner-main-title">المجموعة الرئيسية</h2>
+                  <p className="owner-system-hint">إخفاؤها يبقيها لمن هم داخلها فقط. إظهارها يعيد كل الحسابات إلى المجموعة.</p>
+                  <div className="account-actions">
+                    <button type="button" onClick={() => void setMainOpen(false).then((ok) => setDone(ok ? 'أُخفيت عن غير الأعضاء.' : 'تعذر إخفاء المجموعة.'))}>إخفاء عن غير الأعضاء</button>
+                    <button type="button" className="is-allow" onClick={() => void setMainOpen(true).then((ok) => setDone(ok ? 'ظهرت لكل الحسابات.' : 'تعذر إظهار المجموعة.'))}>إظهار للجميع</button>
                   </div>
-                </div>
-              ) : (
-                <div className="owner-system-actions">
-                  <button type="button" onClick={refreshSystem} disabled={wiping}>تحديث الحالة</button>
-                  <button type="button" className="danger" onClick={() => { setDone(''); setWipeAsk(true); }} disabled={wiping}>حذف ملفات القرص</button>
-                </div>
-              )}
-            </section>
-          </>
+                </section>
+                <section className="owner-system" aria-labelledby="owner-system-title">
+                  <h2 id="owner-system-title">حذف الوسائط من القرص</h2>
+                  {systemError ? <p className="owner-system-alert" role="alert">{systemError}</p> : null}
+                  {system?.lastPurgeError ? <p className="owner-system-alert" role="alert">آخر تنظيف للوسائط فشل: {system.lastPurgeError}</p> : null}
+                  {system && (system.legacyImageRows > 0 || system.legacyFileRows > 0) ? (
+                    <p className="owner-system-alert" role="alert">ما زالت هناك وسائط قديمة داخل قاعدة البيانات. أعد تشغيل الخادم لإكمال النقل إلى القرص.</p>
+                  ) : null}
+                  {system ? <MediaPurgeClock system={system} /> : !systemError ? <p className="owner-system-hint">جارٍ قراءة حالة الوسائط…</p> : null}
+                  {system ? (
+                    <ul className="owner-system-list">
+                      <li>على القرص الآن: <span dir="ltr">{system.diskImageFiles}</span> صورة · <span dir="ltr">{system.diskFileFiles}</span> ملف أو فيديو · {formatBytes(system.diskBytes)}</li>
+                      <li>في قاعدة البيانات: <span dir="ltr">{system.metadataImages}</span> صورة · <span dir="ltr">{system.metadataFiles}</span> ملف أو فيديو</li>
+                      <li>آخر فحص: {system.lastPurgeAt ? new Date(system.lastPurgeAt).toLocaleString('ar') : 'لم يُنفَّذ بعد'}</li>
+                      {system.lastPurgeAt ? (
+                        <li>آخر حذف: <span dir="ltr">{system.lastExpiredImages}</span> صورة · <span dir="ltr">{system.lastExpiredFiles}</span> ملف أو فيديو · <span dir="ltr">{system.lastOrphans}</span> ملف بلا سجل</li>
+                      ) : null}
+                    </ul>
+                  ) : null}
+                  {wipeAsk ? (
+                    <div className="owner-system-confirm">
+                      <p className="owner-system-alert" role="alert">يُحذف الآن كل الصور والملفات والفيديو من القرص. الرسائل تبقى، ومؤقت الحذف التلقائي لا يعود إلى البداية.</p>
+                      <div className="owner-system-actions">
+                        <button type="button" onClick={() => setWipeAsk(false)} disabled={wiping}>إلغاء</button>
+                        <button type="button" className="danger" onClick={() => void wipeDisk()} disabled={wiping}>{wiping ? 'جارٍ الحذف' : 'حذف الآن'}</button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="owner-system-actions">
+                      <button type="button" onClick={refreshSystem} disabled={wiping}>تحديث الحالة</button>
+                      <button type="button" className="danger" onClick={() => { setDone(''); setWipeAsk(true); }} disabled={wiping}>حذف ملفات القرص</button>
+                    </div>
+                  )}
+                </section>
+              </>
+            ) : null}
+            </div>
+          </div>
         ) : null}
         <div className="account-end" aria-hidden="true" />
       </IonContent>

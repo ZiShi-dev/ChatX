@@ -21,7 +21,7 @@ export default function Avatar({ name, color, size = 44, slot, src, decoration, 
   const frame = useRef<HTMLSpanElement>(null);
   const allowed = useProfileMotion();
   const moving = useVisibleAvatar(frame, animate && allowed && kind !== 'none');
-  const faceSize = kind === 'none' ? size : Math.round(size * ((kind === 'hat' || kind === 'hat-rain') ? 0.78 : kind === 'dragon' ? 0.74 : 0.82));
+  const faceSize = kind === 'none' ? size : Math.round(size * ((kind === 'hat' || kind === 'hat-rain' || kind === 'dragon') ? 0.78 : 0.82));
   const face = (
     <span
       slot={kind === 'none' ? slot : undefined}

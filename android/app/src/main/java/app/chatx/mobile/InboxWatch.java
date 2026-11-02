@@ -204,14 +204,6 @@ final class InboxWatch {
         if (alarms == null) return;
         long at = System.currentTimeMillis() + Math.max(INTERVAL_MS, prefs(context).getLong("retryAt", 0) - System.currentTimeMillis());
         PendingIntent intent = broadcast(context);
-        try {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && alarms.canScheduleExactAlarms()) {
-                alarms.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, at, intent);
-                return;
-            }
-        } catch (SecurityException error) {
-            // The inexact alarm below still runs when exact alarms are not allowed.
-        }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
             alarms.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, at, intent);
             return;

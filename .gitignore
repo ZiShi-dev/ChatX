@@ -7,6 +7,9 @@ server/certs/
 server/data/media/*
 !server/data/media/.gitkeep
 .env
+*.jks
+*.keystore
+android/keystore.properties
 /.pnp
 .pnp.js
 

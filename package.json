@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "apk:build": "node scripts/build-apk.mjs",
+    "play:bundle": "node scripts/build-play.mjs",
     "dev": "vite",
     "build": "tsc && vite build",
     "preview": "vite preview",

@@ -4,7 +4,7 @@ import { createKeyRepository } from './keyStore.ts';
 import { FILE_BYTES_MAX, IMAGE_BYTES_MAX, isVideoFileName, SEALED_OVERHEAD, VIDEO_BYTES_MAX } from './sealed.ts';
 import { randomInt } from 'node:crypto';
 import pg from 'pg';
-import { eraseGroupSelection, eraseSelection } from './eraseMember.ts';
+import { deleteOwnAccountRows, eraseGroupSelection, eraseSelection } from './eraseMember.ts';
 import { GLOBAL_ROOM_ID } from './home.ts';
 import { GROUP_TURN_MS, resolveGroupTurn } from './groupTurn.ts';
 import { noticeKind } from './inbox.ts';
@@ -151,6 +151,18 @@ export function createPostgresRepository(pool: pg.Pool, store: MediaStore): Auth
         const result = await eraseSelection({
           query: (sql, params) => client.query(sql, params),
         }, actorId, targetId, choices);
+        if (result.ok) return 'ok';
+        return result.error === 'forbidden' ? 'forbidden' : 'missing';
+      } finally {
+        client.release();
+      }
+    },
+    async deleteOwnAccount(userId) {
+      const client = await pool.connect();
+      try {
+        const result = await deleteOwnAccountRows({
+          query: (sql, params) => client.query(sql, params),
+        }, userId);
         if (result.ok) return 'ok';
         return result.error === 'forbidden' ? 'forbidden' : 'missing';
       } finally {

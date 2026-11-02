@@ -1,5 +1,5 @@
-import { offlineShell } from './scripts/offlineShell';
-import { legacyCsp } from './scripts/legacyCsp';
+import { offlineShell } from './scripts/offlineShell.ts';
+import { legacyCsp } from './scripts/legacyCsp.ts';
 /// <reference types="vitest" />
 
 import { createHash } from 'node:crypto'

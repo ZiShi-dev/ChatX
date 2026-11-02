@@ -48,7 +48,7 @@ it('reserves a square decoration slot and keeps tiny avatars unobstructed', () =
   expect(frame.style.width).toBe('36px');
   expect(frame.style.height).toBe('36px');
   expect(frame.style.minWidth).toBe('36px');
-  expect(container.querySelector('.jade-dragon-front')).not.toBeNull();
+  expect(container.querySelector('.cowboy-hat-front')).not.toBeNull();
   expect(container.querySelector('.is-animated')).toBeNull();
   rerender(<Avatar name="User" color="#3d9b84" size={18} decoration="dragon" />);
   expect(container.querySelector('.avatar-frame')).toBeNull();

@@ -7,6 +7,7 @@ import { createHash } from 'node:crypto';
 import {
   acceptGoogle,
   endSession,
+  deleteOwnAccount,
   eraseOwnerGroup,
   eraseOwnerMember,
   listOwnerMembers,
@@ -132,6 +133,34 @@ async function readBody(request: Request, limit: number) {
   }
 }
 
+function privacyPage() {
+  const headers = new Headers();
+  securityHeaders(headers);
+  headers.set('content-type', 'text/html; charset=utf-8');
+  headers.set('content-security-policy', "default-src 'none'; style-src 'unsafe-inline'; base-uri 'none'; frame-ancestors 'none'");
+  headers.set('cache-control', 'public, max-age=3600');
+  const html = `<!doctype html>
+<html lang="ar" dir="rtl">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>سياسة الخصوصية — ChatX</title>
+<style>body{font-family:system-ui,sans-serif;line-height:1.6;max-width:40rem;margin:2rem auto;padding:0 1rem}h1{font-size:1.4rem}</style>
+<h1>سياسة الخصوصية — ChatX</h1>
+<p>ChatX تطبيق محادثة لمجموعة صغيرة. لا نعرض إعلانات ولا نبيع البيانات.</p>
+<h2>ما يُحفظ</h2>
+<ul>
+<li>حساب Google: البريد، الاسم، ومعرّف Google، لإنشاء الجلسة.</li>
+<li>الملف: الاسم الظاهر، النبذة، الصورة، والغطاء.</li>
+<li>المحتوى الذي ترسله: الرسائل، الصور، والملفات. ملفات الوسائط على القرص تُحذف بعد 24 ساعة.</li>
+<li>رمز إشعارات الجهاز، إذا فعّلت الإشعارات، لإيصال التنبيهات عبر Firebase.</li>
+<li>جلسة تسجيل الدخول، في ملف HttpOnly.</li>
+</ul>
+<h2>حذف الحساب</h2>
+<p>من التطبيق أو الموقع: الإعدادات، ثم «حذف حسابي». يُحذف الحساب مع الرسائل والصور والملفات والجلسات. لا يمكن التراجع. حساب المشغّل محمي ولا يُحذف من هذه الشاشة.</p>
+</html>`;
+  return new Response(html, { status: 200, headers });
+}
+
 function failure(deps: Deps, error: string) {
   return json({ error }, statusFor(error), error === 'rate_limited' ? { retryAfter: Math.ceil(deps.config.authCooldownMs / 1000) } : undefined);
 }
@@ -166,6 +195,7 @@ async function route(deps: Deps, request: Request) {
     return new Response(null, { status: 204, headers });
   }
   if (request.method === 'GET' && path === '/api/health') return json({ ok: true, groupTurnPolicy: 'weekly-v3-direct', networkPolicy: 'durable-delta-v1', securityPolicy:'bounded-api-v1', turnNotificationPolicy:'all-members-v1', notificationReadPolicy:'durable-v1', pushPolicy: 'fcm-data-v2', pushConfigured: hasPushConfiguration() });
+  if (request.method === 'GET' && path === '/privacy') return privacyPage();
   if (request.method === 'GET' && path === '/api/app/release') return json(readAppRelease(deps.config.releaseDir, bundledUpdatePublicKey()));
   const groupTurn = path.match(/^\/api\/rooms\/([0-9a-f-]{36})\/turn$/i);
   if (groupTurn && request.method === 'GET') {
@@ -519,6 +549,13 @@ async function route(deps: Deps, request: Request) {
     });
     if (!result.ok) return failure(deps, result.error);
     return json({ ok: true });
+  }
+  if (request.method === 'POST' && path === '/api/account/delete') {
+    const result = await deleteOwnAccount(deps, { token: readSessionToken(request), confirm: body.confirm });
+    if (!result.ok) return failure(deps, result.error);
+    const response = json({ ok: true });
+    response.headers.append('set-cookie', clearSessionCookie(secureRequest(request)));
+    return response;
   }
   if (request.method === 'POST' && path === '/api/auth/logout') {
     await endSession(deps, readSessionToken(request));

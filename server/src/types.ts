@@ -85,6 +85,7 @@ export interface AuthRepository {
   findUserById(id: string): Promise<AuthUser | null>;
   listUsers(): Promise<AuthUser[]>;
   eraseMember(actorId: string, targetId: string, choices: EraseChoices): Promise<'ok' | 'missing' | 'forbidden'>;
+  deleteOwnAccount(userId: string): Promise<'ok' | 'missing' | 'forbidden'>;
   listOwnerGroups(): Promise<Array<{ id: string; name: string }>>;
   eraseGroup(actorId: string, roomId: string, choices: GroupEraseChoices): Promise<'ok' | 'missing' | 'forbidden'>;
   listOwnerAudit(): Promise<OwnerAudit[]>;

@@ -4,57 +4,28 @@
 .decoration-soul-fire::after { display:none; }
 .soul-fire-back { z-index:0; }
 .soul-fire-front { z-index:2; }
-.jade-dragon-back { z-index:0; }
-.decoration-dragon > .avatar { position:relative; z-index:1; }
-.jade-dragon-front { z-index:2; }
-.decoration-dragon.is-animated .jade-dragon-coil { animation:jade-coil-breathe 6s ease-in-out infinite; transform-origin:60px 60px; }
-.decoration-dragon.is-animated .jade-dragon-head { animation:jade-head-breathe 4.8s ease-in-out infinite; transform-origin:94px 30px; }
-.decoration-dragon.is-animated .jade-dragon-mane { animation:jade-mane-wave 3.2s ease-in-out infinite; transform-origin:95px 32px; }
-.decoration-dragon.is-animated .jade-dragon-whiskers { animation:jade-whisker-wave 3.7s ease-in-out infinite; transform-origin:106px 40px; }
-.decoration-dragon.is-animated .jade-dragon-tail { animation:jade-tail-wave 5.4s ease-in-out infinite; transform-origin:100px 78px; }
-.decoration-dragon.is-animated .jade-dragon-breath { animation:jade-breath-rise 3.6s ease-out infinite; transform-origin:111px 54px; }
-@keyframes jade-coil-breathe { 50% { transform:scale(1.015,.99); } }
-@keyframes jade-head-breathe { 50% { transform:translate(-.5px,1px) rotate(-2deg); } }
-@keyframes jade-mane-wave { 50% { transform:skewY(-5deg) scale(1.04,1); } }
-@keyframes jade-whisker-wave { 50% { transform:rotate(9deg) scale(1,.92); } }
-@keyframes jade-tail-wave { 50% { transform:rotate(-4deg); } }
-@keyframes jade-breath-rise { 0%,100% { transform:translateY(0) scale(.7); opacity:0; } 25% { opacity:.8; } 80% { transform:translate(-2px,5px) scale(1.1); opacity:0; } }
-@media (prefers-reduced-motion:reduce) { .decoration-dragon.is-animated .jade-dragon-coil, .decoration-dragon.is-animated .jade-dragon-head, .decoration-dragon.is-animated .jade-dragon-mane, .decoration-dragon.is-animated .jade-dragon-whiskers, .decoration-dragon.is-animated .jade-dragon-tail, .decoration-dragon.is-animated .jade-dragon-breath { animation:none; } }
-.soul-flame { transform-box:fill-box; transform-origin:50% 100%; }
-.decoration-soul-fire.is-animated .soul-fire-contour { animation:soul-fire-flow 2.4s ease-in-out infinite; animation-delay:var(--flame-delay,0s); }
-.decoration-soul-fire.is-animated .soul-fire-core { animation-duration:1.8s; }
-.decoration-soul-fire.is-animated .soul-fire-ember { animation:soul-fire-rise 2.8s ease-out infinite; animation-delay:var(--flame-delay,0s); }
+.cowboy-hat-back { z-index:0; }
+.cowboy-hat-front { z-index:2; }
 .decoration-soul-fire.is-animated .soul-eye { animation:soul-eye-glow 3s ease-in-out infinite; }
-@keyframes soul-fire-flow {
-  0%,100% { d:path('M10 40C-2 35 0 26 5 21C9 16 3 10 8 3C6 14 17 16 13 23C20 19 14 13 18 9C23 20 21 26 16 31C14 35 16 38 10 40Z'); transform:scale(1,.97); opacity:.85; }
-  33% { d:path('M10 40C0 34 3 27 8 22C14 16 7 9 14 0C9 13 20 18 14 25C20 23 20 16 23 13C25 23 19 28 15 32C12 35 15 39 10 40Z'); transform:scale(.95,1.06); opacity:1; }
-  68% { d:path('M10 40C-3 34-1 28 3 23C7 18 0 13 3 6C3 17 13 17 11 25C18 21 12 13 15 5C23 17 23 24 17 30C13 35 17 38 10 40Z'); transform:scale(1.04,.99); opacity:.92; }
-}
-@keyframes soul-fire-rise { 0% { transform:translate(0,5px) scale(.7); opacity:0; } 20% { opacity:.8; } 100% { transform:translate(3px,-12px) scale(.25); opacity:0; } }
 @keyframes soul-eye-glow { 50% { opacity:.65; } }
-@media (prefers-reduced-motion:reduce) { .decoration-soul-fire.is-animated .soul-flame, .decoration-soul-fire.is-animated .soul-eye, .decoration-soul-fire.is-animated .soul-fire-ember { animation:none; } }
+@media (prefers-reduced-motion:reduce) { .decoration-soul-fire.is-animated .soul-eye { animation:none; } }
 .avatar-frame::after { content:''; position:absolute; inset:2%; border-radius:50%; pointer-events:none; border:clamp(1px,.035em,3px) solid var(--cosmetic-color); }
 .decoration-orbit::after { border:2px dashed var(--cosmetic-color); }
 .decoration-laurel::after { border:3px double #d1af67; border-left-color:var(--cosmetic-color); border-right-color:var(--cosmetic-color); }
 .decoration-prism::after { border-radius:34%; transform:rotate(45deg); border:2px solid var(--cosmetic-color); inset:16%; }
-.decoration-hat, .decoration-hat-rain { align-items:flex-end; }
+.decoration-hat, .decoration-hat-rain, .decoration-dragon { align-items:flex-end; }
 .decoration-hat::after, .decoration-hat-rain::after, .decoration-dragon::after { display:none; }
 .avatar-artwork { position:absolute; inset:0; width:100%; height:100%; pointer-events:none; overflow:hidden; z-index:1; }
-.decoration-hat > .avatar, .decoration-hat-rain > .avatar { position:absolute; bottom:6%; left:50%; transform:translateX(-50%); z-index:1; }
+.decoration-hat > .avatar, .decoration-hat-rain > .avatar, .decoration-dragon > .avatar { position:absolute; bottom:6%; left:50%; transform:translateX(-50%); z-index:1; }
 .hat-back-artwork { z-index:0; }
 .hat-artwork { z-index:2; }
-.decoration-hat.is-animated .hat-artwork, .decoration-hat.is-animated .hat-back-artwork, .decoration-hat-rain.is-animated .hat-artwork, .decoration-hat-rain.is-animated .hat-back-artwork { animation:profile-hat 5s ease-in-out infinite; transform-origin:50% 28%; }
+.decoration-hat.is-animated .hat-artwork, .decoration-hat.is-animated .hat-back-artwork, .decoration-hat-rain.is-animated .hat-artwork, .decoration-hat-rain.is-animated .hat-back-artwork, .decoration-dragon.is-animated .cowboy-hat-front, .decoration-dragon.is-animated .cowboy-hat-back { animation:profile-hat 5s ease-in-out infinite; transform-origin:50% 28%; }
 .decoration-hat-rain.is-animated .hat-rain-back { animation:hat-rain 3.6s linear infinite; }
 .decoration-hat-rain.is-animated .hat-rain-front { animation:hat-rain 2.8s linear infinite; animation-delay:-1.4s; }
 @keyframes hat-rain { 0% { transform:translateY(-6px); opacity:0; } 25%,75% { opacity:.28; } 100% { transform:translateY(9px); opacity:0; } }
-.decoration-dragon.is-animated .dragon-artwork { animation:profile-dragon 7s ease-in-out infinite; }
-.decoration-dragon.is-animated .dragon-spark { animation:profile-ember 2.8s ease-in-out infinite; transform-origin:114px 55px; }
-.decoration-dragon.is-animated .spark-far { animation-duration:3.6s; animation-delay:-1.4s; transform-origin:11px 73px; }
 .decoration-orbit.is-animated::after { animation:profile-orbit 24s linear infinite; }
 .decoration-prism.is-animated::after { animation:profile-prism 6s ease-in-out infinite; }
 @keyframes profile-hat { 25% { transform:rotate(-1.5deg) translateY(-.5%); } 75% { transform:rotate(1.5deg) translateY(-.5%); } }
-@keyframes profile-dragon { 30% { transform:rotate(-2deg); } 70% { transform:rotate(2deg); } }
-@keyframes profile-ember { 50% { opacity:.35; transform:translateY(-3px) scale(.8); } }
 @keyframes profile-orbit { to { transform:rotate(360deg); } }
 @keyframes profile-prism { 50% { transform:rotate(6deg); opacity:.7; } }
 .profile-frame, .member-sheet, .profile-editor-preview, .account-hero { position:relative; isolation:isolate; }
@@ -81,7 +52,7 @@
 .profile-editor-preview .cosmetic-preview { position:relative; margin:-40px 16px 0; padding:0; min-height:0; border:0; border-radius:0; background:transparent; align-items:flex-end; gap:12px; }
 @media (min-width:760px) { .profile-editor-tabs button { font-size:14px; } .profile-editor-fields { max-height:48vh; } }
 @media (max-height:550px) { .profile-editor-header { padding-top:4px; } .profile-editor-header h2 { margin:0 0 4px; font-size:16px; } .profile-editor-header .cosmetic-preview { min-height:72px; padding:8px 12px; } .profile-editor-header .avatar-frame, .profile-editor-header .avatar { transform:scale(.8); margin:-8px; } }
-@media (prefers-reduced-motion:reduce) { .avatar-frame.is-animated::after, .avatar-frame.is-animated .avatar-artwork, .avatar-frame.is-animated .dragon-spark { animation:none; } }
+@media (prefers-reduced-motion:reduce) { .avatar-frame.is-animated::after, .avatar-frame.is-animated .avatar-artwork { animation:none; } }
 
 .cosmetic-options[aria-label="زينة الصورة"] button { display:flex; flex-direction:column; align-items:center; justify-content:center; gap:10px; min-height:100px; }
 

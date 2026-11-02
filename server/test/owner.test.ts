@@ -238,4 +238,17 @@ describe('owner tools', () => {
     clock += 60_000;
     assert.equal(budget(request, 'shared'), 0);
   });
+
+  it('lets a member delete their own account and publishes the privacy page', async () => {
+    const { deps, handle } = await signedIn();
+    assert.equal((await call(handle, '/api/account/delete', 'member-token', {})).status, 400);
+    assert.equal((await call(handle, '/api/account/delete', 'operator-token', { confirm: true })).status, 403);
+    const removed = await call(handle, '/api/account/delete', 'member-token', { confirm: true });
+    assert.equal(removed.status, 200);
+    assert.equal(await deps.repo.findUserById(memberId), null);
+    assert.ok(await deps.repo.findUserById(operatorId));
+    const privacy = await call(handle, '/privacy', '');
+    assert.equal(privacy.status, 200);
+    assert.match(await privacy.text(), /حذف حسابي/);
+  });
 });

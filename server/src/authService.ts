@@ -324,6 +324,16 @@ export async function listOwnerMembers(deps: Deps, token: string) {
   };
 }
 
+export async function deleteOwnAccount(deps: Deps, input: { token: string; confirm: unknown }) {
+  if (input.confirm !== true) return { ok: false as const, error: 'invalid' as const };
+  const user = await sessionUser(deps, input.token);
+  if (!user) return { ok: false as const, error: 'invalid_credentials' as const };
+  const result = await deps.repo.deleteOwnAccount(user.id);
+  if (result === 'ok') return { ok: true as const };
+  if (result === 'forbidden') return { ok: false as const, error: 'forbidden' as const };
+  return { ok: false as const, error: 'not_found' as const };
+}
+
 export async function eraseOwnerMember(deps: Deps, input: { token: string; userId: unknown; choices: unknown }) {
   const user = await sessionUser(deps, input.token);
   if (!user) return { ok: false as const, error: 'invalid_credentials' as const };

@@ -1,13 +1,17 @@
 import { useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
+import { useNavigate } from 'react-router-dom';
 import { IonContent, IonHeader, IonPage, IonToggle } from '@ionic/react';
 import NetworkStatusBanner from '../components/common/NetworkBanner';
 import NotificationPermissionCard from '../components/common/NotificationPermission';
 import PushConnectionCard from '../components/common/PushConnectionCard';
-import ApkUpdateCard from '../components/common/ApkUpdateCard';
 import PageNav from '../components/common/PageNav';
 import { APPEARANCE_PRESETS, DEFAULT_LOGO, logoFromFile, wallpaperFromFile } from '../lib/appearance';
 import { notificationPresentation, type InboxKind } from '../lib/inbox';
+import { AdminApiError, adminFetch } from '../lib/adminApi';
 import { formatBytes } from '../lib/media';
+import { isSafeExternalUrl } from '../lib/url';
+import { useAuthStore } from '../stores/authStore';
 import { useChatStore } from '../stores/chatStore';
 import { useSettingsStore } from '../stores/settingsStore';
 import type { ImageQuality, VideoQuality } from '../types/settings';
@@ -26,6 +30,80 @@ const videoChoices: Array<{ value: VideoQuality; label: string; hint: string }> 
 ];
 
 type SettingsPageProps = { embedded?: boolean };
+type SettingsSection = 'look' | 'privacy' | 'alerts' | 'receive' | 'send' | 'storage' | 'account';
+
+const settingsSections: Array<{ id: SettingsSection; label: string }> = [
+  { id: 'look', label: 'المظهر' },
+  { id: 'privacy', label: 'الخصوصية' },
+  { id: 'alerts', label: 'الإشعارات' },
+  { id: 'receive', label: 'الاستقبال' },
+  { id: 'send', label: 'الإرسال' },
+  { id: 'storage', label: 'التخزين' },
+  { id: 'account', label: 'الحساب' },
+];
+
+function scrollSettings(node: HTMLElement | null) {
+  const content = node?.closest('ion-content');
+  if (!content || !('getScrollElement' in content)) return;
+  void (content as { getScrollElement: () => Promise<HTMLElement> }).getScrollElement().then((scroller) => {
+    scroller.scrollTop = 0;
+  });
+}
+
+function privacyHref() {
+  const origin = String(import.meta.env.VITE_API_ORIGIN ?? '').trim().replace(/\/$/, '');
+  const href = origin ? `${origin}/privacy` : '';
+  return href.startsWith('https://') && isSafeExternalUrl(href) ? href : '';
+}
+
+function DeleteAccountSection() {
+  const navigate = useNavigate();
+  const logout = useAuthStore((state) => state.logout);
+  const [open, setOpen] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  const privacy = privacyHref();
+  const remove = async () => {
+    if (busy) return;
+    setBusy(true);
+    setError('');
+    try {
+      await adminFetch('/api/account/delete', { method: 'POST', body: { confirm: true } });
+      logout();
+      navigate('/activation', { replace: true });
+    } catch (failure: unknown) {
+      setBusy(false);
+      setError(failure instanceof AdminApiError && failure.code === 'forbidden'
+        ? 'لا يمكن حذف حساب المشغّل من التطبيق.'
+        : 'تعذر حذف الحساب. تحقق من الاتصال ثم أعد المحاولة.');
+    }
+  };
+  return (
+    <section className="settings-block">
+      <h2>الحساب</h2>
+      <article className="setting-card column">
+        <strong>حذف الحساب</strong>
+        <p>يحذف الحساب والرسائل والصور والملفات والجلسات من خادم ChatX. لا يمكن التراجع.</p>
+        {privacy ? <a href={privacy} target="_blank" rel="noreferrer">سياسة الخصوصية</a> : null}
+        <button type="button" className="storage-clear" onClick={() => { setError(''); setOpen(true); }}>حذف حسابي</button>
+        {error ? <p className="form-error" role="alert">{error}</p> : null}
+      </article>
+      {open && createPortal(
+        <div className="wa-scrim center" onClick={() => { if (!busy) setOpen(false); }}>
+          <div className="account-dialog" role="alertdialog" aria-labelledby="delete-account-title" onClick={(event) => event.stopPropagation()}>
+            <h2 id="delete-account-title">حذف الحساب؟</h2>
+            <p className="account-warn">ستُحذف رسائلك وصورك وملفاتك وجلساتك. هذا الإجراء نهائي.</p>
+            <div className="account-actions">
+              <button type="button" disabled={busy} onClick={() => setOpen(false)}>إلغاء</button>
+              <button type="button" className="danger" disabled={busy} onClick={() => void remove()}>{busy ? 'جارٍ الحذف' : 'حذف الحساب'}</button>
+            </div>
+          </div>
+        </div>,
+        document.body,
+      )}
+    </section>
+  );
+}
 
 const colorFields: Array<{ key: 'accent' | 'link' | 'bg' | 'frame'; label: string; aria: string }> = [
   { key: 'accent', label: 'التمييز', aria: 'لون التمييز' },
@@ -249,12 +327,37 @@ export default function SettingsPage({ embedded = false }: SettingsPageProps) {
 
   const showTyping = useSettingsStore((state) => state.showTyping);
   const setShowTyping = useSettingsStore((state) => state.setShowTyping);
+  const shellRef = useRef<HTMLDivElement>(null);
+  const [section, setSection] = useState<SettingsSection>('look');
+
+  const openSection = (next: SettingsSection, tab: HTMLButtonElement) => {
+    if (next === section) return;
+    setSection(next);
+    tab.scrollIntoView({ inline: 'nearest', block: 'nearest' });
+    scrollSettings(shellRef.current);
+  };
 
   const body = (
-    <div className="settings-shell profile-frame">
-        <ApkUpdateCard />
-        <AppearanceSettings />
-        <section className="settings-block">
+    <div ref={shellRef} className="settings-shell profile-frame">
+        <div className="group-tabs is-scroll settings-tabs" role="tablist" aria-label="أقسام الإعدادات">
+          {settingsSections.map((item) => (
+            <button
+              key={item.id}
+              type="button"
+              role="tab"
+              id={`settings-tab-${item.id}`}
+              aria-selected={section === item.id}
+              aria-controls={`settings-panel-${item.id}`}
+              className={section === item.id ? 'is-on' : undefined}
+              onClick={(event) => openSection(item.id, event.currentTarget)}
+            >
+              {item.label}
+            </button>
+          ))}
+        </div>
+        <div className="settings-panel" role="tabpanel" id={`settings-panel-${section}`} aria-labelledby={`settings-tab-${section}`}>
+        {section === 'look' && <AppearanceSettings />}
+        {section === 'privacy' && <section className="settings-block">
           <h2>الخصوصية</h2>
           <article className="setting-card">
             <div>
@@ -267,8 +370,8 @@ export default function SettingsPage({ embedded = false }: SettingsPageProps) {
               onIonChange={(event) => setShowTyping(event.detail.checked)}
             />
           </article>
-        </section>
-        <section className="settings-block">
+        </section>}
+        {section === 'alerts' && <section className="settings-block">
           <h2>الإشعارات</h2>
           <p className="settings-lead">تظهر اللافتات وإشعارات الهاتف للرسائل الخاصة ورسائل المجموعات والإشارات والردود، ما لم تكن المحادثة مكتومة. التفاعلات والأحداث تبقى في صفحة الإشعارات. عند قراءة الرسالة يزول التنبيه.</p>
           <NotificationPermissionCard />
@@ -291,8 +394,8 @@ export default function SettingsPage({ embedded = false }: SettingsPageProps) {
               );
             })}
           </div>
-        </section>
-        <section className="settings-block">
+        </section>}
+        {section === 'receive' && <section className="settings-block">
           <h2>الاستقبال</h2>
           <p className="settings-lead">ما يحدث للصور والفيديو التي يصلك.</p>
           <article className="setting-card">
@@ -326,9 +429,9 @@ export default function SettingsPage({ embedded = false }: SettingsPageProps) {
               onIonChange={(event) => setAutoVideos(event.detail.checked)}
             />
           </article>
-        </section>
+        </section>}
 
-        <section className="settings-block">
+        {section === 'send' && <section className="settings-block">
           <h2>الإرسال</h2>
           <p className="settings-lead">حجم الصور والفيديو التي ترسلها. هذا مستقل عن توفير البيانات.</p>
           <article className="setting-card column">
@@ -367,9 +470,9 @@ export default function SettingsPage({ embedded = false }: SettingsPageProps) {
             </div>
             <p>{videoHint}</p>
           </article>
-        </section>
+        </section>}
 
-        <section className="settings-block">
+        {section === 'storage' && <section className="settings-block">
           <h2>التخزين</h2>
           <p className="settings-lead">الملفات المحفوظة على هذا الهاتف. مسحها يطلب تنزيلها من جديد.</p>
           <article className="setting-card column">
@@ -401,13 +504,9 @@ export default function SettingsPage({ embedded = false }: SettingsPageProps) {
               مسح الملفات المؤقتة
             </button>
           </article>
-        </section>
-        <section className="settings-block settings-block-tail">
-          <h2>حقوق الإيموجي</h2>
-          <p className="settings-lead" dir="ltr">Apple emoji artwork © Apple Inc. · License supplied by RealityRipple</p>
-          <a href="/assets/emoji/LICENSE.txt" target="_blank" rel="noreferrer">ترخيص الرسومات المرفق</a>
-          <a href="https://github.com/RealityRipple/emoji/tree/trunk/apple" target="_blank" rel="noreferrer">مصدر صور الإيموجي</a>
-        </section>
+        </section>}
+        {section === 'account' && <DeleteAccountSection />}
+        </div>
     </div>
   );
 

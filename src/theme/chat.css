@@ -496,12 +496,25 @@ ion-page > ion-content.inbox-page {
   padding-bottom: calc(24px + var(--chatx-nav-bottom, var(--ion-safe-area-bottom, 0px)));
 }
 
-.settings-block {
-  padding: 16px 16px 4px;
+.settings-tabs {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  margin: 0;
+  padding: 8px 8px 0;
+  background: var(--chatx-bg);
 }
 
-.settings-block-tail {
-  padding-bottom: 20px;
+.settings-tabs button {
+  min-height: 44px;
+}
+
+.settings-panel {
+  min-height: 40vh;
+}
+
+.settings-block {
+  padding: 16px 16px 4px;
 }
 
 .settings-appearance {
@@ -3927,6 +3940,10 @@ ion-page > ion-content.group-profile-scroll {
   margin: 16px 16px 0;
 }
 
+.account-facts div:last-child:nth-child(odd) {
+  grid-column: 1 / -1;
+}
+
 .account-facts div {
   min-width: 0;
   padding: 12px 14px;
@@ -6129,6 +6146,35 @@ ion-toolbar.network-toolbar.setup {
   font-weight: 700;
 }
 
+.admin-frame {
+  width: min(440px, 100%);
+  margin-inline: auto;
+}
+
+.group-tabs.is-three.admin-tabs {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  margin: 12px 0 0;
+  background: var(--chatx-bg);
+}
+
+.group-tabs.is-three.admin-tabs button {
+  min-height: 44px;
+  font-size: 14px;
+}
+
+.admin-panel {
+  display: grid;
+  gap: 16px;
+  padding-top: 16px;
+}
+
+.admin-panel .owner-list,
+.admin-panel .owner-system {
+  margin: 0 16px;
+}
+
 .people-admin h2 {
   margin: 18px 16px 8px;
   color: var(--chatx-text);
@@ -6152,10 +6198,20 @@ ion-toolbar.network-toolbar.setup {
 
 .owner-system {
   margin: 8px 16px 12px;
-  padding: 14px 16px;
+  padding: 18px 16px;
   border: 1px solid var(--chatx-frame);
   border-radius: 16px;
   background: var(--chatx-surface);
+}
+
+.owner-system .account-actions {
+  grid-template-columns: 1fr;
+}
+
+.owner-system .account-actions button {
+  height: auto;
+  min-height: 44px;
+  padding: 10px 14px;
 }
 
 .owner-system h2 {
@@ -6172,7 +6228,7 @@ ion-toolbar.network-toolbar.setup {
 }
 
 .owner-system-list li + li {
-  margin-top: 4px;
+  margin-top: 10px;
 }
 
 .owner-system-alert {
@@ -6215,7 +6271,7 @@ ion-toolbar.network-toolbar.setup {
 
 .owner-system-actions {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: 1fr;
   gap: 8px;
 }
 
@@ -6266,8 +6322,11 @@ ion-toolbar.network-toolbar.setup {
 .owner-list {
   display: flex;
   flex-direction: column;
-  gap: 8px;
   margin: 0 16px;
+  overflow: hidden;
+  border: 1px solid var(--chatx-frame);
+  border-radius: 16px;
+  background: var(--chatx-raised);
 }
 
 .owner-row {
@@ -6275,15 +6334,19 @@ ion-toolbar.network-toolbar.setup {
   align-items: center;
   gap: 12px;
   width: 100%;
-  min-height: 68px;
+  min-height: 64px;
   margin: 0;
-  padding: 10px 12px;
-  border: 1px solid var(--chatx-frame);
-  border-radius: 16px;
-  background: var(--chatx-raised);
+  padding: 12px 14px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
   color: var(--chatx-text);
   font: inherit;
   text-align: start;
+}
+
+.owner-row + .owner-row {
+  border-top: 1px solid var(--chatx-frame);
 }
 
 .owner-face {

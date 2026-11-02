@@ -155,8 +155,8 @@ try {
   assert.equal(await page.locator('.profile-hero .avatar-frame').count(), 0);
   await page.getByRole('button', { name: 'تعديل الملف', exact: true }).click();
   await page.getByRole('dialog').getByRole('tab', { name: 'الزينة', exact: true }).click();
-  await page.getByRole('dialog').getByRole('button', { name: 'التنين', exact: true }).click();
-  assert.equal(await page.locator('.cosmetic-preview .dragon-artwork').count(), 1);
+  await page.getByRole('dialog').getByRole('button', { name: 'قبعة الكاوبوي', exact: true }).click();
+  assert.equal(await page.locator('.cosmetic-preview .cowboy-hat-front').count(), 1);
   await page.screenshot({ path: 'docs/profile-dragon-editor-desktop.png' });
   await page.getByRole('dialog').getByRole('button', { name: 'حفظ', exact: true }).click();
   await page.getByRole('dialog').waitFor({ state: 'detached' });

@@ -239,6 +239,66 @@ export function createMemoryRepository(): AuthRepository {
       audits.push({ actorId, action: 'member', targetId, detail: auditDetail(choices) });
       return 'ok';
     },
+    async deleteOwnAccount(userId) {
+      const target = users.get(userId);
+      if (!target) return 'missing';
+      if (target.email.toLowerCase() === ERASE_OPERATOR_EMAIL) return 'forbidden';
+      const dropRooms = new Set<string>();
+      for (const member of members.values()) {
+        if (member.userId === userId && rooms.get(member.roomId)?.kind === 'private') dropRooms.add(member.roomId);
+      }
+      const dropMessages = new Set<string>();
+      for (const message of messages) {
+        if (dropRooms.has(message.roomId) || message.senderId === userId) dropMessages.add(message.id);
+      }
+      for (let index = messages.length - 1; index >= 0; index -= 1) {
+        if (dropMessages.has(messages[index]!.id)) messages.splice(index, 1);
+      }
+      for (const id of dropMessages) {
+        images.delete(id);
+        files.delete(id);
+      }
+      for (const [key, reaction] of reactions) {
+        if (dropMessages.has(reaction.messageId) || reaction.userId === userId) reactions.delete(key);
+      }
+      for (let index = notices.length - 1; index >= 0; index -= 1) {
+        const notice = notices[index];
+        if (notice && (dropMessages.has(notice.messageId) || notice.userId === userId)) notices.splice(index, 1);
+      }
+      for (const key of saved.keys()) {
+        const [ownerId, messageId] = key.split(':');
+        if ((messageId && dropMessages.has(messageId)) || ownerId === userId) saved.delete(key);
+      }
+      for (const roomId of dropRooms) {
+        rooms.delete(roomId);
+        journals.delete(roomId);
+        for (const [key, member] of members) if (member.roomId === roomId) members.delete(key);
+        for (const key of passed.keys()) if (key.startsWith(`${roomId}:`)) passed.delete(key);
+      }
+      for (const [key, member] of members) if (member.userId === userId) members.delete(key);
+      for (const key of passed.keys()) if (key.endsWith(`:${userId}`)) passed.delete(key);
+      for (const room of rooms.values()) {
+        if (room.adminId === userId) room.adminId = undefined;
+        if (room.turnUserId === userId) {
+          room.turnUserId = undefined;
+          room.turnOpensAt = undefined;
+        }
+        if (room.turnNoticeFor === userId) room.turnNoticeFor = undefined;
+      }
+      for (const [key, session] of sessions) if (session.userId === userId) sessions.delete(key);
+      for (const [id, upload] of uploads) if (upload.ownerId === userId) uploads.delete(id);
+      for (const [key, value] of pushTokens) if (value.userId === userId) pushTokens.delete(key);
+      pushPrefs.delete(userId);
+      clearedAt.delete(userId);
+      identities.delete(userId);
+      for (const [key, row] of roomKeys) if (row.memberId === userId) roomKeys.delete(key);
+      for (const [key, link] of friendships) {
+        if (key.includes(userId) || link.requestedBy === userId) friendships.delete(key);
+      }
+      audits.push({ actorId: userId, action: 'member', targetId: userId, detail: 'self' });
+      users.delete(userId);
+      return 'ok';
+    },
     async listOwnerGroups() {
       return [...rooms.values()]
         .filter((room) => room.kind === 'group')

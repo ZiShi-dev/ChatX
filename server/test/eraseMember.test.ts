@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { ERASE_OPERATOR_EMAIL, eraseGroupSelection, eraseMember, eraseSelection, resolveEraseChoices, type Queryable } from '../src/eraseMember.ts';
+import { deleteOwnAccountRows, ERASE_OPERATOR_EMAIL, eraseGroupSelection, eraseMember, eraseSelection, resolveEraseChoices, type Queryable } from '../src/eraseMember.ts';
 import { GLOBAL_ROOM_ID } from '../src/home.ts';
 
 function scripted(rows: Array<{ id: string; email: string; google_sub?: string } | null>): Queryable & { sql: string[] } {
@@ -123,5 +123,25 @@ describe('eraseMember', () => {
     assert.deepEqual(await eraseGroupSelection(chat, actorId, groupId, { group: true }), { ok: false, error: 'forbidden' });
     assert.equal(chat.sql.at(-1), 'ROLLBACK');
     assert.equal(chat.sql.some((item) => item.startsWith('DELETE')), false);
+  });
+});
+
+describe('deleteOwnAccountRows', () => {
+  it('refuses a missing account and the operator', async () => {
+    const missing = scripted([null]);
+    assert.deepEqual(await deleteOwnAccountRows(missing, '22222222-2222-4222-8222-222222222222'), { ok: false, error: 'missing' });
+    assert.equal(missing.sql.at(-1), 'ROLLBACK');
+    const operator = scripted([{ id: '11111111-1111-4111-8111-111111111111', email: ERASE_OPERATOR_EMAIL }]);
+    assert.deepEqual(await deleteOwnAccountRows(operator, '11111111-1111-4111-8111-111111111111'), { ok: false, error: 'forbidden' });
+    assert.equal(operator.sql.some((item) => item.startsWith('DELETE FROM users')), false);
+  });
+
+  it('deletes the member rows and keeps an audit line', async () => {
+    const db = scripted([{ id: '22222222-2222-4222-8222-222222222222', email: 'amina@example.com' }]);
+    assert.deepEqual(await deleteOwnAccountRows(db, '22222222-2222-4222-8222-222222222222'), { ok: true, id: '22222222-2222-4222-8222-222222222222' });
+    assert.ok(db.sql.some((item) => item.includes("kind = 'private'")));
+    assert.ok(db.sql.some((item) => item.includes("'self'")));
+    assert.ok(db.sql.some((item) => item.startsWith('DELETE FROM users')));
+    assert.equal(db.sql.at(-1), 'COMMIT');
   });
 });

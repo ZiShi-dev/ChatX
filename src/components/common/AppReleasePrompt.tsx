@@ -35,10 +35,10 @@ export default function AppReleasePrompt() {
     <div className="wa-scrim center" onClick={later}>
       <div className="account-dialog notify-ask" role="alertdialog" aria-labelledby="app-release-title" onClick={(event) => event.stopPropagation()}>
         <h2 id="app-release-title">تحديث التطبيق</h2>
-        <p className="account-warn">يتوفر الإصدار <bdi dir="ltr">{offer.versionCode}</bdi>. التثبيت يحتاج تأكيدك، وتبقى النسخة الحالية إن لم يكتمل التنزيل.</p>
+        <p className="account-warn">يتوفر الإصدار <bdi dir="ltr">{offer.versionName || offer.versionCode}</bdi> على متجر Play. التحديث يتم من المتجر.</p>
         {error ? <p className="form-error">{error}</p> : null}
         <div className="account-actions">
-          <button type="button" className="is-allow" disabled={busy} onClick={install}>{busy ? 'جارٍ التنزيل' : 'تثبيت'}</button>
+          <button type="button" className="is-allow" disabled={busy} onClick={install}>{busy ? 'جارٍ الفتح' : 'فتح المتجر'}</button>
           <button type="button" disabled={busy} onClick={later}>ليس الآن</button>
         </div>
       </div>

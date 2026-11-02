@@ -5,8 +5,8 @@ export const AVATAR_DECORATIONS = [
   { id: 'prism', label: 'منشور' },
   { id: 'hat', label: 'قبعة الخيزران' },
   { id: 'hat-rain', label: 'قبعة المطر' },
-  { id: 'dragon', label: 'التنين' },
-  { id: 'soul-fire', label: 'جماجم ولهيب الروح' },
+  { id: 'dragon', label: 'قبعة الكاوبوي' },
+  { id: 'soul-fire', label: 'جماجم' },
 ] as const;
 export type AvatarDecoration = typeof AVATAR_DECORATIONS[number]['id'];
 export type ProfileCosmetics = { avatarDecoration?: AvatarDecoration };

@@ -275,3 +275,41 @@ export async function eraseMember(db: Queryable, target: string) {
   }
   return { ok: true as const, id: person.id, email: person.email };
 }
+
+export async function deleteOwnAccountRows(db: Queryable, userId: string) {
+  if (!UUID.test(userId)) return { ok: false as const, error: 'missing' as const };
+  await db.query('BEGIN');
+  try {
+    const found = await db.query('SELECT id, lower(email) AS email FROM users WHERE id = $1::uuid FOR UPDATE', [userId]);
+    const person = found.rows[0];
+    if (!person?.id || !person.email) {
+      await db.query('ROLLBACK');
+      return { ok: false as const, error: 'missing' as const };
+    }
+    if (person.email === ERASE_OPERATOR_EMAIL) {
+      await db.query('ROLLBACK');
+      return { ok: false as const, error: 'forbidden' as const };
+    }
+    await db.query('UPDATE rooms SET admin_id = NULL WHERE admin_id = $1', [person.id]);
+    await db.query('UPDATE rooms SET turn_user_id = NULL WHERE turn_user_id = $1', [person.id]);
+    await db.query('UPDATE security_events SET user_id = NULL WHERE user_id = $1', [person.id]);
+    await db.query(
+      `DELETE FROM rooms
+       WHERE kind = 'private'
+         AND id IN (SELECT room_id FROM room_members WHERE user_id = $1)`,
+      [person.id],
+    );
+    await db.query('DELETE FROM room_messages WHERE sender_id = $1', [person.id]);
+    await db.query(
+      `INSERT INTO owner_audit (id, actor_id, action, target_id, detail) VALUES ($1, $2, 'member', $2, 'self')`,
+      [randomUUID(), person.id],
+    );
+    const removed = await db.query('DELETE FROM users WHERE id = $1', [person.id]);
+    if (!removed.rowCount) throw new Error('missing');
+    await db.query('COMMIT');
+    return { ok: true as const, id: person.id };
+  } catch (error) {
+    await db.query('ROLLBACK');
+    throw error;
+  }
+}
