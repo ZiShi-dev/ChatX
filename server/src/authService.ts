@@ -28,6 +28,13 @@ export type OwnerSystemStatus = {
     nextPurgeAt: string | null;
     purgeIntervalMs: number;
   };
+  content: {
+    enabled: boolean;
+    retentionMs: number;
+    lastRunAt: string | null;
+    lastError: string | null;
+    lastDeleted: number;
+  };
 };
 
 export type Deps = {
@@ -37,6 +44,7 @@ export type Deps = {
   rateLimit: RateLimiter;
   ownerSystem?: () => Promise<OwnerSystemStatus | null>;
   ownerWipeMedia?: () => Promise<unknown>;
+  ownerSetContentRetention?: (enabled: boolean) => Promise<OwnerSystemStatus['content'] | null>;
 };
 
 type Failure = { ok: false; error: 'invalid_credentials' | 'rate_limited' | 'unavailable' | 'forbidden' | 'username_taken' };
@@ -298,6 +306,16 @@ export async function listOwnerSystem(deps: Deps, token: string) {
   const system = await deps.ownerSystem();
   if (!system) return { ok: false as const, error: 'unavailable' as const };
   return { ok: true as const, system };
+}
+
+export async function setContentRetention(deps: Deps, token: string, enabled: boolean) {
+  const user = await sessionUser(deps, token);
+  if (!user) return { ok: false as const, error: 'invalid_credentials' as const };
+  if (!ownerAccount(user)) return { ok: false as const, error: 'forbidden' as const };
+  if (!deps.ownerSetContentRetention) return { ok: false as const, error: 'unavailable' as const };
+  const content = await deps.ownerSetContentRetention(enabled);
+  if (!content) return { ok: false as const, error: 'unavailable' as const };
+  return { ok: true as const, content };
 }
 
 export async function wipeOwnerMedia(deps: Deps, token: string) {

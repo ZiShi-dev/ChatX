@@ -73,6 +73,7 @@ describe('owner tools', () => {
         nextPurgeAt: '2026-10-09T12:00:00.000Z',
         purgeIntervalMs: 86_400_000,
       },
+      content: { enabled: false, retentionMs: 86_400_000, lastRunAt: null, lastError: null, lastDeleted: 0 },
     });
     const operator = person(operatorId, 'إبراهيم', ERASE_OPERATOR_EMAIL, 'google-operator');
     const member = person(memberId, 'أمينة', 'amina@example.com');
@@ -108,7 +109,7 @@ describe('owner tools', () => {
       legacyImageRows: 0, legacyFileRows: 0, lastPurgeAt: null,
       lastPurgeError: null, lastExpiredImages: 0, lastExpiredFiles: 0,
       lastOrphans: 0, nextPurgeAt: null, purgeIntervalMs: 86_400_000,
-    } });
+    }, content: { enabled: false, retentionMs: 86_400_000, lastRunAt: null, lastError: null, lastDeleted: 0 } });
     assert.equal((await call(handle, '/api/owner/media/wipe', 'member-token', {})).status, 403);
     assert.equal(wiped, 0);
     const response = await call(handle, '/api/owner/media/wipe', 'operator-token', {});
@@ -237,6 +238,27 @@ describe('owner tools', () => {
     assert.ok(budget(request, 'shared') > 0);
     clock += 60_000;
     assert.equal(budget(request, 'shared'), 0);
+  });
+
+  it('lets only the operator turn the 24 hour content wipe on and off', async () => {
+    const { deps, handle } = await signedIn();
+    assert.equal((await call(handle, '/api/owner/content-retention', 'operator-token', { enabled: true })).status, 503);
+    assert.equal((await call(handle, '/api/owner/content-retention', 'member-token', { enabled: true })).status, 403);
+    let enabled = false;
+    deps.ownerSetContentRetention = async (next) => {
+      enabled = next;
+      return { enabled: next, retentionMs: 86_400_000, lastRunAt: null, lastError: null, lastDeleted: 0 };
+    };
+    const turnedOn = await call(handle, '/api/owner/content-retention', 'operator-token', { enabled: true });
+    assert.equal(turnedOn.status, 200);
+    assert.equal((await turnedOn.json() as { content: { enabled: boolean } }).content.enabled, true);
+    assert.equal(enabled, true);
+    assert.equal((await call(handle, '/api/owner/content-retention', 'member-token', { enabled: false })).status, 403);
+    assert.equal(enabled, true);
+    const turnedOff = await call(handle, '/api/owner/content-retention', 'operator-token', { enabled: false });
+    assert.equal(turnedOff.status, 200);
+    assert.equal(enabled, false);
+    assert.equal((await call(handle, '/api/owner/content-retention', 'operator-token', { enabled: 'yes' })).status, 401);
   });
 
   it('lets a member delete their own account and publishes the privacy page', async () => {

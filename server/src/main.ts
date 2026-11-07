@@ -8,6 +8,7 @@ import { createApi, securityHeaders } from './http.ts';
 import { configureHttpServer, proxyClientAddress } from './transportSecurity.ts';
 import { clientRequestHeaders } from './requestHeaders.ts';
 import { migrate } from './migrate.ts';
+import { readContentRetention, runContentRetention, writeContentRetentionEnabled } from './contentRetention.ts';
 import { collectOwnerMediaStatus, createMediaStore, migrateLegacyMedia, startMediaPurgeScheduler, wipeDiskMedia } from './mediaStore.ts';
 import { createPool, createPostgresRepository } from './postgres.ts';
 import { tryServeRelease } from './releases.ts';
@@ -73,14 +74,23 @@ try {
   await media.ensure();
   await migrateLegacyMedia(pool, media);
   const repo = createPostgresRepository(pool, media);
-  const stopMediaPurge = await startMediaPurgeScheduler(pool, media, config.mediaRetentionMs);
+  const stopMediaPurge = await startMediaPurgeScheduler(pool, media, config.mediaRetentionMs, undefined, {
+    beforeSweep: (before) => runContentRetention(pool, media, before, config.mediaRetentionMs),
+  });
   const throttle = await loadThrottle(pool);
   const handle = createApi({
     repo,
     config,
     now: () => Date.now(),
-    ownerSystem: async () => ({ media: await collectOwnerMediaStatus(pool, media, config.mediaRetentionMs) }),
+    ownerSystem: async () => ({
+      media: await collectOwnerMediaStatus(pool, media, config.mediaRetentionMs),
+      content: await readContentRetention(pool, config.mediaRetentionMs),
+    }),
     ownerWipeMedia: () => wipeDiskMedia(pool, media),
+    ownerSetContentRetention: async (enabled) => {
+      await writeContentRetentionEnabled(pool, enabled);
+      return readContentRetention(pool, config.mediaRetentionMs);
+    },
     rateLimit: createLimiter(config, () => Date.now(), {
       initial: throttle,
       onChange: (state) => saveThrottle(pool, state),

@@ -2868,6 +2868,7 @@ button.chat-avatar {
 
 .composer-bar {
   display: flex;
+  flex: none;
   direction: ltr;
   align-items: flex-end;
   gap: 8px;
@@ -3113,6 +3114,20 @@ ion-content::part(scroll)::-webkit-scrollbar {
   text-align: center;
 }
 
+.composer:has(.attach-thumb img),
+.composer:has(.attach-thumb video) {
+  display: flex;
+  flex-direction: column;
+  max-height: calc(100dvh - 64px);
+}
+
+.composer-draft {
+  min-height: 0;
+  max-height: 460px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
 .attach-strip {
   display: flex;
   gap: 8px;
@@ -3130,11 +3145,26 @@ ion-content::part(scroll)::-webkit-scrollbar {
   background: var(--chatx-soft);
 }
 
+.attach-thumb:has(img),
+.attach-thumb:has(video) {
+  width: min(78vw, 320px);
+  height: 240px;
+  flex: 1 0 220px;
+  background: var(--chatx-bg);
+}
+
+.attach-strip > .attach-thumb:only-child:has(img),
+.attach-strip > .attach-thumb:only-child:has(video) {
+  width: 100%;
+  height: 260px;
+  flex-basis: auto;
+}
+
 .attach-thumb img,
 .attach-thumb video {
   width: 100%;
   height: 100%;
-  object-fit: cover;
+  object-fit: contain;
 }
 
 .attach-file {
@@ -3159,12 +3189,12 @@ ion-content::part(scroll)::-webkit-scrollbar {
 
 .attach-remove {
   position: absolute;
-  top: 4px;
-  inset-inline-end: 4px;
+  top: 6px;
+  inset-inline-end: 6px;
   display: grid;
   place-items: center;
-  width: 22px;
-  height: 22px;
+  width: 36px;
+  height: 36px;
   padding: 0;
   border: 0;
   border-radius: 50%;
@@ -3178,9 +3208,10 @@ ion-content::part(scroll)::-webkit-scrollbar {
 
 .attach-size {
   position: absolute;
-  right: 4px;
-  bottom: 4px;
-  left: 4px;
+  inset-inline-start: 6px;
+  bottom: 6px;
+  max-width: calc(100% - 16px);
+  padding: 2px 6px;
   overflow: hidden;
   border-radius: 6px;
   background: rgba(18, 22, 20, 0.72);
@@ -5946,6 +5977,19 @@ ion-toolbar.network-toolbar.setup {
   font-size: 12px;
 }
 
+.quality-choices {
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.quality-choices button {
+  height: auto;
+  min-height: 48px;
+  padding: 8px 10px;
+  line-height: 1.3;
+  white-space: normal;
+}
+
 .admin-auth-gate {
   justify-content: flex-start;
   padding-bottom: 24px;
@@ -6337,6 +6381,12 @@ ion-toolbar.network-toolbar.setup {
   border-color: transparent;
   background: var(--chatx-danger);
   color: #fff;
+}
+
+.owner-system-actions button.is-allow {
+  border-color: transparent;
+  background: var(--chatx-accent);
+  color: var(--chatx-on-accent);
 }
 
 .owner-system-actions button:disabled {

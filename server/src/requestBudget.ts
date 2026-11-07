@@ -19,7 +19,7 @@ export function createRequestBudget(now:()=>number) {
     if(path.startsWith('/api/auth/google'))return consume('auth:'+ip,30);
     if(path==='/api/links/preview')return consume('link:'+ip,40);
     if(path==='/api/account/delete'){const token=readSessionToken(request);return consume('account-delete:'+(token?hashSession(token):ip),5);}
-    if(path==='/api/owner/erase' || path==='/api/owner/groups/erase' || path==='/api/owner/media/wipe') {
+    if(path==='/api/owner/erase' || path==='/api/owner/groups/erase' || path==='/api/owner/media/wipe' || path==='/api/owner/content-retention') {
       const token=readSessionToken(request);
       const limited=consume('owner:'+(token?hashSession(token):ip),10);
       if(limited)return limited;

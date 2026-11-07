@@ -22,6 +22,14 @@ import type { User, UserStatus } from '../types/user';
 
 type OwnerGroup = { id: string; name: string };
 
+type ContentRetention = {
+  enabled: boolean;
+  retentionMs: number;
+  lastRunAt: string | null;
+  lastError: string | null;
+  lastDeleted: number;
+};
+
 type OwnerSystemMedia = {
   mediaRetentionMs: number;
   diskImageFiles: number;
@@ -90,6 +98,21 @@ function MediaPurgeClock({ system, t }: { system: OwnerSystemMedia; t: ReturnTyp
       )}
     </div>
   );
+}
+
+function readContentRetention(payload: unknown): ContentRetention | null {
+  if (!payload || typeof payload !== 'object' || !('content' in payload)) return null;
+  const row = (payload as { content?: unknown }).content;
+  if (!row || typeof row !== 'object') return null;
+  const data = row as { enabled?: unknown; lastRunAt?: unknown; lastError?: unknown; lastDeleted?: unknown; retentionMs?: unknown };
+  if (typeof data.enabled !== 'boolean') return null;
+  return {
+    enabled: data.enabled,
+    retentionMs: typeof data.retentionMs === 'number' && data.retentionMs > 0 ? data.retentionMs : DAY_MS,
+    lastRunAt: typeof data.lastRunAt === 'string' ? data.lastRunAt : null,
+    lastError: typeof data.lastError === 'string' ? data.lastError : null,
+    lastDeleted: typeof data.lastDeleted === 'number' && data.lastDeleted >= 0 ? data.lastDeleted : 0,
+  };
 }
 
 function readGroups(payload: unknown): OwnerGroup[] {
@@ -363,6 +386,8 @@ export default function PeopleAdminPage() {
   const [group, setGroup] = useState<OwnerGroup>();
   const [done, setDone] = useState('');
   const [system, setSystem] = useState<OwnerSystemMedia | null>(null);
+  const [content, setContent] = useState<ContentRetention | null>(null);
+  const [contentBusy, setContentBusy] = useState(false);
   const [systemError, setSystemError] = useState('');
   const [wipeAsk, setWipeAsk] = useState(false);
   const [wiping, setWiping] = useState(false);
@@ -436,10 +461,12 @@ export default function PeopleAdminPage() {
         return;
       }
       setSystem(media);
+      setContent(readContentRetention(payload));
       setSystemError('');
     }).catch((error) => {
       if (!alive.current || request !== systemRequest.current) return;
       setSystem(null);
+      setContent(null);
       setSystemError(error instanceof AdminApiError ? t('admin.systemReadFailed') : t('admin.systemConnectFailed'));
     });
   }, [t]);
@@ -450,6 +477,23 @@ export default function PeopleAdminPage() {
     const timer = window.setInterval(refreshSystem, 60_000);
     return () => window.clearInterval(timer);
   }, [access, refreshSystem]);
+
+  const setContentEnabled = useCallback(async (enabled: boolean) => {
+    if (contentBusy) return;
+    setContentBusy(true);
+    setDone('');
+    try {
+      const payload = await adminFetch('/api/owner/content-retention', { method: 'POST', body: { enabled } });
+      if (!alive.current) return;
+      const next = payload && typeof payload === 'object' ? readContentRetention({ content: (payload as { content?: unknown }).content }) : null;
+      if (next) setContent(next);
+      else refreshSystem();
+    } catch {
+      if (alive.current) setDone(t('admin.contentSaveFailed'));
+    } finally {
+      if (alive.current) setContentBusy(false);
+    }
+  }, [contentBusy, refreshSystem, t]);
 
   const wipeDisk = useCallback(async () => {
     ++systemRequest.current;
@@ -601,6 +645,29 @@ export default function PeopleAdminPage() {
             ) : null}
             {section === 'server' ? (
               <>
+                <section className="owner-system" aria-labelledby="owner-content-title">
+                  <h2 id="owner-content-title">{t('admin.contentTitle')}</h2>
+                  <p className="owner-system-hint">{t('admin.contentHint')}</p>
+                  {content ? (
+                    <>
+                      <p className="owner-system-hint">{content.enabled ? t('admin.contentStateOn') : t('admin.contentStateOff')}</p>
+                      {content.lastError ? <p className="owner-system-alert" role="alert">{t('admin.contentFailed', { error: content.lastError })}</p> : null}
+                      <p className="owner-system-hint">
+                        {content.lastRunAt ? t('admin.contentLast', { count: content.lastDeleted }) : t('admin.contentLastNever')}
+                      </p>
+                      <div className="owner-system-actions">
+                        <button
+                          type="button"
+                          className={content.enabled ? 'danger' : 'is-allow'}
+                          disabled={contentBusy}
+                          onClick={() => void setContentEnabled(!content.enabled)}
+                        >
+                          {content.enabled ? t('admin.contentOffAction') : t('admin.contentOnAction')}
+                        </button>
+                      </div>
+                    </>
+                  ) : null}
+                </section>
                 <section className="owner-system" aria-labelledby="owner-main-title">
                   <h2 id="owner-main-title">{t('admin.mainGroupTitle')}</h2>
                   <p className="owner-system-hint">{t('admin.mainGroupHint')}</p>

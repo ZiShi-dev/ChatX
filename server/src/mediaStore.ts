@@ -312,7 +312,13 @@ export async function wipeDiskMedia(pool: pg.Pool, store: MediaStore) {
   return { images: images.rows.length, files: files.rows.length, orphans };
 }
 
-export async function startMediaPurgeScheduler(pool: pg.Pool, store: MediaStore, retentionMs: number, log: (message: string) => void = () => undefined) {
+export async function startMediaPurgeScheduler(
+  pool: pg.Pool,
+  store: MediaStore,
+  retentionMs: number,
+  log: (message: string) => void = () => undefined,
+  hooks?: { beforeSweep?: (before: Date) => Promise<void> },
+) {
   let timer: ReturnType<typeof setTimeout> | undefined;
   let stopped = false;
   let running = false;
@@ -326,6 +332,13 @@ export async function startMediaPurgeScheduler(pool: pg.Pool, store: MediaStore,
   const tick = async () => {
     try {
       const before = new Date(Date.now() - retentionMs);
+      if (hooks?.beforeSweep) {
+        try {
+          await hooks.beforeSweep(before);
+        } catch (error) {
+          log(error instanceof Error ? error.message : 'content retention failed');
+        }
+      }
       const expired = await purgeExpiredMedia(pool, store, before);
       const orphans = await purgeOrphanMedia(pool, store);
       mediaOps = {

@@ -19,7 +19,6 @@ import { recalledInboxFilter, recalledInboxScroll, rememberInboxFilter, remember
 import { useAuthStore } from '../stores/authStore';
 import { useChatStore } from '../stores/chatStore';
 import { useMuteStore } from '../stores/muteStore';
-import { connectionLost, useNetworkStore } from '../stores/networkStore';
 import { useSettingsStore } from '../stores/settingsStore';
 import { useI18n, type MessageKey } from '../lib/i18n';
 import { useUserStore } from '../stores/userStore';
@@ -113,7 +112,6 @@ export default function NotificationsPage() {
   const clearInbox = useChatStore((state) => state.clearInbox);
   const mutes = useMuteStore((state) => state.mutes);
   const notifyTypes = useSettingsStore((state) => state.notifyTypes);
-  const offline = useNetworkStore((state) => state.network === 'offline');
   const [filter, setFilter] = useState(recalledInboxFilter);
   const [pages, setPages] = useState(1);
   const [confirmClear, setConfirmClear] = useState(false);
@@ -135,7 +133,7 @@ export default function NotificationsPage() {
       try {
         const result = await loadInbox();
         if (!alive) return;
-        if (result === 'offline') setNotice(connectionLost() ? t('inbox.loadOffline') : '');
+        if (result === 'offline') setNotice('');
         else if (result === 'invalid') setNotice(t('inbox.loadInvalid'));
         else setNotice('');
       } finally {
@@ -221,7 +219,6 @@ export default function NotificationsPage() {
           </div>
         </div>
         {notice ? <p className="form-error account-notice">{notice}</p> : null}
-        {offline && <p className="inbox-offline" role="status">{t('inbox.offline')}</p>}
         {!ready ? (
           <PageSkeleton kind="notices" />
         ) : (

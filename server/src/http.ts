@@ -12,6 +12,7 @@ import {
   eraseOwnerMember,
   listOwnerMembers,
   listOwnerSystem,
+  setContentRetention,
   wipeOwnerMedia,
   previewGoogle,
   readOwnProfile,
@@ -534,6 +535,12 @@ async function route(deps: Deps, request: Request) {
     const result = await listOwnerSystem(deps, readSessionToken(request));
     if (!result.ok) return failure(deps, result.error);
     return json(result.system);
+  }
+  if (request.method === 'POST' && path === '/api/owner/content-retention') {
+    if (typeof body.enabled !== 'boolean') return failure(deps, 'invalid_credentials');
+    const result = await setContentRetention(deps, readSessionToken(request), body.enabled);
+    if (!result.ok) return failure(deps, result.error);
+    return json({ ok: true, content: result.content });
   }
   if (request.method === 'POST' && path === '/api/owner/media/wipe') {
     const result = await wipeOwnerMedia(deps, readSessionToken(request));

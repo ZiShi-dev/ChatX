@@ -1,68 +1,48 @@
 import { useEffect } from 'react';
 import { IonToolbar } from '@ionic/react';
-import { nativeNeedsApiOrigin } from '../../lib/apiOrigin';
-import { offlineBannerLabel, serverBannerLabel } from '../../lib/queue';
 import { useChatStore } from '../../stores/chatStore';
-import { useNetworkStore } from '../../stores/networkStore';
 import { useSavedStore } from '../../stores/savedStore';
 import { useI18n } from '../../lib/i18n';
 
 const ERROR_DISMISS_MS = 12_000;
 
+function isConnectionNotice(error: string, t: (key: 'messageLimit.sendConnection' | 'errors.loadMessagesFailed') => string) {
+  return error === t('messageLimit.sendConnection') || error.startsWith(t('errors.loadMessagesFailed'));
+}
+
 export default function NetworkStatusBanner() {
-  const network = useNetworkStore((state) => state.network);
   const chatError = useChatStore((state) => state.lastError);
   const savedError = useSavedStore((state) => state.lastError);
   const error = chatError || savedError;
-  const pending = useChatStore((state) => state.messages.reduce((count, message) => count + (message.status === 'pending' ? 1 : 0), 0));
   const { t } = useI18n();
+  const connectionNotice = Boolean(error) && isConnectionNotice(error, t);
 
   useEffect(() => {
-    if (!error) return;
+    if (!error || connectionNotice) return;
     const timer = window.setTimeout(() => {
       useChatStore.setState({ lastError: '' });
       useSavedStore.setState({ lastError: '' });
     }, ERROR_DISMISS_MS);
     return () => window.clearTimeout(timer);
-  }, [error]);
+  }, [connectionNotice, error]);
 
-  if (nativeNeedsApiOrigin()) {
-    return (
-      <IonToolbar className="network-toolbar setup">
-        <p className="network-banner" role="status">{t('network.setup')}</p>
-      </IonToolbar>
-    );
-  }
+  if (!error || connectionNotice) return null;
 
-  if (error) {
-    return (
-      <IonToolbar className="network-toolbar">
-        <p className="network-banner" role="alert">
-          {error}
-          <button
-            type="button"
-            onClick={() => {
-              useChatStore.setState({ lastError: '' });
-              useSavedStore.setState({ lastError: '' });
-            }}
-            aria-label={t('network.close')}
-          >
-            ×
-          </button>
-        </p>
-      </IonToolbar>
-    );
-  }
-
-  if (network === 'online') return null;
-  const offline = network === 'offline';
-  const deviceOffline = typeof navigator !== 'undefined' && navigator.onLine === false;
-  const bannerText = offline
-    ? deviceOffline ? offlineBannerLabel(pending) : serverBannerLabel(pending)
-    : t('network.weak');
   return (
-    <IonToolbar className={offline ? 'network-toolbar' : 'network-toolbar slow'}>
-      <p className="network-banner">{bannerText}</p>
+    <IonToolbar className="network-toolbar">
+      <p className="network-banner" role="alert">
+        {error}
+        <button
+          type="button"
+          onClick={() => {
+            useChatStore.setState({ lastError: '' });
+            useSavedStore.setState({ lastError: '' });
+          }}
+          aria-label={t('network.close')}
+        >
+          ×
+        </button>
+      </p>
     </IonToolbar>
   );
 }

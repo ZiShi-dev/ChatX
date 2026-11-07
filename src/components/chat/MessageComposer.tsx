@@ -716,6 +716,8 @@ export default function MessageComposer({ conversationId, talk = 'open' }: Messa
           </div>
         )}
         {pickerError && <p className="attach-error">{pickerError}</p>}
+        {attachments.length > 0 && (
+          <div className="composer-draft">
         {attachments.some((item) => item.kind === 'image' || item.kind === 'video') && (
           <div className="quality-card">
             {attachments.some((item) => item.kind === 'image') && (
@@ -758,7 +760,6 @@ export default function MessageComposer({ conversationId, talk = 'open' }: Messa
             )}
           </div>
         )}
-        {attachments.length > 0 && (
           <div className="attach-strip">
             {attachments.map((item) => (
               <div key={item.id} className="attach-thumb">
@@ -778,6 +779,7 @@ export default function MessageComposer({ conversationId, talk = 'open' }: Messa
                 <span className="attach-size">{formatBytes(item.size)}</span>
               </div>
             ))}
+          </div>
           </div>
         )}
         {matches.length > 0 && (
@@ -970,7 +972,7 @@ function QualityChoices<T extends string>({
       <strong>{label}</strong>
       <p>{originalLabel}: {formatBytes(original)}</p>
       <p>{afterIntro}: {maximum ? maxLabel : approxLabel} {formatBytes(expected)}</p>
-      <div className="setting-choices" role="radiogroup" aria-label={label}>
+      <div className="setting-choices quality-choices" role="radiogroup" aria-label={label}>
         {options.map((option) => (
           <button
             key={option.id}

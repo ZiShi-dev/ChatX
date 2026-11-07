@@ -84,10 +84,7 @@ export default function HomePage() {
       const timer = window.setTimeout(() => setReady(true), 280);
       return () => window.clearTimeout(timer);
     }
-    if (connectionLost()) {
-      setReady(true);
-      setNotice(t('home.loadOffline'));
-    }
+    if (connectionLost()) setReady(true);
     const run = async (silent: boolean) => {
       if (!silent) setReady(useChatStore.getState().conversations.length > 0);
       const result = await loadHome();
@@ -95,7 +92,7 @@ export default function HomePage() {
         await useSavedStore.getState().load().catch(() => undefined);
       }
       if (!alive) return;
-      if (result === 'offline') setNotice(connectionLost() ? t('home.loadOffline') : '');
+      if (result === 'offline') setNotice('');
       else if (result === 'invalid') setNotice(t('home.loadInvalid'));
       else {
         setNotice('');
