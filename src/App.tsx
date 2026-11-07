@@ -11,10 +11,10 @@ import StartupScreen from './components/common/StartupScreen';
 import KeyGate from './components/common/KeyGate';
 import { NotificationPermissionDialog } from './components/common/NotificationPermission';
 import PageSkeleton, { type SkeletonKind } from './components/common/PageSkeleton';
-import ActivationPage from './pages/ActivationPage';
-import ChatPage from './pages/ChatPage';
 import HomePage from './pages/HomePage';
 
+const ActivationPage = lazy(() => import('./pages/ActivationPage'));
+const ChatPage = lazy(() => import('./pages/ChatPage'));
 const GroupMembersPage = lazy(() => import('./pages/GroupMembersPage'));
 const AccountPage = lazy(() => import('./pages/AccountPage'));
 const DirectMediaPage = lazy(() => import('./pages/DirectMediaPage'));
@@ -52,7 +52,7 @@ import './theme/variables.css';
 import './theme/name-fonts.css';
 import './theme/chat.css';
 
-setupIonicReact({ mode: 'md' });
+setupIonicReact({ mode: 'md', animated: false });
 
 function NativeChrome() {
   useMotionTier();
@@ -62,7 +62,7 @@ function NativeChrome() {
   useEffect(() => {
     if (!Capacitor.isNativePlatform()) return;
     void StatusBar.setStyle({ style: Style.Light }).catch(() => undefined);
-    void StatusBar.setBackgroundColor({ color: '#121a18' }).catch(() => undefined);
+    void StatusBar.setBackgroundColor({ color: '#101614' }).catch(() => undefined);
     const opened = listenForChatNotificationOpens((conversationId, messageId) => openNotificationChat(navigate, messageId ? `/chat/${conversationId}?at=${messageId}` : `/chat/${conversationId}`));
     const inboxOpen = Capacitor.isNativePlatform()
       ? InboxWatch.addListener('open', (event) => {
@@ -123,12 +123,12 @@ function AppRoutes() {
       <AppReleasePrompt />
       <NotificationPermissionDialog />
       <KeyGate>
-        <IonRouterOutlet>
+        <IonRouterOutlet animated={false}>
         <Routes>
-        <Route path="/activation" element={activated ? <Navigate to="/home" replace /> : <ActivationPage />} />
+        <Route path="/activation" element={activated ? <Navigate to="/home" replace /> : <Suspense fallback={<PageSkeleton kind="account" />}><ActivationPage /></Suspense>} />
         <Route path="/home" element={guard(<HomePage />)} />
         <Route path="/chat/:id/media" element={page(<DirectMediaPage />, 'media')} />
-        <Route path="/chat/:id" element={guard(<ChatPage />)} />
+        <Route path="/chat/:id" element={page(<ChatPage />, 'chat')} />
         <Route path="/new" element={page(<NewChatPage />, 'people')} />
         <Route path="/group/:id/members" element={page(<GroupMembersPage />, 'members')} />
         <Route path="/group/:id" element={page(<GroupProfilePage />, 'group')} />

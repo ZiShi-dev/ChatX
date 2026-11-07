@@ -19,7 +19,7 @@ import { recalledInboxFilter, recalledInboxScroll, rememberInboxFilter, remember
 import { useAuthStore } from '../stores/authStore';
 import { useChatStore } from '../stores/chatStore';
 import { useMuteStore } from '../stores/muteStore';
-import { useNetworkStore } from '../stores/networkStore';
+import { connectionLost, useNetworkStore } from '../stores/networkStore';
 import { useSettingsStore } from '../stores/settingsStore';
 import { useI18n, type MessageKey } from '../lib/i18n';
 import { useUserStore } from '../stores/userStore';
@@ -58,9 +58,10 @@ const NotificationRow = memo(function NotificationRow({
   room: string;
   onOpen: (item: InboxItem) => void;
 }) {
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
   const look = notificationPresentation(item.kind);
-  const label = `${name}، ${room}، ${look.label}${item.suppressed ? '، مكتوم' : ''}${item.unread ? '، غير مقروء' : ''}`;
+  const sep = locale === 'ar' ? '\u060C ' : ', ';
+  const label = [name, room, look.label, item.suppressed ? t('inbox.mutedBadge') : '', item.unread ? t('inbox.unreadBadge') : ''].filter(Boolean).join(sep);
   return (
     <button
       type="button"
@@ -84,7 +85,7 @@ const NotificationRow = memo(function NotificationRow({
           {item.suppressed && (
             <span className="kind-pill quiet">
               <IonIcon icon={notificationsOffOutline} />
-              مكتوم
+              {t('inbox.mutedBadge')}
             </span>
           )}
         </span>
@@ -134,8 +135,8 @@ export default function NotificationsPage() {
       try {
         const result = await loadInbox();
         if (!alive) return;
-        if (result === 'offline') setNotice('تعذر الاتصال.');
-        else if (result === 'invalid') setNotice('تعذر تحميل الإشعارات.');
+        if (result === 'offline') setNotice(connectionLost() ? t('inbox.loadOffline') : '');
+        else if (result === 'invalid') setNotice(t('inbox.loadInvalid'));
         else setNotice('');
       } finally {
         if (alive) setReady(true);
@@ -145,7 +146,7 @@ export default function NotificationsPage() {
     return () => {
       alive = false;
     };
-  }, [loadInbox, serverAccount]);
+  }, [loadInbox, serverAccount, t]);
 
   const items = useMemo(
     () => serverAccount
@@ -199,7 +200,7 @@ export default function NotificationsPage() {
           }
           void loadInbox().finally(finish);
         }}>
-          <IonRefresherContent pullingText="جارٍ التحديث" refreshingText="جارٍ التحديث" />
+          <IonRefresherContent pullingText={t('inbox.refreshing')} refreshingText={t('inbox.refreshing')} />
         </IonRefresher>
         <div className="inbox-tools">
           <p className="inbox-lead">{t('inbox.lead')}</p>
@@ -242,8 +243,8 @@ export default function NotificationsPage() {
         </div>
         {shown.length === 0 ? (
           <EmptyState
-            title={items.length === 0 ? 'لا توجد إشعارات' : 'لا توجد إشعارات من هذا النوع'}
-            detail={items.length === 0 ? 'ستظهر هنا رسائل المجموعات بمجرد وصولها.' : undefined}
+            title={items.length === 0 ? t('inbox.emptyAll') : t('inbox.emptyFilter')}
+            detail={items.length === 0 ? t('inbox.emptyLead') : undefined}
           />
         ) : (
           <div className="inbox-list">
@@ -254,10 +255,10 @@ export default function NotificationsPage() {
                 <NotificationRow
                   key={`${item.kind}-${item.id}`}
                   item={item}
-                  name={item.senderName || sender?.displayName || 'مستخدم غير متاح'}
+                  name={item.senderName || sender?.displayName || t('inbox.senderUnknown')}
                   color={sender?.color ?? '#6f8f72'}
                   photo={sender?.avatarUrl}
-                  room={item.conversationName || (conversation ? conversationTitle(conversation, currentUser.id, users) : 'محادثة')}
+                  room={item.conversationName || (conversation ? conversationTitle(conversation, currentUser.id, users) : t('inbox.defaultRoom'))}
                   onOpen={open}
                 />
               );
@@ -275,7 +276,7 @@ export default function NotificationsPage() {
                   if (oldest) void loadInbox({ at: oldest.createdAt, id: oldest.id });
                 }}
               >
-                عرض المزيد
+                {t('inbox.loadMore')}
               </button>
             )}
           </div>
@@ -287,10 +288,10 @@ export default function NotificationsPage() {
         createPortal(
           <div className="wa-scrim center" onClick={() => setConfirmClear(false)}>
             <div className="account-dialog" role="alertdialog" aria-labelledby="clear-inbox-title" onClick={(event) => event.stopPropagation()}>
-              <h2 id="clear-inbox-title">حذف كل الإشعارات؟</h2>
-              <p className="account-warn">ستختفي الإشعارات الحالية. الرسائل في المحادثات تبقى.</p>
+              <h2 id="clear-inbox-title">{t('inbox.clearTitle')}</h2>
+              <p className="account-warn">{t('inbox.clearBody')}</p>
               <div className="account-actions">
-                <button type="button" onClick={() => setConfirmClear(false)}>إلغاء</button>
+                <button type="button" onClick={() => setConfirmClear(false)}>{t('profile.cancel')}</button>
                 <button
                   type="button"
                   className="danger"
@@ -299,7 +300,7 @@ export default function NotificationsPage() {
                     setConfirmClear(false);
                   }}
                 >
-                  حذف
+                  {t('inbox.clearConfirm')}
                 </button>
               </div>
             </div>

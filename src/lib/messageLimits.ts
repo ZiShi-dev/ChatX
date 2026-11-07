@@ -3,8 +3,11 @@ import { formatBytes } from './media';
 import type { Message } from '../types/message';
 import { AdminApiError } from './adminApi';
 import { retryableStatus } from './retry';
+import { currentLocale, dateLocale, translate, type Locale } from './i18n';
 
-export const SEND_CONNECTION_MESSAGE = 'تعذر تجهيز أو إرسال الرسالة. تحقق من الملف أو الاتصال ثم أعد المحاولة.';
+export function sendConnectionMessage(locale: Locale = currentLocale()) {
+  return translate(locale, 'messageLimit.sendConnection');
+}
 
 const PERMANENT_SEND = new Set(['file_too_large', 'invalid_image', 'unsupported_media', 'size']);
 
@@ -27,49 +30,66 @@ export const MESSAGE_TEXT_MAX = 4000;
 /** Avant compression côté appareil (sélection galerie). */
 export const PICKER_IMAGE_BYTES_MAX = 20 * 1024 * 1024;
 
-export function textTooLongMessage(length?: number) {
+function numLocale(n: number, locale: Locale) {
+  return n.toLocaleString(dateLocale(locale));
+}
+
+export function textTooLongMessage(length?: number, locale: Locale = currentLocale()) {
   const detail = typeof length === 'number' && length > MESSAGE_TEXT_MAX
-    ? ` (${length.toLocaleString('ar-EG')} حرفًا)`
+    ? translate(locale, 'messageLimit.textTooLongDetail', { length: numLocale(length, locale) })
     : '';
-  return `الرسالة أطول من الحد المسموح (${MESSAGE_TEXT_MAX.toLocaleString('ar-EG')} حرفًا)${detail}. قصّر النص ثم أعد الإرسال.`;
+  return translate(locale, 'messageLimit.textTooLong', {
+    max: numLocale(MESSAGE_TEXT_MAX, locale),
+    detail,
+  });
 }
 
-export function fileTooLargeMessage(size?: number) {
-  const picked = typeof size === 'number' && size > 0 ? ` الملف المختار: ${formatBytes(size)}.` : '';
-  return `الملف كبير جدًا. الحد الأقصى ${formatBytes(FILE_BYTES_MAX)}.${picked}`;
+export function fileTooLargeMessage(size?: number, locale: Locale = currentLocale()) {
+  const picked = typeof size === 'number' && size > 0
+    ? translate(locale, 'messageLimit.filePicked', { size: formatBytes(size) })
+    : '';
+  return translate(locale, 'messageLimit.fileTooLarge', { max: formatBytes(FILE_BYTES_MAX), picked });
 }
 
-export function videoTooLargeMessage(size?: number) {
-  const picked = typeof size === 'number' && size > 0 ? ` الفيديو المختار: ${formatBytes(size)}.` : '';
-  return `الفيديو كبير جدًا. الحد الأقصى ${formatBytes(VIDEO_BYTES_MAX)}.${picked}`;
+export function videoTooLargeMessage(size?: number, locale: Locale = currentLocale()) {
+  const picked = typeof size === 'number' && size > 0
+    ? translate(locale, 'messageLimit.videoPicked', { size: formatBytes(size) })
+    : '';
+  return translate(locale, 'messageLimit.videoTooLarge', { max: formatBytes(VIDEO_BYTES_MAX), picked });
 }
 
-export function imageTooLargeMessage() {
-  return 'الصورة كبيرة جدًا بعد الضغط. جرّب جودة «توفير البيانات» أو اختر صورة أصغر.';
+export function imageTooLargeMessage(locale: Locale = currentLocale()) {
+  return translate(locale, 'messageLimit.imageTooLargeAfterFit');
 }
 
-export function pickerImageTooLargeMessage(size?: number) {
-  const picked = typeof size === 'number' && size > 0 ? ` (${formatBytes(size)})` : '';
-  return `الصورة كبيرة جدًا${picked}. الحد قبل الضغط: ${formatBytes(PICKER_IMAGE_BYTES_MAX)}.`;
+export function pickerImageTooLargeMessage(size?: number, locale: Locale = currentLocale()) {
+  const picked = typeof size === 'number' && size > 0
+    ? translate(locale, 'messageLimit.pickerImagePicked', { size: formatBytes(size) })
+    : '';
+  return translate(locale, 'messageLimit.pickerImageTooLarge', { max: formatBytes(PICKER_IMAGE_BYTES_MAX), picked });
 }
 
-export function attachmentLimitSummaryMessage() {
-  return `يمكن إرفاق 10 عناصر كحد أقصى، وفيديو واحد. الصور حتى ${formatBytes(PICKER_IMAGE_BYTES_MAX)}، الملفات حتى ${formatBytes(FILE_BYTES_MAX)}، والفيديو حتى ${formatBytes(VIDEO_BYTES_MAX)}.`;
+export function attachmentLimitSummaryMessage(locale: Locale = currentLocale()) {
+  return translate(locale, 'messageLimit.attachmentSummary', {
+    imgMax: formatBytes(PICKER_IMAGE_BYTES_MAX),
+    fileMax: formatBytes(FILE_BYTES_MAX),
+    vidMax: formatBytes(VIDEO_BYTES_MAX),
+  });
 }
 
-export function outgoingFailureMessage(error: unknown, message: Message) {
+export function outgoingFailureMessage(error: unknown, message: Message, locale: Locale = currentLocale()) {
   const size = message.media?.fileSize;
   if (error instanceof Error) {
     if (error.message === 'file_too_large') {
-      return message.type === 'video' ? videoTooLargeMessage(size) : fileTooLargeMessage(size);
+      return message.type === 'video' ? videoTooLargeMessage(size, locale) : fileTooLargeMessage(size, locale);
     }
-    if (error.message === 'invalid_image') return imageTooLargeMessage();
+    if (error.message === 'invalid_image') return imageTooLargeMessage(locale);
   }
   if (error instanceof AdminApiError && error.code === 'invalid_upload') {
-    if (message.type === 'video') return videoTooLargeMessage(size);
-    if (message.type === 'file') return fileTooLargeMessage(size);
-    if (message.type === 'image') return imageTooLargeMessage();
-    return 'تعذر رفع المرفق. تحقق من الحجم والصيغة ثم أعد المحاولة.';
+    if (message.type === 'video') return videoTooLargeMessage(size, locale);
+    if (message.type === 'file') return fileTooLargeMessage(size, locale);
+    if (message.type === 'image') return imageTooLargeMessage(locale);
+    return translate(locale, 'messageLimit.uploadFailed');
   }
-  return SEND_CONNECTION_MESSAGE;
+  return sendConnectionMessage(locale);
 }

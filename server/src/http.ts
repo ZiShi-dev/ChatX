@@ -115,8 +115,16 @@ function secureRequest(request: Request) {
   return request.headers.get('x-chatx-secure') === '1';
 }
 
+function installedAppOrigin(origin: string) {
+  return origin === NATIVE_APP_ORIGIN
+    || /^https?:\/\/(?:localhost|127\.0\.0\.1)(?::\d+)?$/.test(origin)
+    || origin.startsWith('capacitor://localhost')
+    || origin.startsWith('ionic://localhost');
+}
+
 function nativeSession(request: Request, token: string) {
-  return request.headers.get('origin') === NATIVE_APP_ORIGIN ? { sessionToken: token } : {};
+  const origin = request.headers.get('origin') ?? '';
+  return installedAppOrigin(origin) ? { sessionToken: token } : {};
 }
 
 async function readBody(request: Request, limit: number) {

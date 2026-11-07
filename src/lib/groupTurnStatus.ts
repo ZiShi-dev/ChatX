@@ -1,16 +1,45 @@
+import type { Locale } from './locale';
+import { dateLocale, translate, type MessageKey } from './i18n';
+
 export type TurnRefresh = 'loading' | 'ok' | 'offline' | 'invalid' | 'local';
 
-export function groupTurnStatus(name: string, mine: boolean, now: number, opensAt: string | undefined, refresh: TurnRefresh) {
+const turnFormatOptions: Intl.DateTimeFormatOptions = {
+  day: 'numeric',
+  month: 'long',
+  hour: '2-digit',
+  minute: '2-digit',
+  numberingSystem: 'latn',
+};
+
+export function groupTurnStatus(
+  locale: Locale,
+  name: string,
+  mine: boolean,
+  now: number,
+  opensAt: string | undefined,
+  refresh: TurnRefresh,
+) {
+  const t = (key: MessageKey, vars?: Record<string, string | number>) => translate(locale, key, vars);
   const opens = opensAt ? Date.parse(opensAt) : Number.NaN;
   const expires = opens + 7 * 24 * 60 * 60 * 1000;
+  const dl = dateLocale(locale);
+  const format = (date: number) => new Intl.DateTimeFormat(dl, turnFormatOptions).format(date);
+
   if (Number.isFinite(expires) && now >= expires) {
-    if (refresh === 'loading') return 'انتهى الدور — جارٍ تحديث الدور التالي';
-    if (refresh === 'offline') return 'انتهى الدور — تعذر الاتصال لتحديث الدور التالي';
-    if (refresh === 'ok') return 'انتهى الدور — لم تصل بيانات الدور الجديد من الخادم';
-    return 'انتهى الدور — تعذر تحميل بيانات الدور التالي';
+    if (refresh === 'loading') return t('turn.expired.loading');
+    if (refresh === 'offline') return t('turn.expired.offline');
+    if (refresh === 'ok') return t('turn.expired.noServerData');
+    return t('turn.expired.loadFailed');
   }
-  const format = (date: number) => new Intl.DateTimeFormat('ar', { day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit', numberingSystem: 'latn' }).format(date);
-  if (Number.isFinite(opens) && opens > now) return mine ? `دورك في ${format(opens)}` : `دور ${name} في ${format(opens)}`;
-  const end = Number.isFinite(expires) ? ` حتى ${format(expires)}` : '';
-  return mine ? `دورك لتعديل الاسم والصورة بحرية${end}` : `دور ${name} لتعديل الاسم والصورة${end}`;
+  if (Number.isFinite(opens) && opens > now) {
+    return mine ? t('turn.scheduledMine', { when: format(opens) }) : t('turn.scheduledTheirs', { name, when: format(opens) });
+  }
+  if (mine) {
+    return Number.isFinite(expires)
+      ? t('turn.activeMineUntil', { when: format(expires) })
+      : t('turn.activeMineOpen');
+  }
+  return Number.isFinite(expires)
+    ? t('turn.activeTheirsUntil', { name, when: format(expires) })
+    : t('turn.activeTheirsOpen', { name });
 }

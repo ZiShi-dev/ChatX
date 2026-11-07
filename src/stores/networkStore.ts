@@ -17,6 +17,7 @@ export const useNetworkStore = create<NetworkStore>((set) => ({
 type Connection = EventTarget & { effectiveType?: string; saveData?: boolean };
 
 let transportFailed = false;
+let serverConfirmedDown = false;
 let checkRecovery: (() => void) | undefined;
 let slowResponses = 0;
 let fastResponses = 0;
@@ -27,26 +28,53 @@ let resumeGraceUntil = 0;
 
 export function resetNetworkMeasurements() {
   slowResponses = fastResponses = recoveryStarted = 0;
-  degraded = transportFailed = leftApp = false;
+  degraded = transportFailed = serverConfirmedDown = leftApp = false;
   resumeGraceUntil = 0;
+}
+
+/** The phone itself reports no link, or a health check confirmed the server is unreachable. */
+export function connectionLost() {
+  return (typeof navigator !== 'undefined' && navigator.onLine === false) || useNetworkStore.getState().network === 'offline';
 }
 
 export function reportNetworkFailure(stalled = false) {
   if (nativeNeedsApiOrigin()) return;
   if (typeof document !== 'undefined' && (document.visibilityState === 'hidden' || Date.now() < resumeGraceUntil)) return;
-  if (stalled && navigator.onLine !== false) {
+  if (navigator.onLine === false) {
+    transportFailed = true;
+    serverConfirmedDown = true;
+    fastResponses = 0;
+    useNetworkStore.getState().setNetwork('offline');
+    checkRecovery?.();
+    return;
+  }
+  // One slow or dropped request is a weak link. The red banner waits for a failed health check.
+  if (stalled) {
     degraded = true;
     useNetworkStore.getState().setNetwork('slow');
     return;
   }
   transportFailed = true;
+  degraded = true;
   fastResponses = 0;
-  useNetworkStore.getState().setNetwork(navigator.onLine === false ? 'offline' : 'offline');
+  useNetworkStore.getState().setNetwork(serverConfirmedDown ? 'offline' : 'slow');
   checkRecovery?.();
+}
+
+function confirmServerDown() {
+  if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+    serverConfirmedDown = true;
+    useNetworkStore.getState().setNetwork('offline');
+    return;
+  }
+  if (!transportFailed) return;
+  serverConfirmedDown = true;
+  useNetworkStore.getState().setNetwork('offline');
 }
 
 export function reportNetworkSuccess(elapsed: number, useful = true) {
   transportFailed = false;
+  serverConfirmedDown = false;
   const connection = (navigator as Navigator & { connection?: Connection }).connection;
   if (useful) {
     if (elapsed > 3000) { slowResponses++; fastResponses = 0; if (slowResponses >= 3) degraded = true; }
@@ -70,7 +98,7 @@ export function observeNetwork() {
     timer = undefined;
     const request = new AbortController();
     controller = request;
-    const timeout = window.setTimeout(() => request.abort(), 5000);
+    const timeout = window.setTimeout(() => request.abort(), 15_000);
     const started = Date.now();
     try {
       const url = Capacitor.isNativePlatform()
@@ -81,8 +109,10 @@ export function observeNetwork() {
       if (response.ok && !stopped && !request.signal.aborted) {
         attempts = 0;
         reportNetworkSuccess(Date.now() - started, false);
-      }
-    } catch { /* Keep recovery checks small and bounded while disconnected. */ }
+      } else if (!stopped && !request.signal.aborted) confirmServerDown();
+    } catch {
+      if (!stopped) confirmServerDown();
+    }
     finally {
       window.clearTimeout(timeout);
       controller = undefined;
@@ -97,8 +127,9 @@ export function observeNetwork() {
   };
   const sync = () => {
     if (document.visibilityState === 'hidden') return;
-    const slow = degraded || connection?.saveData || connection?.effectiveType === 'slow-2g' || connection?.effectiveType === '2g';
-    useNetworkStore.getState().setNetwork(navigator.onLine === false ? 'offline' : transportFailed ? 'offline' : slow ? 'slow' : 'online');
+    const slow = degraded || transportFailed || connection?.saveData || connection?.effectiveType === 'slow-2g' || connection?.effectiveType === '2g';
+    const unreachable = navigator.onLine === false || (transportFailed && serverConfirmedDown);
+    useNetworkStore.getState().setNetwork(unreachable ? 'offline' : slow ? 'slow' : 'online');
     if (navigator.onLine !== false && transportFailed) { window.clearTimeout(timer); timer = undefined; void probe(); }
   };
   sync();
@@ -112,6 +143,7 @@ export function observeNetwork() {
     if (!leftApp) return;
     leftApp = false;
     transportFailed = false;
+    serverConfirmedDown = false;
     degraded = false;
     slowResponses = 0;
     fastResponses = 0;

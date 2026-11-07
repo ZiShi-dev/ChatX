@@ -15,14 +15,15 @@ import { isSafeExternalUrl } from '../lib/url';
 import { useAuthStore } from '../stores/authStore';
 import { useSavedStore } from '../stores/savedStore';
 import type { MessageType } from '../types/message';
+import { useI18n, type MessageKey } from '../lib/i18n';
 import './SavedPage.css';
 
-const KIND: Record<MessageType, string> = {
-  text: 'نص',
-  image: 'صورة',
-  video: 'فيديو',
-  link: 'رابط',
-  file: 'ملف',
+const KIND: Record<MessageType, MessageKey> = {
+  text: 'saved.kind.text',
+  image: 'preview.image',
+  video: 'preview.video',
+  link: 'preview.link',
+  file: 'preview.file',
 };
 
 function savedHref(item: SavedEntry) {
@@ -33,6 +34,7 @@ function savedHref(item: SavedEntry) {
 
 export default function SavedPage() {
   const navigate = useNavigate();
+  const { t } = useI18n();
   const [params] = useSearchParams();
   const room = params.get('room') ?? '';
   const currentUser = useAuthStore((state) => state.currentUser);
@@ -49,7 +51,7 @@ export default function SavedPage() {
     let alive = true;
     void load()
       .catch(() => {
-        if (alive) setError('تعذر تحميل المحفوظات. أعد المحاولة.');
+        if (alive) setError(t('saved.loadError'));
       })
       .finally(() => {
         if (alive) setReady(true);
@@ -57,7 +59,7 @@ export default function SavedPage() {
     return () => {
       alive = false;
     };
-  }, [load, currentUser.id]);
+  }, [load, currentUser.id, t]);
 
   const mine = useMemo(() => savedFor(entries, currentUser.id), [currentUser.id, entries]);
   const visible = scope === 'room' && room ? mine.filter((item) => item.conversationId === room) : mine;
@@ -71,25 +73,25 @@ export default function SavedPage() {
     <IonPage>
       <IonHeader>
         <NetworkStatusBanner />
-        <PageNav title="المحفوظات" fallback={room ? `/chat/${room}` : '/home'} />
+        <PageNav title={t('saved.title')} fallback={room ? `/chat/${room}` : '/home'} />
       </IonHeader>
       <IonContent className="inbox-page saved-page">
-        <p className="inbox-lead saved-lead">الرسائل التي تحفظها تبقى لك، من المجموعات والمحادثات الخاصة.</p>
+        <p className="inbox-lead saved-lead">{t('saved.lead')}</p>
         {error && <p role="alert">{error}</p>}
         {room && (
-          <div className="inbox-filters" role="tablist" aria-label="نطاق المحفوظات">
+          <div className="inbox-filters" role="tablist" aria-label={t('saved.filtersAria')}>
             <button type="button" role="tab" aria-selected={scope === 'room'} className={scope === 'room' ? 'is-on' : undefined} onClick={() => setScope('room')}>
-              هذه المحادثة
+              {t('saved.scopeThis')}
             </button>
             <button type="button" role="tab" aria-selected={scope === 'all'} className={scope === 'all' ? 'is-on' : undefined} onClick={() => setScope('all')}>
-              الكل
+              {t('saved.scopeAll')}
             </button>
           </div>
         )}
         {visible.length === 0 && !ready ? (
           <PageSkeleton kind="saved" />
         ) : visible.length === 0 ? (
-          <EmptyState title="لا توجد رسائل محفوظة" detail="اضغط مطولاً على أي رسالة ثم اختر حفظ." />
+          <EmptyState title={t('saved.emptyTitle')} detail={t('saved.emptyDetail')} />
         ) : (
           <div className="inbox-list">
             {visible.map((item) => {
@@ -104,7 +106,7 @@ export default function SavedPage() {
                       </span>
                       <span className="inbox-meta">
                         <span>{item.conversationName}</span>
-                        <span className="kind-pill">{KIND[item.type]}</span>
+                        <span className="kind-pill">{t(KIND[item.type])}</span>
                       </span>
                       <span className="inbox-preview"><EmojiText text={item.preview} /></span>
                     </span>
@@ -116,13 +118,13 @@ export default function SavedPage() {
                       target="_blank"
                       rel="noreferrer"
                       dir="ltr"
-                      aria-label="فتح الرابط في المتصفح"
+                      aria-label={t('saved.openLink')}
                       onClick={(event) => event.stopPropagation()}
                     >
-                      رابط
+                      {t('preview.link')}
                     </a>
                   )}
-                  <button type="button" className="saved-drop" aria-label="إلغاء الحفظ" onClick={() => remove(currentUser.id, item.messageId)}>
+                  <button type="button" className="saved-drop" aria-label={t('saved.unsave')} onClick={() => remove(currentUser.id, item.messageId)}>
                     <IonIcon icon={bookmark} />
                   </button>
                 </div>
@@ -132,9 +134,9 @@ export default function SavedPage() {
         )}
         {hasMore && <button type="button" disabled={loading} onClick={async () => {
           setLoading(true); setError('');
-          try { await load(true); } catch { setError('تعذر تحميل المحفوظات. أعد المحاولة.'); }
+          try { await load(true); } catch { setError(t('saved.loadError')); }
           finally { setLoading(false); }
-        }}>تحميل المزيد</button>}
+        }}>{t('saved.loadMore')}</button>}
       </IonContent>
     </IonPage>
   );

@@ -3,21 +3,22 @@ import { IonIcon } from '@ionic/react';
 import { chevronForwardOutline, ellipsisVertical } from 'ionicons/icons';
 import { chatNavigationSlot } from '../../lib/messageActionsHost';
 import { dismissOverlayHistory, registerOverlayClose, useOverlayHistory } from '../../lib/overlayBack';
+import { useI18n, type MessageKey } from '../../lib/i18n';
 import './MessageActionBar.css';
 
-const PRIMARY_ORDER = ['رد', 'تعديل', 'نسخ', 'حذف'] as const;
+const PRIMARY_ORDER = ['reply', 'edit', 'copy', 'delete'] as const;
 const PRIMARY = new Set<string>(PRIMARY_ORDER);
-function primaryRank(label: string) {
-  const index = PRIMARY_ORDER.indexOf(label as typeof PRIMARY_ORDER[number]);
+function primaryRank(id: string) {
+  const index = PRIMARY_ORDER.indexOf(id as typeof PRIMARY_ORDER[number]);
   return index === -1 ? 99 : index;
 }
-type Action = ReactElement<{ role?: string; children?: ReactNode; 'aria-label'?: string }>;
-function label(action: Action) {
-  const span = Children.toArray(action.props.children).find((child) => isValidElement(child) && child.type === 'span');
-  return isValidElement<{ children: string }>(span) ? span.props.children : '';
+type Action = ReactElement<{ role?: string; children?: ReactNode; 'aria-label'?: string; 'data-msg-action'?: string }>;
+function actionId(action: Action) {
+  return action.props['data-msg-action'] ?? '';
 }
 
 export default function MessageActionBar({ children, onClose, fallback = false }: { children: ReactNode; onClose: () => void; fallback?: boolean }) {
+  const { t } = useI18n();
   const [expanded, setExpanded] = useState(false);
   const root = useRef<HTMLDivElement>(null);
   const closeRef = useRef(onClose);
@@ -60,17 +61,26 @@ export default function MessageActionBar({ children, onClose, fallback = false }
   }, []);
   const items = Children.toArray(children);
   const actions = items.filter((item): item is Action => isValidElement<{ role?: string }>(item) && item.props.role === 'menuitem');
-  const primary = actions.filter((item) => PRIMARY.has(label(item))).sort((a, b) => primaryRank(label(a)) - primaryRank(label(b)));
-  const secondary = actions.filter((item) => !PRIMARY.has(label(item)));
+  const primary = actions.filter((item) => PRIMARY.has(actionId(item))).sort((a, b) => primaryRank(actionId(a)) - primaryRank(actionId(b)));
+  const secondary = actions.filter((item) => !PRIMARY.has(actionId(item)));
+  const toolbar = 'message.menuToolbar' satisfies MessageKey;
+  const deselect = 'message.menuDeselect' satisfies MessageKey;
+  const oneSel = 'message.oneSelected' satisfies MessageKey;
+  const more = 'message.menuMore' satisfies MessageKey;
   return <div ref={root} className={fallback ? 'message-selection message-selection-fallback' : 'message-selection'}>
-    <div className="message-selection-toolbar" role="toolbar" aria-label="إجراءات الرسالة المحددة">
-      <button type="button" aria-label="إلغاء التحديد" onClick={close}><IonIcon icon={chevronForwardOutline} /></button>
-      <strong aria-label="رسالة واحدة محددة">1</strong>
-      {primary.map((item) => <div key={label(item)} className="message-selection-action" title={label(item)}>{cloneElement(item, { role: 'button', 'aria-label': label(item) })}</div>)}
+    <div className="message-selection-toolbar" role="toolbar" aria-label={t(toolbar)}>
+      <button type="button" aria-label={t(deselect)} onClick={close}><IonIcon icon={chevronForwardOutline} /></button>
+      <strong aria-label={t(oneSel)}>1</strong>
+      {primary.map((item) => {
+        const id = actionId(item);
+        const span = Children.toArray(item.props.children).find((child) => isValidElement(child) && child.type === 'span');
+        const text = isValidElement<{ children: string }>(span) ? span.props.children : '';
+        return <div key={id || text} className="message-selection-action" title={text}>{cloneElement(item, { role: 'button', 'aria-label': text })}</div>;
+      })}
       {secondary.length > 0 && (
-        <button type="button" aria-label="المزيد من الإجراءات" aria-expanded={expanded} onClick={() => setExpanded(!expanded)}><IonIcon icon={ellipsisVertical} /></button>
+        <button type="button" aria-label={t(more)} aria-expanded={expanded} onClick={() => setExpanded(!expanded)}><IonIcon icon={ellipsisVertical} /></button>
       )}
     </div>
-    {expanded && secondary.length > 0 && <div className="message-selection-more" role="menu" aria-label="المزيد من الإجراءات">{secondary}</div>}
+    {expanded && secondary.length > 0 && <div className="message-selection-more" role="menu" aria-label={t(more)}>{secondary}</div>}
   </div>;
 }

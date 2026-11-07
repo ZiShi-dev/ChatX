@@ -5,6 +5,7 @@ import { fcmEnabled } from './fcmEnabled';
 import { isServerId } from './home';
 import { quietLevel, useMuteStore } from '../stores/muteStore';
 import { useSettingsStore } from '../stores/settingsStore';
+import { t } from './i18n';
 
 let token = '';
 let started = false;
@@ -162,7 +163,7 @@ export async function startPushRegistration(userId: string) {
   }));
   if (lease !== generation) return;
   if (Capacitor.getPlatform() === 'android') {
-    await PushNotifications.createChannel({ id: 'chatx-messages', name: 'الرسائل', importance: 4, visibility: 1, vibration: true });
+    await PushNotifications.createChannel({ id: 'chatx-messages', name: t('push.channelName'), importance: 4, visibility: 1, vibration: true });
   }
   window.addEventListener('online', syncPushPrefs);
   await PushNotifications.register();

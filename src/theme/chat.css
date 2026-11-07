@@ -1262,6 +1262,77 @@ html[data-wallpaper='1'] .composer-input::placeholder {
   font-size: 16px;
 }
 
+.request-fold {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  min-height: 72px;
+  padding: 8px 16px;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: start;
+}
+
+.request-fold-faces {
+  display: flex;
+  flex: none;
+}
+
+.request-fold-faces .avatar + .avatar {
+  margin-inline-start: -14px;
+}
+
+.request-fold-faces .avatar {
+  outline: 2px solid var(--chatx-bg);
+  border-radius: 50%;
+}
+
+.request-fold-copy {
+  min-width: 0;
+  flex: 1;
+}
+
+.request-fold-copy strong,
+.request-fold-copy small {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.request-fold-copy small {
+  color: var(--chatx-muted);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.request-fold-count {
+  flex: none;
+  min-width: 22px;
+  height: 22px;
+  padding: 0 6px;
+  border-radius: 11px;
+  background: var(--chatx-accent);
+  color: var(--chatx-on-accent);
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 22px;
+  text-align: center;
+}
+
+.request-fold-chevron {
+  flex: none;
+  color: var(--chatx-muted);
+  font-size: 18px;
+}
+
+.request-fold.is-open .request-fold-chevron {
+  transform: rotate(180deg);
+}
+
 .friend-actions {
   display: flex;
   gap: 8px;
@@ -1721,15 +1792,7 @@ button.chat-nav-main {
 
 @media (prefers-reduced-motion: reduce) {
   .swipe-shift,
-  .swipe-reply,
-  .skeleton-avatar,
-  .skeleton-line,
-  .skeleton-chip,
-  .skeleton-bubble,
-  .skeleton-banner,
-  .skeleton-search,
-  .skeleton-card,
-  .skeleton-tile {
+  .swipe-reply {
     transition: none;
     animation: none;
   }
@@ -1884,17 +1947,6 @@ ion-content.chat-scroll::part(scroll) {
 
 .bubble-stack.mine .swipe-shift {
   align-items: flex-end;
-}
-
-@media (prefers-reduced-motion: no-preference) {
-  .bubble-stack.is-new .bubble-row {
-    animation: send-bubble 160ms cubic-bezier(0.2, 0, 0, 1);
-  }
-}
-
-@keyframes send-bubble {
-  from { opacity: 0.65; transform: translateY(4px); }
-  to { opacity: 1; transform: none; }
 }
 
 .swipe-reply {
@@ -2966,9 +3018,14 @@ ion-content::part(scroll)::-webkit-scrollbar {
 }
 
 .emoji-grid button.is-on,
-.emoji-grid button:hover,
 .emoji-grid button:focus-visible {
   background: var(--chatx-soft);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .emoji-grid button:hover {
+    background: var(--chatx-soft);
+  }
 }
 
 .app-sheet .emoji-panel {
@@ -3159,8 +3216,10 @@ ion-header:has(.message-search) {
   --icon-color: var(--chatx-muted);
   --clear-button-color: var(--chatx-muted);
   --border-radius: 999px;
+  --box-shadow: none;
   padding: 0;
-  min-height: 40px;
+  min-height: 44px;
+  font-size: 1rem;
 }
 
 
@@ -3194,45 +3253,11 @@ ion-header:has(.message-search) {
   height: 5px;
   border-radius: 50%;
   background: currentColor;
-  opacity: 0.35;
-  animation: typing-dot 1.1s ease-in-out infinite;
-}
-
-.typing-dots i:nth-child(2) {
-  animation-delay: 0.15s;
-}
-
-.typing-dots i:nth-child(3) {
-  animation-delay: 0.3s;
-}
-
-@keyframes typing-dot {
-  0%,
-  80%,
-  100% {
-    opacity: 0.35;
-    transform: translateY(0);
-  }
-
-  40% {
-    opacity: 1;
-    transform: translateY(-2px);
-  }
+  opacity: 0.8;
 }
 
 .chat-heading span.typing {
   color: var(--chatx-accent-soft);
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .typing-dots i {
-    animation: none;
-    opacity: 0.8;
-  }
-
-  .composer-input {
-    transition: none;
-  }
 }
 
 .empty-state {
@@ -4962,8 +4987,8 @@ ion-toolbar.network-toolbar.setup {
 }
 
 .media-preview.is-held {
-  filter: blur(8px);
-  transform: scale(1.08);
+  filter: blur(5px);
+  transform: scale(1.06);
 }
 
 .media-preview.tall {
@@ -5032,7 +5057,6 @@ ion-toolbar.network-toolbar.setup {
 .media-ring .value {
   stroke: #fff;
   stroke-linecap: round;
-  transition: stroke-dashoffset 0.2s linear;
 }
 
 .media-ring strong {
@@ -5652,7 +5676,6 @@ ion-toolbar.network-toolbar.setup {
 .skeleton-card,
 .skeleton-tile {
   background: var(--chatx-soft);
-  animation: skeleton-pulse 1.2s ease-in-out infinite;
 }
 
 .skeleton-avatar {
@@ -5760,10 +5783,6 @@ ion-toolbar.network-toolbar.setup {
   flex: 1;
   justify-content: flex-end;
   min-height: 70%;
-}
-
-@keyframes skeleton-pulse {
-  50% { opacity: 0.45; }
 }
 
 .home-section {
@@ -6550,48 +6569,52 @@ ion-button,
 ion-segment-button,
 [role="button"] {
   -webkit-tap-highlight-color: transparent;
-  transition: transform 80ms ease-out, opacity 80ms ease-out;
+  touch-action: manipulation;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
 }
 
 button:not(:disabled):active,
 ion-button:active,
+ion-segment-button:active,
 [role="button"]:active {
-  transform: scale(0.96);
   opacity: 0.78;
 }
 
-button.conversation-row:active,
-button.chat-nav-main:active,
-button.media-open:active,
-.app-sheet > button:active,
-.account-actions button:active,
-.group-tabs button:active,
-.account-tabs button:active,
-.inbox-filters button:active,
-.profile-pop-action:active,
-.live-inbox-open:active,
-.group-profile-card:active,
-button.owner-row:active,
-button.friend-request-open:active,
-ion-segment-button:active {
-  transform: none;
-  opacity: 1;
-  box-shadow: inset 0 0 0 999px rgba(255, 255, 255, 0.14);
-}
-
 @media (prefers-reduced-motion: reduce) {
-  button,
-  ion-button,
-  ion-segment-button,
-  [role="button"] {
-    transition: none;
-  }
-
   button:not(:disabled):active,
   ion-button:active,
   [role="button"]:active {
-    transform: none;
     opacity: 0.72;
+  }
+
+  .media-preview.is-held {
+    filter: none;
+    transform: none;
+  }
+}
+
+/* Petits écrans / appareils modestes : ombres plus légères (moins de travail GPU) */
+@media (max-width: 600px) {
+  .account-dialog {
+    box-shadow: 0 8px 22px rgba(0, 0, 0, 0.38);
+  }
+
+  .app-sheet {
+    box-shadow: 0 -6px 18px rgba(0, 0, 0, 0.28);
+  }
+
+  .app-toast {
+    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.32);
+  }
+
+  .wa-menu {
+    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.32);
+  }
+
+  .wa-dialog {
+    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.32);
   }
 }
 

@@ -1,5 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { AdminApiError } from '../lib/adminApi';
 import * as adminApi from '../lib/adminApi';
+import { clearStoredSession } from '../lib/sessionToken';
 import { useAuthStore } from './authStore';
 import { useUserStore } from './userStore';
 
@@ -62,6 +64,20 @@ describe('authStore user style', () => {
     const result = await useAuthStore.getState().saveAccountProfile({ color: '#a56b7a', messageFont: 'clear' });
     expect(result).toBe('ok');
     expect(useAuthStore.getState().currentUser).toMatchObject({ color: '#a56b7a', messageFont: 'clear' });
+  });
+
+  it('stays signed in when the account exists but the first profile save fails', async () => {
+    const token = 'A'.repeat(43);
+    vi.spyOn(adminApi, 'adminFetch').mockImplementation((path: string) => {
+      if (path === '/api/auth/google/profile') return Promise.resolve({ step: 'ready', user: baseUser, sessionToken: token });
+      return Promise.reject(new AdminApiError('offline', 0));
+    });
+    const result = await useAuthStore.getState().finishGoogleProfile('credential', 'نورة', { color: '#3d9b84', messageFont: 'system', avatarDecoration: 'none' });
+    expect(result).toBe('ok');
+    expect(useAuthStore.getState().activated).toBe(true);
+    expect(useAuthStore.getState().currentUser.id).toBe(MEMBER_ID);
+    clearStoredSession();
+    localStorage.removeItem('chatx.auth');
   });
 
   it('accepts any hex color in the optimistic patch', async () => {

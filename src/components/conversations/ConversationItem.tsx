@@ -5,6 +5,7 @@ import Avatar from '../common/Avatar';
 import type { AvatarDecoration } from '../../lib/profileCosmetics';
 import EmojiText from '../common/EmojiText';
 import type { ConversationType } from '../../types/conversation';
+import { useI18n } from '../../lib/i18n';
 
 type ConversationItemProps = {
   title: string;
@@ -41,6 +42,7 @@ export default function ConversationItem({
   onClick,
   onHold,
 }: ConversationItemProps) {
+  const { t } = useI18n();
   const holdTimer = useRef<number | undefined>(undefined);
   const held = useRef(false);
   const armed = useRef(false);
@@ -59,8 +61,8 @@ export default function ConversationItem({
         <span className="conversation-top">
           <span className="conversation-title">
             <span className="conversation-name">{title}</span>
-            {type === 'global' && <span className="kind-pill quiet">رئيسية</span>}
-            {type === 'group' && <span className="kind-pill quiet">مجموعة</span>}
+            {type === 'global' && <span className="kind-pill quiet">{t('conversation.badgeMain')}</span>}
+            {type === 'group' && <span className="kind-pill quiet">{t('chat.group')}</span>}
           </span>
           {muted && <IonIcon className="mute-mark" icon={notificationsOffOutline} />}
           {time && <time className="conversation-time">{time}</time>}
@@ -81,7 +83,7 @@ export default function ConversationItem({
     return (
       <div className={unread > 0 ? 'conversation-row has-unread is-gone' : 'conversation-row is-gone'}>
         <button type="button" className="conversation-open" onClick={onClick}>{body}</button>
-        <button type="button" className="conversation-remove" aria-label="إزالة المحادثة" onClick={onRemove}>
+        <button type="button" className="conversation-remove" aria-label={t('conversation.removeAria')} onClick={onRemove}>
           <IonIcon icon={trashOutline} />
         </button>
       </div>

@@ -101,8 +101,8 @@ export default function ProfilePage({ embedded = false, onShowSettings, scrollHo
       setSaveError('');
       return true;
     }
-    if (saved === 'username_taken') setSaveError('هذا الاسم مستخدم.');
-    else setSaveError(saved === 'offline' ? 'تعذر الاتصال. بقي التعديل على هذا الجهاز.' : 'تعذر حفظ الملف.');
+    if (saved === 'username_taken') setSaveError(t('profile.errUsernameTaken'));
+    else setSaveError(saved === 'offline' ? t('profile.errOfflineLocal') : t('profile.errSaveFailed'));
     return false;
   };
 
@@ -120,7 +120,7 @@ export default function ProfilePage({ embedded = false, onShowSettings, scrollHo
     if (!file) return;
     const avatarUrl = await readPhoto(file).catch(() => '');
     if (!avatarUrl) {
-      setSaveError('تعذر حفظ الملف.');
+      setSaveError(t('profile.errFileSave'));
       scrollHold?.restore();
       return;
     }
@@ -132,7 +132,7 @@ export default function ProfilePage({ embedded = false, onShowSettings, scrollHo
     if (!file) return;
     const bannerUrl = await readBanner(file).catch(() => '');
     if (bannerUrl) setBannerPreview(bannerUrl);
-    else setSaveError('تعذر حفظ الملف.');
+    else setSaveError(t('profile.errFileSave'));
     scrollHold?.restore();
   };
 
@@ -142,7 +142,7 @@ export default function ProfilePage({ embedded = false, onShowSettings, scrollHo
     const roleColors = draftRoleColors.map((item) => sanitizeUserColor(item, '#3d9b84')).filter((item, index, list) => list.indexOf(item) === index);
     if (name.length < 2 || !colorValid) return;
     if (roleLabel && roleColors.length === 0) {
-      setSaveError('أضف لونًا واحدًا على الأقل للدور.');
+      setSaveError(t('profile.errRoleColor'));
       return;
     }
     void saveAccountProfile({
@@ -185,14 +185,14 @@ export default function ProfilePage({ embedded = false, onShowSettings, scrollHo
         </section>
         <dl className="account-facts">
           <div>
-            <dt>الحالة</dt>
+            <dt>{t('profile.status')}</dt>
             <dd className="profile-status">
               <i className={getUserPresence(currentUser.id, [currentUser]) === 'online' ? 'on' : ''} />
               {connectionLabel(currentUser, { self: true })}
             </dd>
           </div>
           <div>
-            <dt>لون الاسم</dt>
+            <dt>{t('profile.nameColor')}</dt>
             <dd className="profile-style-swatch" style={{ '--style-color': currentUser.color } as CSSProperties}>
               <span aria-hidden="true" />
             </dd>
@@ -203,17 +203,17 @@ export default function ProfilePage({ embedded = false, onShowSettings, scrollHo
           </div>
         </dl>
         <section className="profile-bio">
-          <span>النبذة</span>
+          <span>{t('profile.bioSection')}</span>
           {currentUser.bio ? (
             <p dir="auto">{currentUser.bio}</p>
           ) : (
-            <button type="button" className="group-bio-add" onClick={openEditor}>أضف نبذة</button>
+            <button type="button" className="group-bio-add" onClick={openEditor}>{t('profile.addBio')}</button>
           )}
         </section>
         <section className="profile-actions">
           <button type="button" onClick={openEditor}>
             <IonIcon icon={pencilOutline} />
-            <span>تعديل الملف</span>
+            <span>{t('profile.editProfile')}</span>
           </button>
           {!embedded && (
             <button type="button" onClick={openSettings}>
@@ -223,7 +223,7 @@ export default function ProfilePage({ embedded = false, onShowSettings, scrollHo
           )}
           <button type="button" className="is-leave" onClick={() => setConfirmLeave(true)}>
             <IonIcon icon={logOutOutline} />
-            <span>تسجيل الخروج</span>
+            <span>{t('profile.logOut')}</span>
           </button>
         </section>
       </div>
@@ -231,10 +231,10 @@ export default function ProfilePage({ embedded = false, onShowSettings, scrollHo
         createPortal(
           <div className="wa-scrim center" onClick={() => setConfirmLeave(false)}>
             <div className="account-dialog" role="alertdialog" onClick={(event) => event.stopPropagation()}>
-              <h2>تسجيل الخروج؟</h2>
-              <p className="account-warn">ستعود إلى شاشة الدخول. الرمز نفسه يعيدك ما دام نشطًا.</p>
+              <h2>{t('profile.logOutTitle')}</h2>
+              <p className="account-warn">{t('profile.logOutBody')}</p>
               <div className="account-actions">
-                <button type="button" onClick={() => setConfirmLeave(false)}>إلغاء</button>
+                <button type="button" onClick={() => setConfirmLeave(false)}>{t('profile.cancel')}</button>
                 <button
                   type="button"
                   className="danger"
@@ -243,7 +243,7 @@ export default function ProfilePage({ embedded = false, onShowSettings, scrollHo
                     navigate('/activation', { replace: true });
                   }}
                 >
-                  تسجيل الخروج
+                  {t('profile.logOutConfirm')}
                 </button>
               </div>
             </div>
@@ -253,76 +253,76 @@ export default function ProfilePage({ embedded = false, onShowSettings, scrollHo
       {editing &&
         createPortal(
           <div className="app-scrim sheet profile-editor-scrim" onClick={() => setEditing(false)}>
-            <div ref={editorDialog} className="app-sheet profile-pop profile-editor" role="dialog" aria-modal="true" aria-label="تعديل الملف" onClick={(event) => event.stopPropagation()}>
+            <div ref={editorDialog} className="app-sheet profile-pop profile-editor" role="dialog" aria-modal="true" aria-label={t('profile.editorTitle')} onClick={(event) => event.stopPropagation()}>
               <div className="profile-editor-header"><span className="app-handle" />
-              <h2>تعديل الملف</h2>
+              <h2>{t('profile.editorTitle')}</h2>
               <div className="profile-editor-preview">
                 <div className="profile-editor-banner" style={{ '--banner': draftColor } as CSSProperties}>
                   {currentUser.bannerUrl ? <img src={currentUser.bannerUrl} alt="" /> : null}
                 </div>
-              <div className="cosmetic-preview" aria-label="معاينة مظهر الملف">
+              <div className="cosmetic-preview" aria-label={t('profile.previewAria')}>
                 <Avatar name={displayName || currentUser.displayName} color={draftColor} size={80} src={currentUser.avatarUrl} decoration={draftDecoration} animate={animate} />
                 <strong {...displayNameStyleForUser(draftColor, draftFont)} dir="auto">{displayName || currentUser.displayName}</strong>
               </div>
               </div>
               </div>
-              <div className="profile-editor-tabs" role="tablist" aria-label="أقسام تعديل الملف" onKeyDown={event => {
+              <div className="profile-editor-tabs" role="tablist" aria-label={t('profile.editorAriaTabs')} onKeyDown={event => {
                 const tabs = ['details', 'name', 'effects'] as const;
                 const next = event.key === 'Home' ? 0 : event.key === 'End' ? 2 : event.key === 'ArrowLeft' ? (tabs.indexOf(editorTab) + 1) % 3 : event.key === 'ArrowRight' ? (tabs.indexOf(editorTab) + 2) % 3 : -1;
                 if (next < 0) return;
                 event.preventDefault(); setEditorTab(tabs[next]); editorFields.current?.scrollTo(0, 0);
                 document.getElementById('profile-tab-' + tabs[next])?.focus();
               }}>
-                {([{ id: 'details', label: 'المعلومات' }, { id: 'name', label: 'الاسم والألوان' }, { id: 'effects', label: 'الزينة' }] as const).map(tab => <button type="button" key={tab.id} id={'profile-tab-' + tab.id} role="tab" aria-selected={editorTab === tab.id} aria-controls={'profile-panel-' + tab.id} tabIndex={editorTab === tab.id ? 0 : -1} onClick={() => { setEditorTab(tab.id); editorFields.current?.scrollTo(0, 0); }}>{tab.label}</button>)}
+                {([{ id: 'details' as const, labelKey: 'profile.tabDetails' as MessageKey }, { id: 'name' as const, labelKey: 'profile.tabNameColors' as MessageKey }, { id: 'effects' as const, labelKey: 'profile.tabEffects' as MessageKey }]).map(tab => <button type="button" key={tab.id} id={'profile-tab-' + tab.id} role="tab" aria-selected={editorTab === tab.id} aria-controls={'profile-panel-' + tab.id} tabIndex={editorTab === tab.id ? 0 : -1} onClick={() => { setEditorTab(tab.id); editorFields.current?.scrollTo(0, 0); }}>{t(tab.labelKey)}</button>)}
               </div>
               <div className="profile-editor-fields" ref={editorFields}>
-              <section id="profile-panel-details" role="tabpanel" aria-labelledby="profile-tab-details" hidden={editorTab !== 'details'} className="profile-editor-section"><h3>المعلومات الشخصية</h3>
+              <section id="profile-panel-details" role="tabpanel" aria-labelledby="profile-tab-details" hidden={editorTab !== 'details'} className="profile-editor-section"><h3>{t('profile.personalInfo')}</h3>
               <div className="profile-media-actions">
-                <button type="button" className="profile-photo-action" onClick={pickPhoto}><IonIcon icon={cameraOutline} /> تغيير الصورة</button>
-                <button type="button" className="profile-photo-action" onClick={pickBanner}><IonIcon icon={cameraOutline} /> تغيير الغلاف</button>
-                {currentUser.bannerUrl ? <button type="button" className="profile-photo-action" onClick={() => void saveAccountProfile({ bannerUrl: null }).then(reportSave)}>إزالة الغلاف</button> : null}
+                <button type="button" className="profile-photo-action" onClick={pickPhoto}><IonIcon icon={cameraOutline} /> {t('profile.changePhoto')}</button>
+                <button type="button" className="profile-photo-action" onClick={pickBanner}><IonIcon icon={cameraOutline} /> {t('profile.changeBanner')}</button>
+                {currentUser.bannerUrl ? <button type="button" className="profile-photo-action" onClick={() => void saveAccountProfile({ bannerUrl: null }).then(reportSave)}>{t('profile.removeBanner')}</button> : null}
               </div>
               <input ref={photoRef} className="photo-file" type="file" accept="image/*" onChange={(event) => { void changePhoto(event.target.files?.[0]); event.target.value = ''; }} />
               <input ref={bannerRef} className="photo-file" type="file" accept="image/*" onChange={(event) => { void changeBanner(event.target.files?.[0]); event.target.value = ''; }} />
               <label className="group-name">
-                <span>الاسم</span>
+                <span>{t('profile.nameLabel')}</span>
                 <input dir="auto" maxLength={40} value={displayName} onChange={(event) => setDisplayName(event.target.value)} />
               </label>
               <p className="profile-handle" dir="auto">@{currentUser.username}</p>
               <label className="group-name">
-                <span>النبذة</span>
-                <textarea dir="auto" maxLength={160} value={draftBio} placeholder="نبذة قصيرة" onChange={(event) => setDraftBio(event.target.value)} />
+                <span>{t('profile.bioLabel')}</span>
+                <textarea dir="auto" maxLength={160} value={draftBio} placeholder={t('profile.bioPlaceholderShort')} onChange={(event) => setDraftBio(event.target.value)} />
               </label>
               </section>
-              <section id="profile-panel-name" role="tabpanel" aria-labelledby="profile-tab-name" hidden={editorTab !== 'name'} className="profile-editor-section"><h3>مظهر الاسم والدور</h3>
+              <section id="profile-panel-name" role="tabpanel" aria-labelledby="profile-tab-name" hidden={editorTab !== 'name'} className="profile-editor-section"><h3>{t('profile.nameAndRoleTitle')}</h3>
               <NameColorField
                 color={draftColor}
                 colorInput={colorInput}
                 onColor={chooseColor}
                 onInput={setColorInput}
-                hint="يظهر اسمك في المجموعات للجميع."
+                hint={t('profile.nameColorHint')}
               />
               <div className="profile-style-block">
-                <span className="profile-style-title">دورك (مخصص)</span>
-                <p className="profile-style-hint">مثل Discord: اسم الدور يظهر في ملفك للجميع. يمكنك إضافة حتى {CUSTOM_ROLE_COLORS_MAX} ألوان.</p>
+                <span className="profile-style-title">{t('profile.customRoleTitle')}</span>
+                <p className="profile-style-hint">{t('profile.customRoleHint', { max: CUSTOM_ROLE_COLORS_MAX })}</p>
                 <label className="group-name">
-                  <span>اسم الدور</span>
+                  <span>{t('profile.roleNameLabel')}</span>
                   <input
                     dir="auto"
                     maxLength={32}
                     value={draftRoleLabel}
-                    placeholder="مثال: حارس المجموعة"
+                    placeholder={t('profile.roleNamePlaceholder')}
                     onChange={(event) => setDraftRoleLabel(event.target.value)}
                   />
                 </label>
                 <div className="custom-role-colors">
                   {draftRoleColors.map((hex, index) => (
                     <label key={index} className="look-color">
-                      لون {index + 1}
+                      {t('profile.roleColor', { index: index + 1 })}
                       <span className="look-chip" style={{ background: hex } as CSSProperties}>
                         <input
                           type="color"
-                          aria-label={`لون الدور ${index + 1}`}
+                          aria-label={t('profile.roleColorAria', { index: index + 1 })}
                           value={hex}
                           onChange={(event) => {
                             const next = [...draftRoleColors];
@@ -337,17 +337,17 @@ export default function ProfilePage({ embedded = false, onShowSettings, scrollHo
                 <div className="profile-editor-actions">
                   {draftRoleColors.length < CUSTOM_ROLE_COLORS_MAX && (
                     <button type="button" onClick={() => setDraftRoleColors([...draftRoleColors, draftRoleColors.at(-1) ?? '#3d9b84'])}>
-                      إضافة لون
+                      {t('profile.addColor')}
                     </button>
                   )}
                   {draftRoleColors.length > 1 && (
                     <button type="button" onClick={() => setDraftRoleColors(draftRoleColors.slice(0, -1))}>
-                      إزالة آخر لون
+                      {t('profile.removeLastColor')}
                     </button>
                   )}
                 </div>
                 {sanitizeCustomRoleLabel(draftRoleLabel) && (
-                  <p className="profile-style-hint">معاينة:</p>
+                  <p className="profile-style-hint">{t('profile.previewLabel')}</p>
                 )}
                 {sanitizeCustomRoleLabel(draftRoleLabel) && (
                   <CustomRoleBadge user={{ customRoleLabel: sanitizeCustomRoleLabel(draftRoleLabel), customRoleColors: draftRoleColors }} />
@@ -396,11 +396,11 @@ export default function ProfilePage({ embedded = false, onShowSettings, scrollHo
           <div className="app-scrim sheet" onClick={() => setBannerPreview('')}>
             <div className="app-sheet" role="dialog" aria-labelledby="banner-preview-title" onClick={(event) => event.stopPropagation()}>
               <span className="app-handle" />
-              <h2 id="banner-preview-title">معاينة الغلاف</h2>
+              <h2 id="banner-preview-title">{t('profile.bannerPreviewTitle')}</h2>
               <img className="banner-preview" src={bannerPreview} alt="" />
               {saveError ? <p className="form-error">{saveError}</p> : null}
               <div className="account-actions">
-                <button type="button" onClick={() => setBannerPreview('')}>إلغاء</button>
+                <button type="button" onClick={() => setBannerPreview('')}>{t('profile.cancel')}</button>
                 <button
                   type="button"
                   className="profile-save"
@@ -411,7 +411,7 @@ export default function ProfilePage({ embedded = false, onShowSettings, scrollHo
                     });
                   }}
                 >
-                  استخدام الغلاف
+                  {t('profile.useBanner')}
                 </button>
               </div>
             </div>

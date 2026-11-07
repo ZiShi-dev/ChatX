@@ -1,4 +1,5 @@
 import EmojiText from '../common/EmojiText';
+import { useI18n } from '../../lib/i18n';
 import { QUICK_REACTIONS } from '../../lib/reactions';
 
 type MessageReactionPickerProps = {
@@ -9,11 +10,12 @@ type MessageReactionPickerProps = {
 };
 
 export default function MessageReactionPicker({ mineEmojis, keyboardOpen, onPick, onExpand }: MessageReactionPickerProps) {
+  const { t } = useI18n();
   const owned = new Set(mineEmojis);
 
   return (
     <div className="message-reaction-picker">
-      <div className="reaction-bar" role="group" aria-label="تفاعلات سريعة">
+      <div className="reaction-bar" role="group" aria-label={t('reaction.barAria')}>
         {QUICK_REACTIONS.map((emoji) => (
           <button
             key={emoji}
@@ -36,7 +38,7 @@ export default function MessageReactionPicker({ mineEmojis, keyboardOpen, onPick
           type="button"
           className={`reaction-more-toggle${keyboardOpen ? ' is-on' : ''}`}
           aria-expanded={keyboardOpen}
-          aria-label="اختيار أي إيموجي"
+          aria-label={t('reaction.pickEmojiAria')}
           onPointerDown={(event) => event.stopPropagation()}
           onClick={(event) => {
             event.stopPropagation();

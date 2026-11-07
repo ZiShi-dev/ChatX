@@ -1,0 +1,35 @@
+.home-stress {
+  position: fixed;
+  z-index: 30;
+  left: 50%;
+  bottom: calc(84px + var(--chatx-nav-bottom, 0px));
+  display: flex;
+  gap: 2px;
+  padding: 3px;
+  border-radius: 999px;
+  background: #3a3a3a;
+  transform: translateX(-50%);
+  font-family: system-ui, sans-serif;
+}
+
+.home-stress button {
+  min-height: 28px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: #f4f4f4;
+  font: inherit;
+  font-size: 12px;
+  transform: none;
+}
+
+.home-stress button[aria-pressed='true'] {
+  background: #fff;
+  color: #1a1a1a;
+}
+
+.home-stress button:active {
+  transform: none;
+  opacity: 1;
+}

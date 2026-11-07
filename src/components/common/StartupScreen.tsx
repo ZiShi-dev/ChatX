@@ -1,5 +1,6 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import { brandName, DEFAULT_LOGO } from '../../lib/appearance';
+import { resumeStoredSession } from '../../stores/authStore';
 import { useSettingsStore } from '../../stores/settingsStore';
 import './StartupScreen.css';
 
@@ -12,6 +13,7 @@ export default function StartupScreen({ children }: { children: ReactNode }) {
   useEffect(() => {
     const reducedMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
     const timer = window.setTimeout(() => setVisible(false), reducedMotion ? 120 : 1100);
+    void resumeStoredSession();
     return () => window.clearTimeout(timer);
   }, []);
 

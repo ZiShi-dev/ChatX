@@ -26,11 +26,20 @@ export const DEFAULT_APPEARANCE: Appearance = {
   text: '#e7eeea',
 };
 
-export const APPEARANCE_PRESETS: Array<{ id: string; label: string; look: Pick<Appearance, 'accent' | 'bg' | 'surface' | 'frame' | 'text'> }> = [
-  { id: 'chatx', label: 'ChatX', look: { accent: '#3d9b84', bg: '#101614', surface: '#101614', frame: '#31403a', text: '#e7eeea' } },
-  { id: 'night', label: 'ليل', look: { accent: '#7f97c9', bg: '#10131a', surface: '#10131a', frame: '#3d4c66', text: '#e6ebf5' } },
-  { id: 'sand', label: 'رمال', look: { accent: '#c4a574', bg: '#1a1612', surface: '#1a1612', frame: '#5a4a38', text: '#f3ece3' } },
-  { id: 'plum', label: 'عنب', look: { accent: '#a56baf', bg: '#16121a', surface: '#16121a', frame: '#5a4064', text: '#f3eaf6' } },
+export const APPEARANCE_PRESETS: Array<{ id: string; label: string; look: Pick<Appearance, 'accent' | 'link' | 'bg' | 'surface' | 'frame' | 'text'> }> = [
+  { id: 'chatx', label: 'ChatX', look: { accent: '#3d9b84', link: '#8fc9bb', bg: '#101614', surface: '#101614', frame: '#31403a', text: '#e7eeea' } },
+  { id: 'night', label: 'ليل', look: { accent: '#7f97c9', link: '#b8c5e8', bg: '#10131a', surface: '#10131a', frame: '#3d4c66', text: '#e6ebf5' } },
+  { id: 'sand', label: 'رمال', look: { accent: '#c4a574', link: '#e8d4b0', bg: '#1a1612', surface: '#1a1612', frame: '#5a4a38', text: '#f3ece3' } },
+  { id: 'plum', label: 'عنب', look: { accent: '#a56baf', link: '#d4a8dc', bg: '#16121a', surface: '#16121a', frame: '#5a4064', text: '#f3eaf6' } },
+  /** Pack « Vorzix » : palettes supplémentaires (thème prêt), alignées sur l’apparence existante. */
+  { id: 'vx-ember', label: 'Vorzix Ember', look: { accent: '#e85d75', link: '#f5a8b5', bg: '#1a1214', surface: '#1a1214', frame: '#4a3438', text: '#f5e8ea' } },
+  { id: 'vx-glacier', label: 'Vorzix Glacier', look: { accent: '#6eb5d4', link: '#a8d9ec', bg: '#0f1418', surface: '#0f1418', frame: '#3a4f5c', text: '#e8f4f8' } },
+  { id: 'vx-forest', label: 'Vorzix Forest', look: { accent: '#52a86e', link: '#9ed4b0', bg: '#101814', surface: '#101814', frame: '#2d4a38', text: '#e8f2eb' } },
+  { id: 'vx-sunset', label: 'Vorzix Sunset', look: { accent: '#e8915c', link: '#f4c49a', bg: '#1a1410', surface: '#1a1410', frame: '#5c4532', text: '#faf0e8' } },
+  { id: 'vx-lilac', label: 'Vorzix Lilac', look: { accent: '#a78bcc', link: '#d4c4ea', bg: '#16141c', surface: '#16141c', frame: '#4a3d5c', text: '#f2eef8' } },
+  { id: 'vx-carbon', label: 'Vorzix Carbon', look: { accent: '#8fd4c4', link: '#c5ece2', bg: '#0c0e0d', surface: '#0c0e0d', frame: '#3a403c', text: '#e4eae8' } },
+  { id: 'vx-gold', label: 'Vorzix Gold', look: { accent: '#d4a84b', link: '#ecd69a', bg: '#161410', surface: '#161410', frame: '#5a4a32', text: '#f8f0de' } },
+  { id: 'vx-rosewood', label: 'Vorzix Rosewood', look: { accent: '#c45c7a', link: '#eab0c2', bg: '#181012', surface: '#181012', frame: '#4a3038', text: '#f8e8ec' } },
 ];
 
 const HEX = /^#[0-9a-f]{6}$/i;

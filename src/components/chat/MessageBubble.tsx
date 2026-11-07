@@ -34,12 +34,12 @@ import { useSavedStore } from '../../stores/savedStore';
 import { useUserStore } from '../../stores/userStore';
 import type { Message } from '../../types/message';
 import type { User } from '../../types/user';
+import { useI18n, type MessageKey } from '../../lib/i18n';
 
 const NO_SEEN_USERS: User[] = [];
 const NO_RECEIPTS: ReceiptRow[] = [];
 
 type MessageBubbleProps = {
-  animateArrival?: boolean;
   message: Message;
   mine: boolean;
   showAuthor: boolean;
@@ -58,30 +58,33 @@ type MessageBubbleProps = {
 };
 
 function StatusMark({ message, seen }: { message: Message; seen?: boolean }) {
+  const { t } = useI18n();
   if (!message || message.status === 'sent') {
     return (
-      <span className={seen ? 'status-mark seen' : 'status-mark'} aria-label={seen ? 'شوهدت' : 'تم الإرسال'}>
+      <span className={seen ? 'status-mark seen' : 'status-mark'} aria-label={seen ? t('message.statusSeen') : t('message.statusSent')}>
         <IonIcon icon={seen ? checkmarkDoneOutline : checkmarkOutline} />
       </span>
     );
   }
   if (message.status === 'pending') {
+    const label = t('message.statusPending');
     return (
-      <span className="status-mark" aria-label="في انتظار الإرسال">
-        <IonIcon icon={timeOutline} /> في انتظار الإرسال
+      <span className="status-mark" aria-label={label}>
+        <IonIcon icon={timeOutline} /> {label}
       </span>
     );
   }
   if (message.status === 'sending') {
+    const label = t('message.statusSending');
     return (
-      <span className="status-mark" aria-label="جارٍ الإرسال">
+      <span className="status-mark" aria-label={label}>
         <IonIcon icon={arrowUpOutline} />
-        {typeof message.uploadProgress === 'number' ? ` ${message.uploadProgress}%` : ' جارٍ الإرسال'}
+        {typeof message.uploadProgress === 'number' ? ` ${message.uploadProgress}%` : ` ${label}`}
       </span>
     );
   }
   return (
-    <span className="status-mark failed" aria-label="فشل الإرسال">
+    <span className="status-mark failed" aria-label={t('message.statusFailed')}>
       <IonIcon icon={alertCircleOutline} />
     </span>
   );
@@ -111,6 +114,7 @@ function LoadRing({ progress }: { progress: number }) {
 }
 
 function MediaBlock({ message, onSize }: { message: Message; onSize: (size: { width: number; height: number }) => void }) {
+  const { t } = useI18n();
   const downloadMedia = useChatStore((state) => state.downloadMedia);
   const dataSaver = useDataSaver();
   const autoImages = useSettingsStore((state) => state.autoDownloadImages);
@@ -150,7 +154,7 @@ function MediaBlock({ message, onSize }: { message: Message; onSize: (size: { wi
         <button
           type="button"
           className="media-open"
-          aria-label={ready ? (message.type === 'video' ? 'تشغيل' : 'عرض') : 'تحميل'}
+          aria-label={ready ? (message.type === 'video' ? t('message.mediaPlay') : t('message.mediaView')) : t('message.mediaLoad')}
           onClick={() => {
             if (!ready) { downloadMedia(message.id); return; }
             window.dispatchEvent(new Event('chatx-message-selection'));
@@ -180,15 +184,15 @@ function MediaBlock({ message, onSize }: { message: Message; onSize: (size: { wi
             <span className="media-play"><IonIcon icon={play} /></span>
           )}
           {message.type === 'video' && <span className="media-duration">{formatDuration(media.duration ?? 0)}</span>}
-          {ready && <span className="media-local-mark">نسخة على الجهاز</span>}
+          {ready && <span className="media-local-mark">{t('message.fileLocal')}</span>}
         </button>
         {message.mediaExpired && media.state !== 'cached' && !busy && (
-          <p className="media-error">انتهت صلاحية الملف على الخادم. إن حفظته على هاتفك يبقى متاحًا هناك.</p>
+          <p className="media-error">{t('message.fileExpired')}</p>
         )}
         {message.downloadFailed && media.state !== 'cached' && !busy && !message.mediaExpired && (
           <p className="media-error">
-            تعذر تنزيل الملف
-            <button type="button" onClick={() => downloadMedia(message.id)}>إعادة المحاولة</button>
+            {t('message.fileDownloadFailed')}
+            <button type="button" onClick={() => downloadMedia(message.id)}>{t('message.actionRetry')}</button>
           </p>
         )}
       </div>
@@ -247,6 +251,7 @@ function MessageText({ text, username, onOpenProfile }: { text: string; username
 }
 
 function LinkBlock({ message }: { message: Message }) {
+  const { t } = useI18n();
   const loadLinkPreview = useChatStore((state) => state.loadLinkPreview);
   const network = useNetworkStore((state) => state.network);
   const dataSaver = useDataSaver();
@@ -265,7 +270,7 @@ function LinkBlock({ message }: { message: Message }) {
         <button type="button" className="wa-preview link-hold" onClick={() => loadLinkPreview(message.id)}>
           <span className="wa-copy">
             <span className="wa-host" dir="ltr">{host}</span>
-            <strong>تحميل المعاينة</strong>
+            <strong>{t('message.linkLoadPreview')}</strong>
           </span>
         </button>
       );
@@ -302,8 +307,9 @@ function LinkBlock({ message }: { message: Message }) {
 }
 
 function AimMark({ tone }: { tone: 'reply' | 'direct' | 'everyone' }) {
+  const { t } = useI18n();
   const icon = tone === 'reply' ? arrowUndoOutline : tone === 'everyone' ? peopleOutline : atOutline;
-  const label = tone === 'reply' ? 'رد على رسالتك' : tone === 'direct' ? 'موجّه إليك' : 'للجميع';
+  const label = tone === 'reply' ? t('message.mentionReply') : tone === 'direct' ? t('message.mentionDirect') : t('message.mentionEveryone');
   return (
     <p className={`aim-mark ${tone}`}>
       <IonIcon icon={icon} />
@@ -313,17 +319,17 @@ function AimMark({ tone }: { tone: 'reply' | 'direct' | 'everyone' }) {
 }
 
 function ReplyQuote({ messageId }: { messageId: string }) {
-  const quote = useChatStore((state) => {
+  const { t } = useI18n();
+  const row = useChatStore((state) => {
     const target = state.messages.find((item) => item.id === messageId);
-    if (!target) return '';
-    const raw = target.deletedForEveryone ? 'تم حذف هذه الرسالة' : messagePreview(target);
-    return `${target.senderId}\n${raw.replace(/\s+/g, ' ').trim()}`;
+    if (!target) return null;
+    if (target.deletedForEveryone) return { senderId: target.senderId, deleted: true as const, previewRaw: '' };
+    return { senderId: target.senderId, deleted: false as const, previewRaw: messagePreview(target).replace(/\s+/g, ' ').trim() };
   });
-  const split = quote.indexOf('\n');
-  const senderId = split < 0 ? '' : quote.slice(0, split);
-  const preview = split < 0 ? 'تم حذف هذه الرسالة' : quote.slice(split + 1);
+  const senderId = row?.senderId ?? '';
+  const preview = !row ? t('preview.deleted') : row.deleted ? t('preview.deleted') : row.previewRaw;
   const authorName = useUserStore((state) => (
-    senderId ? state.users.find((user) => user.id === senderId)?.displayName ?? 'عضو' : 'عضو'
+    senderId ? state.users.find((user) => user.id === senderId)?.displayName ?? t('chat.unknownMember') : t('chat.unknownMember')
   ));
   const [missing, setMissing] = useState(false);
 
@@ -345,7 +351,7 @@ function ReplyQuote({ messageId }: { messageId: string }) {
         <strong>{authorName}</strong>
         <em><EmojiText text={preview} /></em>
       </button>
-      {missing && <span className="reply-missing" role="status">الرسالة الأصلية أقدم من الرسائل المحملة</span>}
+      {missing && <span className="reply-missing" role="status">{t('message.replyOlderLoaded')}</span>}
     </span>
   );
 }
@@ -389,7 +395,9 @@ function PersonName({ user, onOpen }: { user: User; onOpen?: (user: User) => voi
   );
 }
 
-function MessageBubble({ message, mine, animateArrival = false, showAuthor, showAvatar = showAuthor, reserveAvatar = false, continued = false, group = false, direct = false, directSeen = false, groupSeen = false, seenHere = NO_SEEN_USERS, receiptRows = NO_RECEIPTS, author, spotlight = false, onOpenProfile }: MessageBubbleProps) {
+function MessageBubble({ message, mine, showAuthor, showAvatar = showAuthor, reserveAvatar = false, continued = false, group = false, direct = false, directSeen = false, groupSeen = false, seenHere = NO_SEEN_USERS, receiptRows = NO_RECEIPTS, author, spotlight = false, onOpenProfile }: MessageBubbleProps) {
+  const { t } = useI18n();
+  const listSep = document.documentElement.dir === 'rtl' ? '، ' : ', ';
   const currentUser = useAuthStore((state) => state.currentUser);
   const currentUserId = currentUser.id;
   const username = currentUser.username;
@@ -426,7 +434,6 @@ function MessageBubble({ message, mine, animateArrival = false, showAuthor, show
   const holdTimer = useRef<number | undefined>(undefined);
   const lastTap = useRef(0);
   const suppressClick = useRef(false);
-  const bornSending = useRef(animateArrival);
   const stackRef = useRef<HTMLDivElement>(null);
   const shiftRef = useRef<HTMLDivElement>(null);
   const swipeIconRef = useRef<HTMLSpanElement>(null);
@@ -497,7 +504,7 @@ function MessageBubble({ message, mine, animateArrival = false, showAuthor, show
     const conversation = useChatStore.getState().conversations.find((item) => item.id === message.conversationId);
     const directory = useUserStore.getState().users;
     if (!conversation) return;
-    const senderName = author?.displayName ?? directory.find((user) => user.id === message.senderId)?.displayName ?? 'عضو';
+    const senderName = author?.displayName ?? directory.find((user) => user.id === message.senderId)?.displayName ?? t('chat.unknownMember');
     const entry = toSavedEntry(message, currentUserId, conversationTitle(conversation, currentUserId, directory), senderName);
     if (entry) toggleSaved(entry);
     setMenuOpen(false);
@@ -506,7 +513,7 @@ function MessageBubble({ message, mine, animateArrival = false, showAuthor, show
   const saveToPhone = () => {
     setMenuOpen(false);
     void saveMessageToPhone(message).catch(() => {
-      useChatStore.setState({ lastError: 'تعذر الحفظ على الهاتف. تأكد أن الملف مُحمَّل ثم أعد المحاولة.' });
+      useChatStore.setState({ lastError: t('message.saveToDeviceNotReady') });
     });
   };
 
@@ -519,7 +526,7 @@ function MessageBubble({ message, mine, animateArrival = false, showAuthor, show
     }
     if (Capacitor.getPlatform() === 'android') {
       void saveMessageToPhone(message).catch(() => {
-        useChatStore.setState({ lastError: 'تعذر الحفظ على الهاتف. تحقق من المساحة ثم أعد المحاولة.' });
+        useChatStore.setState({ lastError: t('message.saveToDeviceFailed') });
       });
       return;
     }
@@ -561,12 +568,12 @@ function MessageBubble({ message, mine, animateArrival = false, showAuthor, show
   const menu = menuOpen
     ? createPortal(
         <MessageActionBar onClose={closeMenu} fallback={fallbackBar}>
-            <button type="button" role="menuitem" onClick={() => { setMenuOpen(false); beginReply(message.id); }}>
-              <span>رد</span>
+            <button type="button" role="menuitem" data-msg-action="reply" onClick={() => { setMenuOpen(false); beginReply(message.id); }}>
+              <span>{t('message.actionReply')}</span>
               <IonIcon icon={arrowUndoOutline} />
             </button>
             {canEdit && (
-              <button type="button" role="menuitem" onClick={() => {
+              <button type="button" role="menuitem" data-msg-action="edit" onClick={() => {
                 flushSync(() => { setMenuOpen(false); beginEdit(message.id); });
                 if (useChatStore.getState().editingId !== message.id) return;
                 const field = stackRef.current?.closest('ion-page')?.querySelector<HTMLTextAreaElement>('.composer-input');
@@ -574,39 +581,39 @@ function MessageBubble({ message, mine, animateArrival = false, showAuthor, show
                 field?.setSelectionRange(field.value.length, field.value.length);
                 if (field && Capacitor.getPlatform() === 'android') void Keyboard.show().catch(() => undefined);
               }}>
-                <span>تعديل</span>
+                <span>{t('message.actionEdit')}</span>
                 <IonIcon icon={createOutline} />
               </button>
             )}
             <button type="button" role="menuitem" onClick={keepMessage}>
-              <span>{saved ? 'إلغاء الحفظ' : 'حفظ لي فقط'}</span>
+              <span>{saved ? t('message.actionCancelSave') : t('media.saveLocalOnly')}</span>
               <IonIcon icon={saved ? bookmark : bookmarkOutline} />
             </button>
             {canSaveMessageMedia(message) && (
               <button type="button" role="menuitem" onClick={saveToPhone}>
-                <span>حفظ على الهاتف</span>
+                <span>{t('message.actionSavePhone')}</span>
                 <IonIcon icon={downloadOutline} />
               </button>
             )}
             {message.text && (
-              <button type="button" role="menuitem" onClick={copyMessage}>
-                <span>نسخ</span>
+              <button type="button" role="menuitem" data-msg-action="copy" onClick={copyMessage}>
+                <span>{t('message.actionCopy')}</span>
                 <IonIcon icon={copyOutline} />
               </button>
             )}
             <button type="button" role="menuitem" onClick={() => { setMenuOpen(false); setInfoOpen(true); }}>
-              <span>معلومات</span>
+              <span>{t('message.actionInfo')}</span>
               <IonIcon icon={informationCircleOutline} />
             </button>
             {failed && (
               <button type="button" role="menuitem" onClick={() => { setMenuOpen(false); retryMessage(message.id); }}>
-                <span>إعادة المحاولة</span>
+                <span>{t('message.actionRetry')}</span>
                 <IonIcon icon={arrowUpOutline} />
               </button>
             )}
             {mine && (message.status === 'pending' || message.status === 'sending') && (
               <button type="button" role="menuitem" onClick={() => { setMenuOpen(false); cancelMessage(message.id); }}>
-                <span>إلغاء</span>
+                <span>{t('message.cancel')}</span>
                 <IonIcon icon={closeOutline} />
               </button>
             )}
@@ -615,18 +622,19 @@ function MessageBubble({ message, mine, animateArrival = false, showAuthor, show
                 type="button"
                 role="menuitem"
                 className="danger"
+                data-msg-action="delete"
                 onClick={() => {
                   setMenuOpen(false);
                   setConfirmDelete(true);
                 }}
               >
-                <span>حذف</span>
+                <span>{t('message.delete')}</span>
                 <IonIcon icon={trashOutline} />
               </button>
             )}
             {canSeeReceipts && seenCount > 0 && (
               <button type="button" role="menuitem" onClick={() => { setMenuOpen(false); setSeenOpen(true); }}>
-                <span>المشاهدات</span>
+                <span>{t('message.actionSeen')}</span>
                 <IonIcon icon={checkmarkDoneOutline} />
               </button>
             )}
@@ -653,20 +661,20 @@ function MessageBubble({ message, mine, animateArrival = false, showAuthor, show
         <div className="app-scrim sheet" onClick={() => setSeenOpen(false)}>
           <div className="app-sheet seen-sheet" role="dialog" aria-labelledby={`seen-title-${message.id}`} onClick={(event) => event.stopPropagation()}>
             <span className="app-handle" />
-            <h2 id={`seen-title-${message.id}`}>المشاهدات</h2>
-            <p>{`شاهدها ${seenCount}`}</p>
+            <h2 id={`seen-title-${message.id}`}>{t('message.seenTitle')}</h2>
+            <p>{t('message.seenCount', { count: seenCount })}</p>
             <ul>
               {seenRows.map((row) => (
                 <li key={row.user.id}>
                   <Avatar name={row.user.displayName} color={row.user.color} size={36} src={row.user.avatarUrl} decoration={row.user.avatarDecoration} />
                   <div>
                     <strong>{row.user.displayName}</strong>
-                    <span className="is-on">{row.seenAt ? `شاهد ${formatNotificationTime(row.seenAt)}` : 'شاهد'}</span>
+                    <span className="is-on">{row.seenAt ? t('message.seenAt', { when: formatNotificationTime(row.seenAt) }) : t('message.seenUnknown')}</span>
                   </div>
                 </li>
               ))}
             </ul>
-            <button type="button" className="cancel" onClick={() => setSeenOpen(false)}>إغلاق</button>
+            <button type="button" className="cancel" onClick={() => setSeenOpen(false)}>{t('member.close')}</button>
           </div>
         </div>,
         document.body,
@@ -677,10 +685,10 @@ function MessageBubble({ message, mine, animateArrival = false, showAuthor, show
     ? createPortal(
         <div className="wa-scrim center" onClick={() => setConfirmDelete(false)}>
           <div className="account-dialog" role="alertdialog" aria-labelledby={`delete-title-${message.id}`} onClick={(event) => event.stopPropagation()}>
-            <h2 id={`delete-title-${message.id}`}>حذف الرسالة؟</h2>
-            <p className="account-warn">ستختفي هذه الرسالة عند الجميع.</p>
+            <h2 id={`delete-title-${message.id}`}>{t('message.deleteConfirmTitle')}</h2>
+            <p className="account-warn">{t('message.deleteConfirmBody')}</p>
             <div className="account-actions">
-              <button type="button" onClick={() => setConfirmDelete(false)}>إلغاء</button>
+              <button type="button" onClick={() => setConfirmDelete(false)}>{t('message.cancel')}</button>
               <button
                 type="button"
                 className="danger"
@@ -689,7 +697,7 @@ function MessageBubble({ message, mine, animateArrival = false, showAuthor, show
                   setConfirmDelete(false);
                 }}
               >
-                حذف
+                {t('message.delete')}
               </button>
             </div>
           </div>
@@ -709,7 +717,7 @@ function MessageBubble({ message, mine, animateArrival = false, showAuthor, show
             {showAuthor && !mine && author && <PersonName user={author} onOpen={onOpenProfile} />}
             <p className="deleted-line">
               <IonIcon icon={banOutline} />
-              <span>{mine ? 'لقد حذفت هذه الرسالة' : 'تم حذف هذه الرسالة'}</span>
+              <span>{mine ? t('preview.deletedMine') : t('preview.deleted')}</span>
             </p>
             <span className="bubble-time">{formatMessageTime(message.createdAt)}</span>
           </div>
@@ -723,7 +731,7 @@ function MessageBubble({ message, mine, animateArrival = false, showAuthor, show
       ref={stackRef}
       id={`msg-${message.id}`}
       style={message.type === 'image' || message.type === 'video' ? { '--media-inline-size': `${mediaBubbleWidth(previewSize?.width ?? message.media?.width, previewSize?.height ?? message.media?.height) + 6}px` } as CSSProperties : undefined}
-      className={`bubble-stack ${mine ? 'mine' : 'theirs'}${continued ? ' is-continued' : ''}${message.type === 'image' || message.type === 'video' ? ' is-media' : ''}${menuOpen ? ' is-picked' : ''}${direct && canSeeReceipts ? ' is-receipt' : ''}${spotlight ? ' is-target' : ''}${reactionTotal > 0 ? ' has-reactions' : ''}${bornSending.current ? ' is-new' : ''}`}
+      className={`bubble-stack ${mine ? 'mine' : 'theirs'}${continued ? ' is-continued' : ''}${message.type === 'image' || message.type === 'video' ? ' is-media' : ''}${menuOpen ? ' is-picked' : ''}${direct && canSeeReceipts ? ' is-receipt' : ''}${spotlight ? ' is-target' : ''}${reactionTotal > 0 ? ' has-reactions' : ''}`}
       onContextMenu={(event) => {
         if (!canOpenMenu) return;
         event.preventDefault();
@@ -821,7 +829,7 @@ function MessageBubble({ message, mine, animateArrival = false, showAuthor, show
       <div ref={shiftRef} className="swipe-shift">
       <div className="bubble-row">
       {failed && (
-        <button type="button" className="retry-mark" aria-label="إعادة المحاولة" onClick={() => retryMessage(message.id)}>
+        <button type="button" className="retry-mark" aria-label={t('message.actionRetry')} onClick={() => retryMessage(message.id)}>
           <IonIcon icon={alertCircleOutline} />
         </button>
       )}
@@ -847,26 +855,26 @@ function MessageBubble({ message, mine, animateArrival = false, showAuthor, show
             <div>
               <strong dir="auto">{message.media.fileName}</strong>
               <span>{formatBytes(message.media.fileSize)}</span>
-              {message.media.state === 'cached' ? <span className="media-local-mark">نسخة على الجهاز</span> : null}
+              {message.media.state === 'cached' ? <span className="media-local-mark">{t('message.fileLocal')}</span> : null}
             </div>
           </button>
         )}
         {message.type === 'file' && message.mediaExpired && message.media?.state !== 'cached' && (
-          <p className="media-error">انتهت صلاحية الملف على الخادم. إن حفظته على هاتفك يبقى متاحًا هناك.</p>
+          <p className="media-error">{t('message.fileExpired')}</p>
         )}
         {message.type === 'file' && message.downloadFailed && !message.mediaExpired && (
-          <p className="media-error">تعذر تنزيل الملف</p>
+          <p className="media-error">{t('message.fileDownloadFailed')}</p>
         )}
         <span className="bubble-time">
           {saved && (
-            <IonIcon className="saved-mark" icon={bookmark} aria-label="محفوظة" />
+            <IonIcon className="saved-mark" icon={bookmark} aria-label={t('message.savedMark')} />
           )}
-          {message.editedAt && <span className="edited-mark">تم التعديل</span>}
+          {message.editedAt && <span className="edited-mark">{t('message.editedMark')}</span>}
           {formatMessageTime(message.createdAt)}
           {mine && !failed && <StatusMark message={message} seen={canSeeReceipts && ((direct && directSeen) || (group && groupSeen))} />}
           {mine && mediaSending && (
             <button type="button" className="media-cancel" onClick={() => cancelMessage(message.id)}>
-              إلغاء
+              {t('message.cancel')}
             </button>
           )}
         </span>
@@ -874,7 +882,7 @@ function MessageBubble({ message, mine, animateArrival = false, showAuthor, show
           <button
             type="button"
             className={mineEmojis.length ? 'reaction-pill is-mine' : 'reaction-pill'}
-            aria-label={`${reactionTotal} تفاعل`}
+            aria-label={t('message.reactionCount', { count: reactionTotal })}
             onPointerDown={(event) => event.stopPropagation()}
             onClick={(event) => {
               event.stopPropagation();
@@ -891,14 +899,14 @@ function MessageBubble({ message, mine, animateArrival = false, showAuthor, show
       </div>
       {failed && (
         <button type="button" className="retry-caption" onClick={() => retryMessage(message.id)}>
-          فشل الإرسال · إعادة المحاولة
+          {t('message.retryCaption')}
         </button>
       )}
       {seenHere.length > 0 && (
         <button
           type="button"
           className="seen-faces"
-          aria-label={`شاهدها ${seenHere.map((user) => user.displayName).join('، ')}`}
+          aria-label={t('message.seenByList', { names: seenHere.map((user) => user.displayName).join(listSep) })}
           onPointerDown={(event) => event.stopPropagation()}
           onClick={() => setSeenOpen(true)}
         >
@@ -911,9 +919,9 @@ function MessageBubble({ message, mine, animateArrival = false, showAuthor, show
       </div>
       {reactionsOpen && createPortal(
         <div className="app-scrim sheet" onClick={() => setReactionsOpen(false)}>
-          <div className="app-sheet" role="dialog" aria-label="التفاعلات" onClick={(event) => event.stopPropagation()}>
+          <div className="app-sheet" role="dialog" aria-label={t('message.reactionsTitle')} onClick={(event) => event.stopPropagation()}>
             <span className="app-handle" />
-            <p className="notify-heading">التفاعلات</p>
+            <p className="notify-heading">{t('message.reactionsTitle')}</p>
             <ul className="reaction-people">
               {(message.reactions ?? []).map((item) => {
                 const person = users.find((user) => user.id === item.userId);
@@ -928,10 +936,10 @@ function MessageBubble({ message, mine, animateArrival = false, showAuthor, show
                         setReactionsOpen(false);
                       }}
                     >
-                      <Avatar name={person?.displayName ?? 'عضو'} color={person?.color ?? '#3d9b84'} size={36} src={person?.avatarUrl} />
+                      <Avatar name={person?.displayName ?? t('chat.unknownMember')} color={person?.color ?? '#3d9b84'} size={36} src={person?.avatarUrl} />
                       <span>
-                        <strong>{own ? 'أنت' : person?.displayName ?? 'عضو'}</strong>
-                        {own && <small>اضغط لإزالة التفاعل</small>}
+                        <strong>{own ? t('chat.you') : person?.displayName ?? t('chat.unknownMember')}</strong>
+                        {own && <small>{t('message.reactionTapRemove')}</small>}
                       </span>
                       <em><EmojiText text={item.emoji} /></em>
                     </button>
@@ -939,7 +947,7 @@ function MessageBubble({ message, mine, animateArrival = false, showAuthor, show
                 );
               })}
             </ul>
-            <button type="button" className="cancel" onClick={() => setReactionsOpen(false)}>إغلاق</button>
+            <button type="button" className="cancel" onClick={() => setReactionsOpen(false)}>{t('member.close')}</button>
           </div>
         </div>,
         document.body,
@@ -950,11 +958,11 @@ function MessageBubble({ message, mine, animateArrival = false, showAuthor, show
         <div className="app-scrim sheet" onClick={() => setInfoOpen(false)}>
           <div className="app-sheet" role="dialog" onClick={(event) => event.stopPropagation()}>
             <span className="app-handle" />
-            <p className="notify-heading">معلومات الرسالة</p>
-            <p className="mute-title">{author?.displayName ?? (mine ? 'أنت' : 'عضو')}</p>
+            <p className="notify-heading">{t('message.infoTitle')}</p>
+            <p className="mute-title">{author?.displayName ?? (mine ? t('chat.you') : t('chat.unknownMember'))}</p>
             <p className="group-block-note">{formatMessageTime(message.createdAt)}</p>
-            <p>{message.status === 'pending' ? 'في انتظار الإرسال' : message.status === 'sending' ? 'جارٍ الإرسال' : message.status === 'failed' ? 'فشل الإرسال' : 'تم الإرسال'}</p>
-            <button type="button" className="cancel" onClick={() => setInfoOpen(false)}>إغلاق</button>
+            <p>{message.status === 'pending' ? t('message.statusPending') : message.status === 'sending' ? t('message.statusSending') : message.status === 'failed' ? t('message.statusFailed') : t('message.statusSent')}</p>
+            <button type="button" className="cancel" onClick={() => setInfoOpen(false)}>{t('member.close')}</button>
           </div>
         </div>,
         document.body,

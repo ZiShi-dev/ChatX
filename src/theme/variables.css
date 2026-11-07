@@ -1,3 +1,31 @@
+html {
+  height: 100%;
+  font-size: 16px;
+  /* Flash gris au tap (WebView) — texte et liens restent sélectionnables ailleurs */
+  -webkit-tap-highlight-color: transparent;
+  /* Pas d’agrandissement de police en paysage (WebView Android) */
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+  /* L’application a ses propres listes : le navigateur ne tire pas la page */
+  overscroll-behavior: none;
+}
+
+/* Ionic MD : ombre portée par défaut sur ion-searchbar (coûteux + aspect « site ») */
+ion-searchbar {
+  --box-shadow: none;
+  font-size: 1rem;
+}
+
+/*
+ * Champs texte : taille minimale 16px pour limiter le zoom automatique iOS
+ * (exclut cases à cocher, radio, plage, couleur, fichier — souvent plus petits par design).
+ */
+input:not([type='checkbox']):not([type='radio']):not([type='range']):not([type='color']):not([type='file']):not([type='hidden']),
+textarea,
+select {
+  font-size: max(1rem, 16px);
+}
+
 :root {
   --ion-color-primary: #3d9b84;
   --ion-color-primary-rgb: 61, 155, 132;
@@ -65,7 +93,11 @@
 }
 
 body {
+  margin: 0;
+  min-height: 100%;
+  min-height: 100dvh;
   background: var(--chatx-bg);
+  overscroll-behavior: none;
 }
 
 ion-app {
@@ -84,6 +116,8 @@ ion-footer {
 
 ion-content::part(scroll) {
   scrollbar-width: none;
+  /* Le rebond reste dans la liste, il ne réveille pas le tirer-pour-actualiser */
+  overscroll-behavior: contain;
 }
 
 ion-content::part(scroll)::-webkit-scrollbar {

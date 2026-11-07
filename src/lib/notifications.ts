@@ -3,6 +3,7 @@ import { LocalNotifications } from '@capacitor/local-notifications';
 import { useMuteStore } from '../stores/muteStore';
 import { useSettingsStore } from '../stores/settingsStore';
 import { allowsNotificationAlert } from './inbox';
+import { t, translate } from './i18n';
 
 export type ChatKind = 'group' | 'private';
 export type ChatNotificationPermission = 'granted' | 'denied' | 'prompt';
@@ -33,10 +34,11 @@ export function subscribeChatNotificationPermission(watch: (value: ChatNotificat
 
 async function ensureAndroidChannel() {
   if (Capacitor.getPlatform() !== 'android') return;
+  const locale = useSettingsStore.getState().locale;
   await LocalNotifications.createChannel({
     id: CHANNEL_ID,
-    name: 'الرسائل',
-    description: 'إشعارات المجموعات والمحادثات الخاصة',
+    name: translate(locale, 'notifications.channelName'),
+    description: translate(locale, 'notifications.channelDescription'),
     importance: 4,
     visibility: 1,
     vibration: true,
@@ -77,7 +79,7 @@ export async function requestChatNotificationPermission(): Promise<ChatNotificat
           conversationId: '',
           kind: 'private',
           title: 'ChatX',
-          body: 'ستصلك إشعارات المجموعات والمحادثات الخاصة.',
+          body: t('notifications.permissionGrantedBody'),
         });
       } catch {
         return next;
@@ -116,6 +118,7 @@ export async function notifyChatMessage(input: {
           title: input.title,
           body: input.body,
           channelId: CHANNEL_ID,
+          isExactNotification: false,
           extra: {
             conversationId: input.conversationId,
             ...(input.messageId ? { messageId: input.messageId } : {}),

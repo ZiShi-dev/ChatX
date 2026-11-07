@@ -1,4 +1,5 @@
 import UserListItem from '../users/UserListItem';
+import { useI18n } from '../../lib/i18n';
 import { roleLabel } from '../../lib/roles';
 import type { User } from '../../types/user';
 
@@ -10,6 +11,7 @@ type MemberListProps = {
 };
 
 export default function MemberList({ title, users, adminId, onSelect }: MemberListProps) {
+  const { t } = useI18n();
   if (users.length === 0) return null;
   return (
     <section className="member-section">
@@ -18,7 +20,7 @@ export default function MemberList({ title, users, adminId, onSelect }: MemberLi
         <UserListItem
           key={user.id}
           user={user}
-          badge={roleLabel(user.role) || (user.id === adminId ? 'مشرف' : undefined)}
+          badge={roleLabel(user.role) || (user.id === adminId ? t('group.badgeMod') : undefined)}
           onClick={() => onSelect(user)}
         />
       ))}

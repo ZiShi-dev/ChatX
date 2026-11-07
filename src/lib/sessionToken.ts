@@ -19,6 +19,11 @@ export function currentSession() {
   return memory || readStoredSession();
 }
 
+/** Another WebView (the Google window) may have stored the token for this app. */
+export function reloadSessionMemory() {
+  memory = readStoredSession();
+}
+
 /** Keeps the login token for the installed app. The WebView drops the cross-site cookie. */
 export function rememberSession(payload: unknown) {
   const token = payload && typeof payload === 'object' && typeof (payload as { sessionToken?: unknown }).sessionToken === 'string'

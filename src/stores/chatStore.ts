@@ -24,7 +24,7 @@ import { mergeRoomWindow } from '../lib/chatWindow';
 import { prepareMedia } from '../lib/mediaPreparation';
 import { fitChatImageFromSources, jpegDataUrl } from '../lib/chatImage';
 import { bytesToBase64, FILE_BYTES_MAX, localMediaBytes, VIDEO_BYTES_MAX } from '../lib/chatFile';
-import { MESSAGE_TEXT_MAX, SEND_CONNECTION_MESSAGE, outgoingFailureMessage, quietOutgoingError, textTooLongMessage, fileTooLargeMessage, videoTooLargeMessage } from '../lib/messageLimits';
+import { MESSAGE_TEXT_MAX, sendConnectionMessage, outgoingFailureMessage, quietOutgoingError, textTooLongMessage, fileTooLargeMessage, videoTooLargeMessage } from '../lib/messageLimits';
 import { ORIGINAL_IMAGE_SIZE, ORIGINAL_VIDEO_SIZE, expectedImageSize, expectedVideoSize } from '../lib/media';
 import { isPrivateBetween } from '../lib/conversation';
 import { canEditRoom } from '../lib/roles';
@@ -51,6 +51,7 @@ type PickedFile = {
   previewUrl?: string;
   duration?: number;
 };
+import { t, translate, currentLocale } from '../lib/i18n';
 import { useAuthStore } from './authStore';
 import { useNetworkStore } from './networkStore';
 import { useSettingsStore } from './settingsStore';
@@ -138,13 +139,18 @@ type ChatState = {
 };
 
 function localGroupLine(actor: string, patch: { name?: string; avatarUrl?: string; bannerUrl?: string | null }) {
+  const locale = currentLocale();
   const clauses: string[] = [];
-  if (patch.name) clauses.push(`غيّر اسم المجموعة إلى «${patch.name}»`);
-  if (patch.avatarUrl) clauses.push('غيّر صورة المجموعة');
-  if (patch.bannerUrl) clauses.push('غيّر غلاف المجموعة');
-  else if (patch.bannerUrl === null) clauses.push('أزال غلاف المجموعة');
+  if (patch.name) clauses.push(translate(locale, 'event.groupRename', { name: patch.name }));
+  if (patch.avatarUrl) clauses.push(translate(locale, 'event.groupAvatar'));
+  if (patch.bannerUrl) clauses.push(translate(locale, 'event.groupBanner'));
+  else if (patch.bannerUrl === null) clauses.push(translate(locale, 'event.groupBannerRemoved'));
   if (!clauses.length) return '';
-  return `${actor.trim() || 'عضو'} ${clauses.join(' و')}`;
+  const actorLabel = actor.trim() || translate(locale, 'event.groupMemberFallback');
+  return translate(locale, 'event.groupActor', {
+    actor: actorLabel,
+    changes: clauses.join(translate(locale, 'event.groupClauseSep')),
+  });
 }
 
 function clearTimers(id: string) {
@@ -599,7 +605,7 @@ async function prepareAndSend(message: Message) {
     const patch: Partial<Message> = { status: temporary && attempts < 5 ? 'pending' : 'failed', uploadProgress: undefined,
       retryable: temporary, sendAttempts: attempts, retryAt: temporary ? Date.now() + retryDelay(attempts, error instanceof AdminApiError ? error.retryAfter : 0) : undefined };
     patchMessage(message.id, patch);
-    try { await saveOutgoing(owner, { ...current, ...patch }); } catch { useChatStore.setState({ lastError: 'تعذر حفظ الرسالة محليًا. تحقق من المساحة المتاحة ثم أعد المحاولة.' }); }
+    try { await saveOutgoing(owner, { ...current, ...patch }); } catch { useChatStore.setState({ lastError: t('errors.saveOutgoingLocal') }); }
     if (!temporary) useChatStore.setState({ lastError: outgoingFailureMessage(error, current ?? message) });
   } finally {
     preparing.delete(message.id);
@@ -688,7 +694,7 @@ function blockedTalk(conversations: Conversation[], messages: Message[], convers
     messages: messages.filter((item) => item.conversationId === roomId),
   });
   if (gate === 'open' || (gate === 'intro' && !media)) return null;
-  return gate === 'locked' ? 'المحادثة مقفلة حتى قبول الصداقة' : 'الرسالة الأولى نصية فقط';
+  return gate === 'locked' ? t('errors.talkLocked') : t('errors.talkIntroTextOnly');
 }
 
 export const useChatStore = create<ChatState>((set, get) => ({
@@ -781,7 +787,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
       const saving = useSettingsStore.getState().dataSaver || useNetworkStore.getState().network !== 'online';
       const size = picked?.fileSize ?? 0;
       if (saving) {
-        set({ lastError: 'لا يمكن إرسال فيديو أثناء توفير البيانات أو الاتصال الضعيف.' });
+        set({ lastError: t('errors.videoDataSaver') });
         return;
       }
       const tooBig = size < 1 || size > VIDEO_BYTES_MAX;
@@ -857,7 +863,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
     const clean = url.trim();
     if (!clean) return;
     const safe = clean.startsWith('http') ? clean : `https://${clean}`;
-    if (!firstUrl(safe)) { set({ lastError: 'الرابط غير صالح.' }); return; }
+    if (!firstUrl(safe)) { set({ lastError: t('errors.invalidLink') }); return; }
     if (isServerId(accountRoom(conversationId))) { get().sendMessage(conversationId, safe); return; }
     appendMessage({
       id: crypto.randomUUID(),
@@ -869,8 +875,8 @@ export const useChatStore = create<ChatState>((set, get) => ({
       replyToId: takeReply(conversationId),
       link: {
         url: clean.startsWith('http') ? clean : `https://${clean}`,
-        title: 'رابط مشارك',
-        description: 'المعاينة لا تُحمّل إلا عند الطلب.',
+        title: t('link.sharedTitle'),
+        description: t('link.sharedDescription'),
         preview: 'notLoaded',
       },
     });
@@ -1016,7 +1022,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
         queueRoomRead(owner, conversationId, messageId, target.createdAt);
         if (!same) queueNotificationReads(owner, [messageId], undefined, { [messageId]: noticeAt });
       }
-      catch { set({ lastError: 'تعذر حفظ القراءة على الجهاز.' }); return false; }
+      catch { set({ lastError: t('errors.readReceiptLocal') }); return false; }
       inboxReadVersion++;
       set((state) => {
         const serverInbox = overlayPendingReads(owner, state.serverInbox);
@@ -1041,7 +1047,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
     const owner = useAuthStore.getState().currentUser.id;
     if (isServerId(owner)) {
       try { queueNotificationReads(owner, [], get().serverInbox.reduce((latest, item) => item.createdAt > latest ? item.createdAt : latest, '') || new Date(serverNow()).toISOString()); }
-      catch { set({ lastError: 'تعذر حفظ القراءة على الجهاز. حاول مجددًا.' }); return; }
+      catch { set({ lastError: t('errors.readReceiptRetry') }); return; }
     }
     inboxReadVersion++;
     set((state) => {
@@ -1066,7 +1072,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
     const owner = useAuthStore.getState().currentUser.id;
     if (isServerId(owner)) {
         try { queueNotificationReads(owner, ids, undefined, Object.fromEntries(ids.map(id => [id, get().serverInbox.find(item => item.id === id)?.createdAt ?? new Date(serverNow()).toISOString()]))); }
-      catch { set({ lastError: 'تعذر حفظ القراءة على الجهاز. حاول مجددًا.' }); return; }
+      catch { set({ lastError: t('errors.readReceiptRetry') }); return; }
     }
     inboxReadVersion++;
     set((state) => {
@@ -1089,7 +1095,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
     const owner = useAuthStore.getState().currentUser.id;
     if (isServerId(owner)) {
       try { queueInboxClear(owner, get().serverInbox.reduce((latest, item) => item.createdAt > latest ? item.createdAt : latest, '') || new Date(serverNow()).toISOString()); }
-      catch { set({ lastError: 'تعذر حفظ الإجراء على الجهاز. حاول مجددًا.' }); return; }
+      catch { set({ lastError: t('errors.actionLocalRetry') }); return; }
     }
     inboxReadVersion++;
     set((state) => ({
@@ -1338,7 +1344,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
         }));
         return true;
       } catch {
-        set({ lastError: 'تعذر حفظ المجموعة.' });
+        set({ lastError: t('errors.saveGroup') });
         return false;
       }
     }
@@ -1588,7 +1594,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
       return true;
     } catch (error) {
       if (owner === useAuthStore.getState().currentUser.id && useNetworkStore.getState().network !== 'offline' && !quietOutgoingError(error)) {
-        set({ lastError: 'تعذر تحميل الرسائل. تحقق من الاتصال ثم أعد المحاولة.' });
+        set({ lastError: t('errors.loadMessagesFailed') });
       }
       return false;
     }
@@ -1635,7 +1641,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
         if (get().editingId === messageId) set({ editingId: null });
         return true;
       } catch {
-        if (me === useAuthStore.getState().currentUser.id) set({ lastError: 'تعذر تعديل الرسالة. أعد المحاولة.' });
+        if (me === useAuthStore.getState().currentUser.id) set({ lastError: t('errors.editMessageFailed') });
         return false;
       }
     }
@@ -1661,8 +1667,8 @@ export const useChatStore = create<ChatState>((set, get) => ({
         if (message.status !== 'sent' && error instanceof AdminApiError && error.status === 404) {
           releaseMedia([message]);
           set((state) => ({ messages: state.messages.filter((item) => item.id !== messageId) }));
-          try { persistChat(); } catch { set({ lastError: 'تعذر حفظ حذف الرسالة محليًا.' }); }
-        } else set({ lastError: 'تعذر حذف الرسالة من الخادم. أعد المحاولة.' });
+          try { persistChat(); } catch { set({ lastError: t('errors.deleteMessageLocal') }); }
+        } else set({ lastError: t('errors.deleteMessageServer') });
       });
       return;
     }
@@ -1688,7 +1694,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
     const mine = previous?.filter((item) => item.userId === me) ?? [];
     if (mine.some((item) => item.emoji === emoji)) return;
     if (mine.length >= MAX_USER_REACTIONS) {
-      set({ lastError: 'يمكنك إضافة 8 تفاعلات مختلفة كحد أقصى.' });
+      set({ lastError: t('errors.reactionsMax') });
       return;
     }
     const next = applyReaction(previous, me, emoji);
@@ -1700,7 +1706,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
       body: { emoji },
     }).catch(() => {
       patchMessage(messageId, { reactions: previous });
-      useChatStore.setState({ lastError: 'تعذر إضافة التفاعل. أعد المحاولة.' });
+      useChatStore.setState({ lastError: t('errors.reactionAddFailed') });
     });
   },
   removeReaction: (messageId, emoji) => {
@@ -1717,7 +1723,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
       body: { emoji, remove: true },
     }).catch(() => {
       patchMessage(messageId, { reactions: previous });
-      useChatStore.setState({ lastError: 'تعذر إزالة التفاعل. أعد المحاولة.' });
+      useChatStore.setState({ lastError: t('errors.reactionRemoveFailed') });
     });
   },
   openReactionKeyboard: (messageId) => {
@@ -1813,7 +1819,7 @@ useNetworkStore.subscribe((state, previous) => {
   if (state.network === 'offline') useChatStore.getState().pauseOutgoing();
   else if (previous.network === 'offline') {
     const banner = useChatStore.getState().lastError;
-    if (banner === SEND_CONNECTION_MESSAGE || banner.startsWith('تعذر تحميل الرسائل')) useChatStore.setState({ lastError: '' });
+    if (banner === sendConnectionMessage() || banner.startsWith(translate(currentLocale(), 'errors.loadMessagesFailed'))) useChatStore.setState({ lastError: '' });
     useChatStore.getState().flushOutgoing();
   }
   else outgoing.wake();
@@ -1852,7 +1858,7 @@ function switchChatAccount() {
     useChatStore.getState().flushOutgoing();
   }).catch(() => {
     if (useAuthStore.getState().currentUser.id !== auth.currentUser.id || !useAuthStore.getState().activated) return;
-    useChatStore.setState({ lastError: 'تعذر فتح التخزين المحلي. الرسائل الجديدة لن تُرسل حتى يمكن حفظها.' });
+    useChatStore.setState({ lastError: t('errors.localStorageOpen') });
   });
 }
 
@@ -1876,7 +1882,7 @@ useChatStore.subscribe((state, previous) => {
   window.clearTimeout(cacheTimer);
   cacheTimer = window.setTimeout(() => {
     try { persistChat(); }
-    catch { if (!useChatStore.getState().lastError) useChatStore.setState({ lastError: 'تعذر حفظ البيانات محليًا. تحقق من المساحة المتاحة.' }); }
+    catch { if (!useChatStore.getState().lastError) useChatStore.setState({ lastError: t('errors.persistLocal') }); }
   }, 250);
 });
 

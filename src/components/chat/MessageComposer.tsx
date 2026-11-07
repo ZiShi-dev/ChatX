@@ -1,8 +1,7 @@
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { FilePicker } from '@capawesome/capacitor-file-picker';
 import { Camera } from '@capacitor/camera';
 import { Capacitor } from '@capacitor/core';
-import { Keyboard } from '@capacitor/keyboard';
 import { IonIcon } from '@ionic/react';
 import { attachOutline, cameraOutline, checkmark, closeOutline, documentOutline, folderOutline, happyOutline, imagesOutline, send } from 'ionicons/icons';
 import PermissionDialog from '../common/PermissionDialog';
@@ -36,36 +35,7 @@ import { useSettingsStore } from '../../stores/settingsStore';
 import { useUserStore } from '../../stores/userStore';
 import type { User } from '../../types/user';
 
-const EVERYONE: User = {
-  id: EVERYONE_HANDLE,
-  username: EVERYONE_HANDLE,
-  displayName: 'الجميع',
-  role: 'member',
-  status: 'online',
-  bio: '',
-  color: '#3d9b84',
-};
-
 type AccessKind = 'photos' | 'files' | 'folder' | 'camera';
-
-const ACCESS_COPY: Record<AccessKind, { title: string; body: string }> = {
-  photos: {
-    title: 'الصور والفيديو',
-    body: 'اسمح لأندرويد بالوصول إلى الصور والفيديو حتى ترسلها في المحادثة.',
-  },
-  files: {
-    title: 'الملفات',
-    body: 'اسمح لأندرويد بالوصول إلى الملفات حتى ترسلها في المحادثة.',
-  },
-  folder: {
-    title: 'المجلدات',
-    body: 'اسمح لأندرويد بالوصول إلى المجلدات حتى ترسل ملفاتها في المحادثة.',
-  },
-  camera: {
-    title: 'الكاميرا',
-    body: 'اسمح لأندرويد باستخدام الكاميرا حتى تلتقط صورة وترسلها في المحادثة.',
-  },
-};
 
 const accessKey = (kind: AccessKind) => `chatx-access-${kind}`;
 
@@ -108,7 +78,26 @@ function kindOf(name: string, mimeType = ''): Attachment['kind'] {
 }
 
 export default function MessageComposer({ conversationId, talk = 'open' }: MessageComposerProps) {
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
+  const localeNorm = locale === 'ar' ? 'ar' : 'en';
+
+  const everyoneLabel = t('composer.everyoneDisplayName');
+  const EVERYONE: User = useMemo(() => ({
+    id: EVERYONE_HANDLE,
+    username: EVERYONE_HANDLE,
+    displayName: everyoneLabel,
+    role: 'member',
+    status: 'online',
+    bio: '',
+    color: '#3d9b84',
+  }), [everyoneLabel]);
+
+  const ACCESS_COPY: Record<AccessKind, { title: string; body: string }> = useMemo(() => ({
+    photos: { title: t('composer.permPhotosTitle'), body: t('composer.permPhotosBody') },
+    files: { title: t('composer.permFilesTitle'), body: t('composer.permFilesBody') },
+    folder: { title: t('composer.permFolderTitle'), body: t('composer.permFolderBody') },
+    camera: { title: t('composer.permCameraTitle'), body: t('composer.permCameraBody') },
+  }), [t]);
   const sendMessage = useChatStore((state) => state.sendMessage);
   const sendImage = useChatStore((state) => state.sendImage);
   const sendVideo = useChatStore((state) => state.sendVideo);
@@ -154,6 +143,7 @@ export default function MessageComposer({ conversationId, talk = 'open' }: Messa
   const [mentionIndex, setMentionIndex] = useState(0);
   const [menuOpen, setMenuOpen] = useState(false);
   const [emojiOpen, setEmojiOpen] = useState(false);
+  const emojiFromTouch = useRef(false);
   const [accessAsk, setAccessAsk] = useState<AccessKind | null>(null);
   const [pickerError, setPickerError] = useState('');
   const [attachments, setAttachments] = useState<Attachment[]>([]);
@@ -182,7 +172,8 @@ export default function MessageComposer({ conversationId, talk = 'open' }: Messa
     })
     : [];
   const showEveryone = Boolean(
-    token && (!mentionQuery || EVERYONE_HANDLE.includes(mentionQuery) || 'الجميع'.includes(mentionQuery)),
+    token && (!mentionQuery || EVERYONE_HANDLE.includes(mentionQuery)
+      || everyoneLabel.toLocaleLowerCase(localeNorm).includes(mentionQuery)),
   );
   const matches = showEveryone ? [EVERYONE, ...people] : people;
   const activeMatch = Math.min(mentionIndex, Math.max(matches.length - 1, 0));
@@ -292,31 +283,6 @@ export default function MessageComposer({ conversationId, talk = 'open' }: Messa
     return () => window.removeEventListener('chatx-reaction-keyboard', close);
   }, []);
 
-  useEffect(() => {
-    if (!emojiOpen) return;
-    const closeForField = (event: FocusEvent) => {
-      const target = event.target;
-      if (target instanceof HTMLTextAreaElement && target.classList.contains('composer-input')) setEmojiOpen(false);
-    };
-    document.addEventListener('focusin', closeForField);
-    if (!Capacitor.isNativePlatform()) return () => document.removeEventListener('focusin', closeForField);
-    let dropped = false;
-    let handle: { remove: () => Promise<void> } | undefined;
-    void Keyboard.addListener('keyboardDidShow', () => {
-      const active = document.activeElement;
-      if (active instanceof Element && active.closest('.emoji-panel')) return;
-      setEmojiOpen(false);
-    }).then((listener) => {
-      if (dropped) void listener.remove();
-      else handle = listener;
-    });
-    return () => {
-      dropped = true;
-      document.removeEventListener('focusin', closeForField);
-      void handle?.remove();
-    };
-  }, [emojiOpen]);
-
   const openPicker = (input: HTMLInputElement | null) => {
     if (!input) return;
     input.value = '';
@@ -338,7 +304,7 @@ export default function MessageComposer({ conversationId, talk = 'open' }: Messa
     const access = await StorageAccess.requestAccess();
     if (!access.granted) {
       localStorage.removeItem(accessKey(kind));
-      setPickerError('يلزم السماح بالوصول إلى الملفات من إعدادات الهاتف.');
+      setPickerError(t('composer.errFilesSettings'));
       setAccessAsk(kind);
       return;
     }
@@ -355,7 +321,7 @@ export default function MessageComposer({ conversationId, talk = 'open' }: Messa
     const directory = await FilePicker.pickDirectory();
     const listed = await StorageAccess.listDirectory({ path: directory.path });
     if (!listed.files.length) {
-      setPickerError('هذا المجلد لا يحتوي على ملفات.');
+      setPickerError(t('composer.errFolderEmpty'));
       return;
     }
     addPicked(listed.files);
@@ -366,7 +332,7 @@ export default function MessageComposer({ conversationId, talk = 'open' }: Messa
     if (Capacitor.getPlatform() === 'android' || Capacitor.getPlatform() === 'ios') {
       void pickNative(kind).catch((error: unknown) => {
         if (cancelled(error)) return;
-        setPickerError('تعذر فتح الملفات.');
+        setPickerError(t('composer.errFilesOpen'));
       });
       return;
     }
@@ -444,7 +410,7 @@ export default function MessageComposer({ conversationId, talk = 'open' }: Messa
     }).slice(0, available);
     const dropped = accepted.length !== files.length || files.length > available;
     if (files.some((file) => kindFor(file) === 'video') && dataSaver) {
-      setPickerError('لا يمكن إرسال فيديو أثناء توفير البيانات أو الاتصال الضعيف.');
+      setPickerError(t('composer.errVideoDataSaverPick'));
     } else if (videoTooBig) {
       const sample = files.find((file) => kindFor(file) === 'video' && file.size > VIDEO_BYTES_MAX);
       setPickerError(videoTooLargeMessage(sample?.size));
@@ -455,7 +421,7 @@ export default function MessageComposer({ conversationId, talk = 'open' }: Messa
       const sample = files.find((file) => kindFor(file) === 'image' && file.size > PICKER_IMAGE_BYTES_MAX);
       setPickerError(pickerImageTooLargeMessage(sample?.size));
     } else if (extraVideo) {
-      setPickerError('يمكن إرفاق فيديو واحد فقط في كل رسالة.');
+      setPickerError(t('composer.errOneVideo'));
     } else if (dropped) {
       setPickerError(attachmentLimitSummaryMessage());
     }
@@ -481,7 +447,7 @@ export default function MessageComposer({ conversationId, talk = 'open' }: Messa
   }
 
   const openCamera = async (confirmed = false) => {
-    if (attachmentsRef.current.length >= 10) { setPickerError('يمكن اختيار 10 مرفقات كحد أقصى.'); return; }
+    if (attachmentsRef.current.length >= 10) { setPickerError(t('composer.errMaxAttachments')); return; }
     setPickerError('');
     setMenuOpen(false);
     try {
@@ -494,7 +460,7 @@ export default function MessageComposer({ conversationId, talk = 'open' }: Messa
         if (current.camera !== 'granted' && current.camera !== 'limited') {
           const asked = await Camera.requestPermissions({ permissions: ['camera'] });
           if (asked.camera !== 'granted' && asked.camera !== 'limited') {
-            setPickerError('يلزم السماح باستخدام الكاميرا من إعدادات الهاتف.');
+            setPickerError(t('composer.accessDeniedCameraSettings'));
             setMenuOpen(true);
             return;
           }
@@ -527,7 +493,7 @@ export default function MessageComposer({ conversationId, talk = 'open' }: Messa
     } catch (error) {
       const message = error instanceof Error ? error.message : '';
       if (/cancel/i.test(message)) return;
-      setPickerError('تعذر فتح الكاميرا.');
+      setPickerError(t('composer.accessDeniedCamera'));
       setMenuOpen(true);
     }
   };
@@ -583,6 +549,7 @@ export default function MessageComposer({ conversationId, talk = 'open' }: Messa
     setDraft(next);
     setCursor(place);
     window.requestAnimationFrame(() => {
+      field?.focus({ preventScroll: true });
       field?.setSelectionRange(place, place);
       resizeField();
     });
@@ -640,7 +607,7 @@ export default function MessageComposer({ conversationId, talk = 'open' }: Messa
           return;
         }
         if (serverRoom && saving) {
-          setPickerError('لا يمكن إرسال فيديو أثناء توفير البيانات أو الاتصال الضعيف.');
+          setPickerError(t('composer.errVideoDataSaverPick'));
           return;
         }
       }
@@ -660,12 +627,12 @@ export default function MessageComposer({ conversationId, talk = 'open' }: Messa
               fileSize = fitted.bytes;
             }
           } catch {
-            setPickerError('تعذر تجهيز الصورة. أعد المحاولة.');
+            setPickerError(t('composer.errPrepareImage'));
             return;
           }
         }
         if (!previewUrl) {
-          setPickerError('تعذر قراءة الصورة.');
+          setPickerError(t('composer.errReadImage'));
           return;
         }
         sendImage(conversationId, imageQuality, { fileName: item.name, fileSize, previewUrl });
@@ -700,7 +667,7 @@ export default function MessageComposer({ conversationId, talk = 'open' }: Messa
         {replying && !editing && (
           <div className="edit-banner">
             <div className="edit-quote">
-              <strong>الرد على {replyingAuthor || 'عضو'}</strong>
+              <strong>{t('composer.replyTo', { name: replyingAuthor || t('composer.memberFallback') })}</strong>
               <p><EmojiText text={replying.preview} /></p>
             </div>
             <button type="button" className="edit-close" aria-label={t('composer.cancelReply')} onClick={() => cancelReply()}>
@@ -711,7 +678,7 @@ export default function MessageComposer({ conversationId, talk = 'open' }: Messa
         {editing && (
           <div className="edit-banner">
             <div className="edit-quote">
-              <strong>تعديل الرسالة</strong>
+              <strong>{t('composer.editBanner')}</strong>
               <p>{editing.text}</p>
             </div>
             <button
@@ -732,19 +699,19 @@ export default function MessageComposer({ conversationId, talk = 'open' }: Messa
           <div className="attach-tray" role="menu">
             <button type="button" className="attach-tile" onClick={() => askAccess('photos')}>
               <span className="attach-glyph photos"><IonIcon icon={imagesOutline} /></span>
-              الصور
+              {t('composer.menuPhotos')}
             </button>
             <button type="button" className="attach-tile" onClick={() => void openCamera()}>
               <span className="attach-glyph camera"><IonIcon icon={cameraOutline} /></span>
-              الكاميرا
+              {t('composer.menuCamera')}
             </button>
             <button type="button" className="attach-tile" onClick={() => askAccess('files')}>
               <span className="attach-glyph file"><IonIcon icon={documentOutline} /></span>
-              ملف
+              {t('composer.menuFile')}
             </button>
             <button type="button" className="attach-tile" onClick={() => askAccess('folder')}>
               <span className="attach-glyph folder"><IonIcon icon={folderOutline} /></span>
-              مجلد
+              {t('composer.menuFolder')}
             </button>
           </div>
         )}
@@ -753,30 +720,38 @@ export default function MessageComposer({ conversationId, talk = 'open' }: Messa
           <div className="quality-card">
             {attachments.some((item) => item.kind === 'image') && (
               <QualityChoices
-                label="جودة الصورة"
+                originalLabel={t('composer.qualityOriginalLabel')}
+                afterIntro={t('composer.qualityAfter')}
+                approxLabel={t('composer.sizeApprox')}
+                maxLabel={t('composer.sizeMax')}
+                label={t('composer.imageQuality')}
                 original={attachments.find((item) => item.kind === 'image')?.size ?? 0}
                 expected={expectedImageSize(imageQuality)}
                 maximum
                 value={imageQuality}
                 options={[
-                  { id: 'saver', label: 'توفير البيانات' },
-                  { id: 'medium', label: 'متوسطة' },
-                  { id: 'original', label: 'عالية' },
-                  { id: 'hd', label: 'HD · أفضل جودة' },
+                  { id: 'saver', label: t('quality.saver') },
+                  { id: 'medium', label: t('quality.medium') },
+                  { id: 'original', label: t('quality.high') },
+                  { id: 'hd', label: t('composer.optionImageHd') },
                 ]}
                 onChange={setImageQuality}
               />
             )}
             {attachments.some((item) => item.kind === 'video') && !isServerId(conversationId) && (
               <QualityChoices
-                label="جودة الفيديو"
+                originalLabel={t('composer.qualityOriginalLabel')}
+                afterIntro={t('composer.qualityAfter')}
+                approxLabel={t('composer.sizeApprox')}
+                maxLabel={t('composer.sizeMax')}
+                label={t('composer.videoQuality')}
                 original={attachments.find((item) => item.kind === 'video')?.size ?? 0}
                 expected={expectedVideoSize(videoQuality)}
                 value={videoQuality}
                 options={[
-                  { id: '480', label: '480p' },
-                  { id: '720', label: '720p' },
-                  { id: 'original', label: 'الأصلية' },
+                  { id: '480', label: t('composer.qualityVideo480') },
+                  { id: '720', label: t('composer.qualityVideo720') },
+                  { id: 'original', label: t('composer.videoQualityOriginal') },
                 ]}
                 onChange={setVideoQuality}
               />
@@ -818,7 +793,7 @@ export default function MessageComposer({ conversationId, talk = 'open' }: Messa
                 <Avatar name={user.displayName} color={user.color} size={32} src={user.avatarUrl} decoration={user.avatarDecoration} />
                 <span>
                   <strong dir="auto">@{user.username}</strong>
-                  <em>{user.id === EVERYONE_HANDLE ? 'إشعار للجميع' : user.displayName}</em>
+                  <em>{user.id === EVERYONE_HANDLE ? t('composer.mentionEveryoneFull') : user.displayName}</em>
                 </span>
               </button>
             ))}
@@ -832,13 +807,24 @@ export default function MessageComposer({ conversationId, talk = 'open' }: Messa
               className={emojiOpen ? 'composer-icon is-on' : 'composer-icon'}
               aria-label={t('composer.emoji')}
               aria-expanded={emojiOpen}
-              onClick={() => {
+              onPointerDown={(event) => {
+                event.preventDefault();
+                emojiFromTouch.current = event.pointerType !== 'mouse';
+              }}
+              onPointerUp={() => {
+                if (!emojiFromTouch.current) return;
                 setMenuOpen(false);
-                if (!emojiOpen) {
-                  fieldRef.current?.blur();
-                  if (Capacitor.isNativePlatform()) void Keyboard.hide();
-                }
                 setEmojiOpen((open) => !open);
+                holdKeyboard();
+              }}
+              onClick={() => {
+                if (emojiFromTouch.current) {
+                  emojiFromTouch.current = false;
+                  return;
+                }
+                setMenuOpen(false);
+                setEmojiOpen((open) => !open);
+                holdKeyboard();
               }}
             >
               <IonIcon icon={happyOutline} />
@@ -859,7 +845,6 @@ export default function MessageComposer({ conversationId, talk = 'open' }: Messa
                 setMentionIndex(0);
                 resizeField();
               }}
-              onFocus={() => setEmojiOpen(false)}
               onSelect={(event) => setCursor(event.currentTarget.selectionStart ?? 0)}
               onKeyDown={(event) => {
                 if (matches.length > 0 && event.key === 'ArrowDown') {
@@ -922,7 +907,8 @@ export default function MessageComposer({ conversationId, talk = 'open' }: Messa
         <PermissionDialog
           title={ACCESS_COPY[accessAsk].title}
           body={ACCESS_COPY[accessAsk].body}
-          allowLabel="السماح"
+          allowLabel={t('composer.allow')}
+          laterLabel={t('permission.later')}
           onAllow={allowAccess}
           onLater={() => setAccessAsk(null)}
         />
@@ -956,6 +942,10 @@ export default function MessageComposer({ conversationId, talk = 'open' }: Messa
 
 function QualityChoices<T extends string>({
   label,
+  originalLabel,
+  afterIntro,
+  approxLabel,
+  maxLabel,
   original,
   expected,
   maximum = false,
@@ -964,6 +954,10 @@ function QualityChoices<T extends string>({
   onChange,
 }: {
   label: string;
+  originalLabel: string;
+  afterIntro: string;
+  approxLabel: string;
+  maxLabel: string;
   original: number;
   expected: number;
   maximum?: boolean;
@@ -974,8 +968,8 @@ function QualityChoices<T extends string>({
   return (
     <div className="quality-block">
       <strong>{label}</strong>
-      <p>الحجم الأصلي: {formatBytes(original)}</p>
-      <p>بعد الضغط: {maximum ? 'بحد أقصى' : 'حوالي'} {formatBytes(expected)}</p>
+      <p>{originalLabel}: {formatBytes(original)}</p>
+      <p>{afterIntro}: {maximum ? maxLabel : approxLabel} {formatBytes(expected)}</p>
       <div className="setting-choices" role="radiogroup" aria-label={label}>
         {options.map((option) => (
           <button

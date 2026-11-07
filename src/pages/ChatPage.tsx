@@ -1046,12 +1046,12 @@ export default function ChatPage() {
                 });
               }}
             >
-              إزالة المحادثة
+              {t('conversation.removeAria')}
             </button>
           </div>
         ) : (
           <>
-            {talk === 'locked' && otherId && conversation.friend !== 'incoming' ? (
+            {otherId && (conversation.friend === 'outgoing' || (talk === 'locked' && conversation.friend !== 'incoming')) ? (
               <div className="friend-bar is-invite">
                 <p>{conversation.friend === 'outgoing' ? t('chat.inviteSent') : t('chat.invitePrompt')}</p>
                 <div className="friend-actions">
@@ -1067,7 +1067,7 @@ export default function ChatPage() {
                       });
                     }}
                   >
-                    إلغاء
+                    {t('chat.cancel')}
                   </button>
                 </div>
               </div>

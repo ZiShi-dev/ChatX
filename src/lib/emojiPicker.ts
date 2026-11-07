@@ -1,4 +1,5 @@
 import { EMOJI_GROUPS } from './emojiCatalog';
+import { translate } from './i18n';
 
 const emojis = [...new Set(EMOJI_GROUPS.flatMap(group => group.emojis))];
 const allowed = new Set(emojis);
@@ -17,7 +18,7 @@ const names: Record<string, string> = {
   '👍': 'yes ok oui نعم موافق', '👎': 'no non لا', '🙏': 'thanks merci شكرا', '👋': 'hello salut مرحبا',
 };
 const normalize = (value: string) => value.toLocaleLowerCase().normalize('NFD').replace(/[\u0300-\u036f\u064b-\u065f]/g, '').trim();
-const index = emojis.map(emoji => ({ emoji, names: normalize(names[emoji] ?? '').split(' '), words: normalize(`${names[emoji] ?? ''} ${EMOJI_GROUPS.filter(group => group.emojis.includes(emoji)).map(group => `${group.label} ${aliases[group.id] ?? ''}`).join(' ')}`) }));
+const index = emojis.map(emoji => ({ emoji, names: normalize(names[emoji] ?? '').split(' '), words: normalize(`${names[emoji] ?? ''} ${EMOJI_GROUPS.filter(group => group.emojis.includes(emoji)).map((group) => `${translate('ar', group.labelKey)} ${aliases[group.id] ?? ''}`).join(' ')}`) }));
 export function searchEmoji(query: string) {
   const words = normalize(query).split(/\s+/).filter(Boolean);
   const specific = index.filter(item => words.length && words.every(word => item.emoji.includes(word) || item.names.some(name => name.startsWith(word))));

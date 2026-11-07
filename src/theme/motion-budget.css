@@ -6,8 +6,3 @@
   animation:none !important;
 }
 :root[data-motion-tier="static"] * { scroll-behavior:auto !important; transition-duration:0s !important; }
-:root[data-motion-tier="balanced"] * { transition-duration:100ms !important; }
-:root[data-motion-tier="balanced"] .avatar-frame .hat-rain-back,
-:root[data-motion-tier="balanced"] .avatar-frame .hat-rain-front {
-  animation:none !important;
-}

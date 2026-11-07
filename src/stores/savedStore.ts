@@ -3,6 +3,7 @@ import { isServerId } from '../lib/home';
 import { readSavedPayload, savedPreview, toggleSaved, type SavedEntry } from '../lib/saved';
 import { openPreview } from '../lib/e2e';
 import { adminFetch } from '../lib/adminApi';
+import { t } from '../lib/i18n';
 import { useAuthStore } from './authStore';
 
 const SAVED_KEY = 'chatx.saved';
@@ -91,7 +92,7 @@ export const useSavedStore = create<SavedStore>((set, get) => ({
       set((state) => {
         const entries = toggleSaved(state.entries, entry);
         writeSaved(entries);
-        return { entries, lastError: 'تعذر حفظ الرسالة. أعد المحاولة.' };
+        return { entries, lastError: t('saved.errKeep') };
       });
     }).finally(() => changing.delete(key));
   },
@@ -113,7 +114,7 @@ export const useSavedStore = create<SavedStore>((set, get) => ({
       set((state) => {
         const entries = [previous, ...state.entries.filter((item) => item.userId !== userId || item.messageId !== messageId)];
         writeSaved(entries);
-        return { entries, lastError: 'تعذر إلغاء الحفظ. أعد المحاولة.' };
+        return { entries, lastError: t('saved.errUnkeep') };
       });
     }).finally(() => changing.delete(key));
   },

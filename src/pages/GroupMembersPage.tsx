@@ -13,10 +13,12 @@ import { useAuthStore } from '../stores/authStore';
 import { useChatStore } from '../stores/chatStore';
 import { useUserStore } from '../stores/userStore';
 import type { User } from '../types/user';
+import { useI18n } from '../lib/i18n';
 
 export default function GroupMembersPage() {
   const { id = '' } = useParams();
   const navigate = useNavigate();
+  const { t } = useI18n();
   const currentUser = useAuthStore((state) => state.currentUser);
   const users = useUserStore((state) => state.users);
   const conversation = useChatStore((state) => state.conversations.find((item) => item.id === id));
@@ -50,21 +52,21 @@ export default function GroupMembersPage() {
     <IonPage>
       <IonHeader>
         <NetworkStatusBanner />
-        <PageNav title={conversation?.name ?? 'الأعضاء'} fallback={id ? `/chat/${id}` : '/home'} />
+        <PageNav title={conversation?.name ?? t('members.pageTitle')} fallback={id ? `/chat/${id}` : '/home'} />
       </IonHeader>
       <IonContent>
         {!conversation ? (
-          <EmptyState title="المجموعة غير موجودة" />
+          <EmptyState title={t('group.notFound')} />
         ) : (
           <>
-            <SearchBar value={query} placeholder="ابحث في الأعضاء" onChange={setQuery} />
+            <SearchBar value={query} placeholder={t('members.searchPlaceholder')} onChange={setQuery} />
             {!ready ? (
               <PageSkeleton kind="members" />
             ) : (
               <>
-                <MemberList title="متصل" adminId={conversation.adminId} users={members.filter((user) => user.status === 'online')} onSelect={setSelected} />
-                <MemberList title="غير متصل" adminId={conversation.adminId} users={members.filter((user) => user.status === 'offline')} onSelect={setSelected} />
-                {members.length === 0 && <EmptyState title={query.trim() ? 'لا يوجد أعضاء مطابقون' : 'لا يوجد أعضاء'} />}
+                <MemberList title={t('members.online')} adminId={conversation.adminId} users={members.filter((user) => user.status === 'online')} onSelect={setSelected} />
+                <MemberList title={t('members.offline')} adminId={conversation.adminId} users={members.filter((user) => user.status === 'offline')} onSelect={setSelected} />
+                {members.length === 0 && <EmptyState title={query.trim() ? t('members.emptySearch') : t('members.empty')} />}
               </>
             )}
           </>
@@ -73,7 +75,7 @@ export default function GroupMembersPage() {
       <UserProfileModal
         user={selected}
         isSelf={selected?.id === currentUser.id}
-        room={conversation && conversation.type !== 'private' ? { name: conversation.name ?? 'مجموعة', adminId: conversation.adminId } : undefined}
+        room={conversation && conversation.type !== 'private' ? { name: conversation.name ?? t('group.defaultName'), adminId: conversation.adminId } : undefined}
         onClose={() => setSelected(undefined)}
         onMessage={messageUser}
       />

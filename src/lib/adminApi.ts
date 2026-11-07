@@ -1,4 +1,3 @@
-import { Capacitor } from '@capacitor/core';
 import { nativeNeedsApiOrigin } from './apiOrigin';
 import { nativeApiPath } from './apiFetchOrigin';
 import { currentSession } from './sessionToken';
@@ -49,7 +48,6 @@ export class AdminApiError extends Error {
 }
 
 function applySession(headers: Headers) {
-  if (!Capacitor.isNativePlatform()) return;
   const token = currentSession();
   if (token) headers.set('x-chatx-session', token);
 }
@@ -69,7 +67,7 @@ export async function adminFetch(path: string, init?: RequestOptions) {
   return JSON.parse(JSON.stringify(await promise)) as unknown;
 }
 function shouldMarkTransportDown(error: unknown) {
-  if (error instanceof AdminApiError) return error.code === 'offline' || error.status === 0;
+  if (error instanceof AdminApiError) return error.code === 'offline';
   return true;
 }
 

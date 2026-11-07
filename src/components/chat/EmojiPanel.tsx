@@ -1,6 +1,7 @@
 import { memo, useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { EMOJI_GROUPS } from '../../lib/emojiCatalog';
 import { recentEmoji, rememberEmoji, searchEmoji } from '../../lib/emojiPicker';
+import { useI18n, type MessageKey } from '../../lib/i18n';
 import { useAuthStore } from '../../stores/authStore';
 import EmojiText from '../common/EmojiText';
 import './EmojiPanel.css';
@@ -16,10 +17,12 @@ function ownsEmoji(selected: string | readonly string[] | undefined, emoji: stri
 }
 
 const EmojiOption = memo(function EmojiOption({ emoji, selected, active, onPick }: { emoji: string; selected: boolean; active: boolean; onPick: (emoji: string) => void }) {
-  return <button type="button" role="option" aria-selected={selected} aria-label={emoji} aria-disabled={selected} disabled={selected} tabIndex={active ? 0 : -1} className={selected ? 'is-on' : undefined} onClick={() => { if (!selected) onPick(emoji); }}><EmojiText text={emoji} /></button>;
+  const fromTouch = useRef(false);
+  return <button type="button" role="option" aria-selected={selected} aria-label={emoji} aria-disabled={selected} disabled={selected} tabIndex={active ? 0 : -1} className={selected ? 'is-on' : undefined} onPointerDown={(event) => { fromTouch.current = event.pointerType !== 'mouse'; }} onPointerUp={() => { if (fromTouch.current && !selected) onPick(emoji); }} onClick={() => { if (fromTouch.current) { fromTouch.current = false; return; } if (!selected) onPick(emoji); }}><EmojiText text={emoji} /></button>;
 });
 
 export default function EmojiPanel({ selected, onPick, onClose }: EmojiPanelProps) {
+  const { t } = useI18n();
   const owner = useAuthStore(state => state.currentUser.id);
   const [recent, setRecent] = useState(() => recentEmoji(owner));
   const [groupId, setGroupId] = useState(recent.length ? 'recent' : EMOJI_GROUPS[0].id);
@@ -39,7 +42,7 @@ export default function EmojiPanel({ selected, onPick, onClose }: EmojiPanelProp
   }, [owner]);
   const pick = useCallback((emoji: string) => { pickRef.current(emoji); rememberEmoji(owner, emoji); }, [owner]);
   const id = useId();
-  const groups = useMemo(() => [{ id: 'recent', label: 'الأخيرة', emojis: recent }, ...EMOJI_GROUPS], [recent]);
+  const groups = useMemo(() => [{ id: 'recent', labelKey: 'emoji.recent' as MessageKey, emojis: recent }, ...EMOJI_GROUPS], [recent]);
   const group = groups.find(item => item.id === groupId) ?? groups[1];
   const searching = Boolean(query.trim());
   const matches = useMemo(() => searching ? searchEmoji(query) : [...new Set(group.emojis)], [searching, query, group]);
@@ -48,14 +51,19 @@ export default function EmojiPanel({ selected, onPick, onClose }: EmojiPanelProp
   useLayoutEffect(() => { if (grid.current) grid.current.scrollTop = scroll.current.get(scrollKey) ?? 0; setActive(0); setLimit(shownLimits.current.get(scrollKey) ?? 120); }, [scrollKey]);
 
   return (
-    <div className="emoji-panel emoji-picker" onPointerDown={event => event.stopPropagation()} onPointerMove={event => event.stopPropagation()} onPointerUp={event => event.stopPropagation()} onKeyDown={event => {
+    <div className="emoji-panel emoji-picker" onPointerDown={event => {
+      event.stopPropagation();
+      const target = event.target;
+      if (target instanceof Element && target.closest('input, textarea')) return;
+      event.preventDefault();
+    }} onPointerMove={event => event.stopPropagation()} onPointerUp={event => event.stopPropagation()} onKeyDown={event => {
       if (event.key !== 'Escape') return;
       if (query) { event.stopPropagation(); setQuery(''); }
       else if (onClose) { event.stopPropagation(); onClose(); }
     }}>
-      <div className="emoji-picker-heading"><strong>{searching ? 'نتائج البحث' : group.label}</strong><span>{matches.length}</span>{onClose && <button type="button" aria-label="إغلاق الإيموجي" onClick={onClose}>×</button>}</div>
-      <div className="emoji-picker-search"><input type="search" dir="auto" value={query} onChange={event => setQuery(event.target.value)} placeholder="ابحث عن إيموجي أو فئة" aria-label="البحث عن إيموجي" autoComplete="off" />{query && <button type="button" aria-label="مسح البحث" onClick={() => setQuery('')}>×</button>}</div>
-      <div className="emoji-tabs" role="tablist" aria-label="أنواع الإيموجي" onKeyDown={event => {
+      <div className="emoji-picker-heading"><strong>{searching ? t('emoji.searchResults') : t(group.labelKey)}</strong><span>{matches.length}</span>{onClose && <button type="button" aria-label={t('emoji.closePicker')} onClick={onClose}>×</button>}</div>
+      <div className="emoji-picker-search"><input type="search" dir="auto" value={query} onChange={event => setQuery(event.target.value)} placeholder={t('emoji.searchPlaceholder')} aria-label={t('emoji.searchLabel')} autoComplete="off" />{query && <button type="button" aria-label={t('emoji.clearSearch')} onClick={() => setQuery('')}>×</button>}</div>
+      <div className="emoji-tabs" role="tablist" aria-label={t('emoji.tabsLabel')} onKeyDown={event => {
         const buttons = [...event.currentTarget.querySelectorAll<HTMLButtonElement>('[role="tab"]')];
         const current = buttons.indexOf(document.activeElement as HTMLButtonElement); if (current < 0) return;
         const rtl = getComputedStyle(event.currentTarget).direction === 'rtl';
@@ -70,8 +78,8 @@ export default function EmojiPanel({ selected, onPick, onClose }: EmojiPanelProp
             type="button"
             role="tab"
             aria-selected={item.id === group.id}
-            aria-label={item.label}
-            title={item.label}
+            aria-label={t(item.labelKey)}
+            title={t(item.labelKey)}
             aria-controls={`${id}-grid`}
             tabIndex={item.id === group.id ? 0 : -1}
             className={item.id === group.id ? 'is-on' : undefined}
@@ -81,7 +89,7 @@ export default function EmojiPanel({ selected, onPick, onClose }: EmojiPanelProp
           </button>
         ))}
       </div>
-      <div ref={grid} id={`${id}-grid`} className="emoji-grid" role="listbox" aria-label={searching ? 'نتائج البحث' : group.label} onScroll={event => { if (!searching) scroll.current.set(scrollKey, event.currentTarget.scrollTop); }} onFocus={event => {
+      <div ref={grid} id={`${id}-grid`} className="emoji-grid" role="listbox" aria-label={searching ? t('emoji.searchResults') : t(group.labelKey)} onScroll={event => { if (!searching) scroll.current.set(scrollKey, event.currentTarget.scrollTop); }} onFocus={event => {
         const button = event.target.closest('button');
         const index = button ? [...event.currentTarget.querySelectorAll('button')].indexOf(button) : -1; if (index >= 0) setActive(index);
       }} onKeyDown={event => {
@@ -94,9 +102,9 @@ export default function EmojiPanel({ selected, onPick, onClose }: EmojiPanelProp
         if (next >= 0) { event.preventDefault(); buttons[next]?.focus(); }
       }}>
         {items.map((emoji, index) => <EmojiOption key={emoji} emoji={emoji} selected={ownsEmoji(selected, emoji)} active={index === active} onPick={pick} />)}
-        {!items.length && <p className="emoji-picker-empty" role="status">{searching ? 'لا توجد نتائج. جرّب اسم فئة أو إيموجي.' : 'الإيموجي الذي تستخدمه سيظهر هنا.'}</p>}
+        {!items.length && <p className="emoji-picker-empty" role="status">{searching ? t('emoji.emptySearch') : t('emoji.emptyRecent')}</p>}
       </div>
-      {items.length < matches.length && <button type="button" className="emoji-picker-more" onClick={() => setLimit(value => { const next = value + 120; shownLimits.current.set(scrollKey, next); return next; })}>عرض المزيد</button>}
+      {items.length < matches.length && <button type="button" className="emoji-picker-more" onClick={() => setLimit(value => { const next = value + 120; shownLimits.current.set(scrollKey, next); return next; })}>{t('emoji.showMore')}</button>}
     </div>
   );
 }

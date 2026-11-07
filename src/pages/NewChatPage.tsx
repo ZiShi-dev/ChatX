@@ -22,9 +22,11 @@ import { isServerId } from '../lib/home';
 import { useAuthStore } from '../stores/authStore';
 import { useChatStore } from '../stores/chatStore';
 import { useUserStore } from '../stores/userStore';
+import { useI18n } from '../lib/i18n';
 
 export default function NewChatPage() {
   const navigate = useNavigate();
+  const { t } = useI18n();
   const currentUserId = useAuthStore((state) => state.currentUser.id);
   const users = useUserStore((state) => state.users);
   const openPrivate = useChatStore((state) => state.openPrivate);
@@ -59,7 +61,7 @@ export default function NewChatPage() {
     void openPrivate(userId).then((conversationId) => {
       setBusy(false);
       if (conversationId) navigate(`/chat/${conversationId}`, { replace: true });
-      else setNotice('تعذر فتح المحادثة.');
+      else setNotice(t('newChat.errOpen'));
     });
   };
 
@@ -70,7 +72,7 @@ export default function NewChatPage() {
     void createGroup(title, selected).then((conversationId) => {
       setBusy(false);
       if (conversationId) navigate(`/chat/${conversationId}`, { replace: true });
-      else setNotice('تعذر إنشاء المجموعة.');
+      else setNotice(t('newChat.errCreate'));
     });
   };
 
@@ -82,14 +84,14 @@ export default function NewChatPage() {
     <IonPage>
       <IonHeader>
         <NetworkStatusBanner />
-        <PageNav title="محادثة جديدة" fallback="/home" />
+        <PageNav title={t('newChat.title')} fallback="/home" />
         <IonToolbar className="page-toolbar sub">
           <IonSegment className="home-filters" value={mode} onIonChange={(event) => setMode((event.detail.value as 'private' | 'group') || 'private')}>
             <IonSegmentButton value="private">
-              <IonLabel>خاص</IonLabel>
+              <IonLabel>{t('home.private')}</IonLabel>
             </IonSegmentButton>
             <IonSegmentButton value="group">
-              <IonLabel>مجموعة</IonLabel>
+              <IonLabel>{t('home.groups')}</IonLabel>
             </IonSegmentButton>
           </IonSegment>
         </IonToolbar>
@@ -98,16 +100,16 @@ export default function NewChatPage() {
         {mode === 'group' && (
           <div className="new-group">
             <label className="group-name">
-              <span>اسم المجموعة</span>
+              <span>{t('newChat.groupName')}</span>
               <input
                 dir="auto"
                 value={title}
                 maxLength={40}
-                placeholder="مثال: مشروع المساء"
+                placeholder={t('newChat.groupPlaceholder')}
                 onChange={(event) => setTitle(event.target.value)}
               />
             </label>
-            <p className="muted">{selected.length < 2 ? 'اختر شخصين على الأقل.' : `${selected.length} أشخاص محددون`}</p>
+            <p className="muted">{selected.length < 2 ? t('newChat.pickTwo') : t('newChat.selectedCount', { count: selected.length })}</p>
             {picked.length > 0 && (
               <div className="picked-row">
                 {picked.map((user) => (
@@ -122,9 +124,9 @@ export default function NewChatPage() {
           </div>
         )}
         {notice && <p className="form-error new-empty">{notice}</p>}
-        <SearchBar value={query} placeholder="ابحث عن شخص" onChange={setQuery} />
+        <SearchBar value={query} placeholder={t('newChat.searchPeople')} onChange={setQuery} />
         {people.length === 0 ? (
-          <p className="muted new-empty">لا توجد نتائج.</p>
+          <p className="muted new-empty">{t('newChat.noResults')}</p>
         ) : (
           <div className="person-list">
             {people.map((user) => {
@@ -158,7 +160,7 @@ export default function NewChatPage() {
       {mode === 'group' && (
         <IonFooter className="chat-footer">
           <IonButton expand="block" disabled={busy || !title.trim() || selected.length < 2} onClick={submitGroup}>
-            إنشاء المجموعة
+            {t('newChat.createGroup')}
           </IonButton>
         </IonFooter>
       )}

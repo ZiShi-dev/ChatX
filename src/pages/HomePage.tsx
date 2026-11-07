@@ -39,11 +39,14 @@ import { brandName, textDirection } from '../lib/appearance';
 import { messagePreview } from '../lib/media';
 import { t, useI18n } from '../lib/i18n';
 import { useAuthStore } from '../stores/authStore';
+import { connectionLost } from '../stores/networkStore';
 import { useChatStore } from '../stores/chatStore';
 import { useSavedStore } from '../stores/savedStore';
 import { notifyLevel, useMuteStore, type ChatMute } from '../stores/muteStore';
 import { useSettingsStore } from '../stores/settingsStore';
 import { useUserStore } from '../stores/userStore';
+import HomeStressBar from '../dev/HomeStressBar';
+import { homeStressPack, useHomeStress } from '../dev/homeStress';
 import type { Conversation, ConversationType } from '../types/conversation';
 
 type Filter = 'all' | Extract<ConversationType, 'private' | 'group'>;
@@ -52,14 +55,22 @@ export default function HomePage() {
   const navigate = useNavigate();
   const { t } = useI18n();
   const currentUser = useAuthStore((state) => state.currentUser);
-  const users = useUserStore((state) => state.users);
-  const conversations = useChatStore((state) => state.conversations);
+  const storedUsers = useUserStore((state) => state.users);
+  const storedConversations = useChatStore((state) => state.conversations);
+  const stress = useHomeStress();
+  const stressPack = homeStressPack(stress.mode, currentUser.id);
+  const users = stressPack ? [...stressPack.users, ...storedUsers] : storedUsers;
+  const conversations = stressPack?.conversations ?? storedConversations;
   const loadHome = useChatStore((state) => state.loadHome);
   const changeFriend = useChatStore((state) => state.changeFriend);
+  const withdrawPrivate = useChatStore((state) => state.withdrawPrivate);
   const serverUnread = useChatStore((state) => state.serverUnread);
-  const messages = useChatStore((state) => state.messages);
+  const storedMessages = useChatStore((state) => state.messages);
+  const messages = stressPack ? stressPack.messages : storedMessages;
   const mutes = useMuteStore((state) => state.mutes);
   const [filter, setFilter] = useState<Filter>('all');
+  const [requestsOpen, setRequestsOpen] = useState(false);
+  const [waitingOpen, setWaitingOpen] = useState(false);
   const [muteTarget, setMuteTarget] = useState<Conversation>();
   const [removeTarget, setRemoveTarget] = useState<Conversation>();
   const dismissDeletedChat = useChatStore((state) => state.dismissDeletedChat);
@@ -73,9 +84,9 @@ export default function HomePage() {
       const timer = window.setTimeout(() => setReady(true), 280);
       return () => window.clearTimeout(timer);
     }
-    if (navigator.onLine === false) {
+    if (connectionLost()) {
       setReady(true);
-      setNotice('تعذر الاتصال.');
+      setNotice(t('home.loadOffline'));
     }
     const run = async (silent: boolean) => {
       if (!silent) setReady(useChatStore.getState().conversations.length > 0);
@@ -84,8 +95,8 @@ export default function HomePage() {
         await useSavedStore.getState().load().catch(() => undefined);
       }
       if (!alive) return;
-      if (result === 'offline') setNotice('تعذر الاتصال.');
-      else if (result === 'invalid') setNotice('تعذر تحميل المحادثات.');
+      if (result === 'offline') setNotice(connectionLost() ? t('home.loadOffline') : '');
+      else if (result === 'invalid') setNotice(t('home.loadInvalid'));
       else {
         setNotice('');
         if (!useChatStore.getState().conversations.some((room) => room.self)) {
@@ -104,7 +115,7 @@ export default function HomePage() {
       alive = false;
       stop();
     };
-  }, [loadHome, serverAccount]);
+  }, [loadHome, serverAccount, t]);
 
   const globalChat = conversations.find((conversation) => isGlobalConversation(conversation) && conversation.participantIds.includes(currentUser.id));
   const visible = useMemo(() => {
@@ -148,8 +159,84 @@ export default function HomePage() {
       : inboxBadgeCount(groupNotifications(conversations, messages, currentUser.id, currentUser.username, mutes, inboxClearedAt, inboxReadIds, notifyTypes)),
     [conversations, currentUser.id, currentUser.username, inboxClearedAt, inboxReadIds, messages, mutes, notifyTypes, serverAccount, serverUnread],
   );
-  const inboxBadge = formatInboxBadge(inboxCount);
+  const inboxBadge = formatInboxBadge(stressPack ? stressPack.inbox : inboxCount);
   const presence = getUserPresence(currentUser.id, users);
+
+  const foldDetail = (count: number, two: 'home.requestsTwo' | 'home.waitingTwo', many: 'home.requestsMany' | 'home.waitingMany') => (
+    count === 2 ? t(two) : t(many, { count })
+  );
+  const foldFaces = (list: Conversation[]) => {
+    const people = [];
+    for (const conversation of list) {
+      const person = otherParticipant(conversation, currentUser.id, users);
+      if (!person) continue;
+      people.push(person);
+      if (people.length === 3) break;
+    }
+    return people;
+  };
+  const renderRequest = (conversation: Conversation) => {
+    const person = otherParticipant(conversation, currentUser.id, users);
+    if (!person) return null;
+    return (
+      <article key={conversation.id} className="friend-request">
+        <button type="button" className="friend-request-open" onClick={() => navigate(`/chat/${conversation.id}`)}>
+          <Avatar name={person.displayName} color={person.color} size={48} src={person.avatarUrl} decoration={person.avatarDecoration} animate={false} />
+          <span>
+            <strong dir="auto">{person.displayName}</strong>
+            <small>{t('home.wants')}</small>
+          </span>
+        </button>
+        <div className="friend-actions">
+          <button type="button" className="is-accept" onClick={() => void changeFriend(person.id, 'accept')}>{t('home.accept')}</button>
+          <button type="button" onClick={() => void changeFriend(person.id, 'decline')}>{t('home.ignore')}</button>
+        </div>
+      </article>
+    );
+  };
+  const renderWaiting = (conversation: Conversation) => {
+    const person = otherParticipant(conversation, currentUser.id, users);
+    if (!person) return null;
+    return (
+      <article key={conversation.id} className="friend-request">
+        <button type="button" className="friend-request-open" onClick={() => navigate(`/chat/${conversation.id}`)}>
+          <Avatar name={person.displayName} color={person.color} size={48} src={person.avatarUrl} decoration={person.avatarDecoration} animate={false} />
+          <span>
+            <strong dir="auto">{person.displayName}</strong>
+            <small>{t('home.waiting')}</small>
+          </span>
+        </button>
+        <div className="friend-actions">
+          <button
+            type="button"
+            className="is-cancel"
+            onClick={() => {
+              void withdrawPrivate(conversation.id).then((ok) => {
+                if (!ok) setNotice(t('home.cancelRequestFailed'));
+              });
+            }}
+          >
+            {t('home.cancelRequest')}
+          </button>
+        </div>
+      </article>
+    );
+  };
+  const renderFold = (kind: 'requests' | 'waiting', list: Conversation[], open: boolean, toggle: () => void) => (
+    <button type="button" className={`request-fold${open ? ' is-open' : ''}`} aria-expanded={open} onClick={toggle}>
+      <span className="request-fold-faces">
+        {foldFaces(list).map((person) => (
+          <Avatar key={person.id} name={person.displayName} color={person.color} size={36} src={person.avatarUrl} animate={false} />
+        ))}
+      </span>
+      <span className="request-fold-copy">
+        <strong>{t(kind === 'requests' ? 'home.requests' : 'home.waiting')}</strong>
+        <small>{foldDetail(list.length, kind === 'requests' ? 'home.requestsTwo' : 'home.waitingTwo', kind === 'requests' ? 'home.requestsMany' : 'home.waitingMany')}</small>
+      </span>
+      <span className="request-fold-count">{list.length}</span>
+      <IonIcon className="request-fold-chevron" icon={chevronDownOutline} aria-hidden="true" />
+    </button>
+  );
 
   const renderConversation = (conversation: Conversation) => {
     const last = lastMessageOf(conversation, messages);
@@ -221,36 +308,28 @@ export default function HomePage() {
               {renderConversation(globalChat)}
             </section>
           )}
-          {requests.length > 0 && (
+          {requests.length === 1 && (
             <section className="home-section">
-              <h2>{t('home.requests')} <span>{requests.length}</span></h2>
-              {requests.map((conversation) => {
-                const person = otherParticipant(conversation, currentUser.id, users);
-                if (!person) return null;
-                return (
-                  <article key={conversation.id} className="friend-request">
-                    <button type="button" className="friend-request-open" onClick={() => navigate(`/chat/${conversation.id}`)}>
-                      <Avatar name={person.displayName} color={person.color} size={48} src={person.avatarUrl} decoration={person.avatarDecoration} animate={false} />
-                      <span>
-                        <strong dir="auto">{person.displayName}</strong>
-                        <small>{t('home.wants')}</small>
-                      </span>
-                    </button>
-                    <div className="friend-actions">
-                      <button type="button" className="is-accept" onClick={() => void changeFriend(person.id, 'accept')}>{t('home.accept')}</button>
-                      <button type="button" onClick={() => void changeFriend(person.id, 'decline')}>{t('home.ignore')}</button>
-                    </div>
-                  </article>
-                );
-              })}
+              <h2>{t('home.requests')} <span>1</span></h2>
+              {renderRequest(requests[0])}
             </section>
           )}
-          {waiting.length > 0 && (
+          {requests.length > 1 && (
             <section className="home-section">
-              <h2>{t('home.waiting')} <span>{waiting.length}</span></h2>
-              <div className="home-list">
-                {waiting.map((conversation) => renderConversation(conversation))}
-              </div>
+              {renderFold('requests', requests, requestsOpen, () => setRequestsOpen((open) => !open))}
+              {requestsOpen ? requests.map((conversation) => renderRequest(conversation)) : null}
+            </section>
+          )}
+          {waiting.length === 1 && (
+            <section className="home-section">
+              <h2>{t('home.waiting')} <span>1</span></h2>
+              {renderWaiting(waiting[0])}
+            </section>
+          )}
+          {waiting.length > 1 && (
+            <section className="home-section">
+              {renderFold('waiting', waiting, waitingOpen, () => setWaitingOpen((open) => !open))}
+              {waitingOpen ? waiting.map((conversation) => renderWaiting(conversation)) : null}
             </section>
           )}
           {listed.length === 0 && requests.length === 0 && waiting.length === 0 && !showGlobal ? (
@@ -269,12 +348,12 @@ export default function HomePage() {
       <div className="user-dock">
         <button type="button" className="user-dock-main" onClick={() => navigate('/account')}>
           <span className="user-dock-avatar">
-            <Avatar name={currentUser.displayName} color={currentUser.color} size={46} src={currentUser.avatarUrl} decoration={currentUser.avatarDecoration} />
+            <Avatar name={stressPack?.dockName ?? currentUser.displayName} color={currentUser.color} size={46} src={stressPack ? stressPack.dockPhoto || undefined : currentUser.avatarUrl} decoration={stressPack ? undefined : currentUser.avatarDecoration} />
             <i className={presence === 'online' ? 'on' : ''} />
           </span>
           <span className="user-dock-copy">
             <strong>
-              <span>{currentUser.displayName}</span>
+              <span>{stressPack?.dockName ?? currentUser.displayName}</span>
               <IonIcon icon={chevronDownOutline} />
             </strong>
             <em>{connectionLabel(currentUser, { self: true })}</em>
@@ -290,6 +369,7 @@ export default function HomePage() {
           title={t('home.removeTitle')}
           body={t('home.removeBody')}
           allowLabel={t('home.remove')}
+          laterLabel={t('chat.cancel')}
           onAllow={() => {
             const id = removeTarget.id;
             setRemoveTarget(undefined);
@@ -300,6 +380,7 @@ export default function HomePage() {
           onLater={() => setRemoveTarget(undefined)}
         />
       )}
+      {import.meta.env.DEV ? <HomeStressBar mode={stress.mode} onChoose={stress.choose} /> : null}
       {muteTarget && (
         <MuteSheet
           conversation={muteTarget}

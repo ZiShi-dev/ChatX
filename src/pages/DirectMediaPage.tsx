@@ -16,16 +16,18 @@ import { useAuthStore } from '../stores/authStore';
 import { useChatStore } from '../stores/chatStore';
 import RoomNotifyPanel from '../components/conversations/RoomNotifyPanel';
 import { useUserStore } from '../stores/userStore';
+import { useI18n } from '../lib/i18n';
 
 export default function DirectMediaPage() {
   const { id = '' } = useParams();
+  const { t } = useI18n();
   const animate = useProfileMotion();
   const currentUser = useAuthStore((state) => state.currentUser);
   const users = useUserStore((state) => state.users);
   const conversation = useChatStore((state) => state.conversations.find((item) => item.id === id));
   const other = conversation?.type === 'private' ? otherParticipant(conversation, currentUser.id, users) : undefined;
   const isSelf = conversation?.self === true;
-  const profileTitle = isSelf ? currentUser.displayName : other?.displayName ?? 'ملف المحادثة';
+  const profileTitle = isSelf ? currentUser.displayName : other?.displayName ?? t('directMedia.fallbackTitle');
 
   return (
     <IonPage>
@@ -35,7 +37,7 @@ export default function DirectMediaPage() {
       </IonHeader>
       <IonContent className="profile-page group-profile-scroll">
         {!conversation || conversation.type !== 'private' || (!other && !isSelf) ? (
-          <EmptyState title="المحادثة غير موجودة" />
+          <EmptyState title={t('directMedia.notFound')} />
         ) : (
           <div className="profile-frame">
             <section className="profile-hero">
@@ -68,7 +70,7 @@ export default function DirectMediaPage() {
                     {(customRoleReady(subject) || isSelf) && (
                       <p className="member-chips">
                         <CustomRoleBadge user={subject} />
-                        {isSelf && <span className="kind-pill">أنت</span>}
+                        {isSelf && <span className="kind-pill">{t('member.you')}</span>}
                       </p>
                     )}
                   </>
@@ -78,11 +80,11 @@ export default function DirectMediaPage() {
             {!isSelf && other && (
               <dl className="account-facts">
                 <div>
-                  <dt>خط الاسم</dt>
+                  <dt>{t('directMedia.nameFont')}</dt>
                   <dd>{fontLabel(other.messageFont)}</dd>
                 </div>
                 <div>
-                  <dt>لون الاسم</dt>
+                  <dt>{t('directMedia.nameColor')}</dt>
                   <dd className="profile-style-swatch" style={{ '--style-color': other.color } as CSSProperties}>
                     <span aria-hidden="true" />
                   </dd>
@@ -90,17 +92,17 @@ export default function DirectMediaPage() {
               </dl>
             )}
             <section className="profile-bio">
-              <span>النبذة</span>
+              <span>{t('directMedia.bio')}</span>
               {(isSelf ? currentUser.bio : other?.bio) ? (
                 <p dir="auto">{isSelf ? currentUser.bio : other?.bio}</p>
               ) : (
-                <p>لا توجد نبذة</p>
+                <p>{t('directMedia.noBio')}</p>
               )}
             </section>
             <MediaTabs
               conversationId={conversation.id}
-              scope="المحادثة"
-              label="وسائط المحادثة"
+              scope="chat"
+              label={t('member.media')}
               notify={<RoomNotifyPanel conversationId={conversation.id} />}
             />
           </div>

@@ -126,7 +126,19 @@ function AppearanceSettings() {
   const opacity = Math.round(appearance.wallpaperOpacity * 100);
   const title = appearance.name.trim() || 'ChatX';
   const { t } = useI18n();
-  const presetLabel: Record<string, MessageKey> = { night: 'preset.night', sand: 'preset.sand', plum: 'preset.plum' };
+  const presetLabel: Record<string, MessageKey> = {
+    night: 'preset.night',
+    sand: 'preset.sand',
+    plum: 'preset.plum',
+    'vx-ember': 'preset.vxEmber',
+    'vx-glacier': 'preset.vxGlacier',
+    'vx-forest': 'preset.vxForest',
+    'vx-sunset': 'preset.vxSunset',
+    'vx-lilac': 'preset.vxLilac',
+    'vx-carbon': 'preset.vxCarbon',
+    'vx-gold': 'preset.vxGold',
+    'vx-rosewood': 'preset.vxRosewood',
+  };
 
   return (
     <section className="settings-block settings-appearance">
@@ -248,7 +260,10 @@ function AppearanceSettings() {
           <p className="profile-style-hint">{t('settings.colorsHint')}</p>
           <div className="setting-choices look-presets appearance-presets" role="radiogroup" aria-label={t('settings.presets')}>
             {APPEARANCE_PRESETS.map((preset) => {
-              const selected = appearance.accent === preset.look.accent && appearance.bg === preset.look.bg && appearance.frame === preset.look.frame;
+              const selected = appearance.accent === preset.look.accent
+                && appearance.bg === preset.look.bg
+                && appearance.frame === preset.look.frame
+                && appearance.link === preset.look.link;
               return (
                 <button
                   key={preset.id}

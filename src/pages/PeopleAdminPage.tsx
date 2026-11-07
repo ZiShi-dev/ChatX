@@ -1,4 +1,4 @@
-import { memo, useCallback, useEffect, useRef, useState } from 'react';
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { IonContent, IonHeader, IonIcon, IonPage } from '@ionic/react';
 import { trashOutline } from 'ionicons/icons';
 import { Navigate } from 'react-router-dom';
@@ -13,7 +13,7 @@ import { readDirectoryUsers } from '../lib/directory';
 import { formatBytes } from '../lib/media';
 import { formatPurgeCountdown, nextMediaPurgeAt } from '../lib/mediaRetention';
 import { roleLabel } from '../lib/roles';
-import { useI18n } from '../lib/i18n';
+import { dateLocale, useI18n } from '../lib/i18n';
 import { useChatStore } from '../stores/chatStore';
 import { useUserStore } from '../stores/userStore';
 import type { Message } from '../types/message';
@@ -42,28 +42,6 @@ type OwnerSystemMedia = {
 
 type ChoiceKey = 'messages' | 'images' | 'files' | 'reactions' | 'privateChats' | 'profile' | 'membership' | 'account';
 type GroupChoiceKey = 'messages' | 'images' | 'files' | 'reactions' | 'group';
-
-const CHOICES: Array<{ key: ChoiceKey; label: string; withAccount?: boolean }> = [
-  { key: 'messages', label: 'الرسائل', withAccount: true },
-  { key: 'images', label: 'الصور', withAccount: true },
-  { key: 'files', label: 'الملفات', withAccount: true },
-  { key: 'reactions', label: 'التفاعلات', withAccount: true },
-  { key: 'privateChats', label: 'المحادثات الخاصة' },
-  { key: 'profile', label: 'صورة الحساب والغلاف', withAccount: true },
-  { key: 'membership', label: 'العضوية في المجموعات', withAccount: true },
-  { key: 'account', label: 'حذف الحساب' },
-];
-
-const GROUP_CHOICES: Array<{ key: GroupChoiceKey; label: string; withGroup?: boolean }> = [
-  { key: 'messages', label: 'الرسائل', withGroup: true },
-  { key: 'images', label: 'الصور', withGroup: true },
-  { key: 'files', label: 'الملفات', withGroup: true },
-  { key: 'reactions', label: 'التفاعلات', withGroup: true },
-  { key: 'group', label: 'حذف المجموعة' },
-];
-
-const USER_OPTIONS = CHOICES.map((item) => ({ key: item.key, label: item.label, forced: item.withAccount }));
-const GROUP_OPTIONS = GROUP_CHOICES.map((item) => ({ key: item.key, label: item.label, forced: item.withGroup }));
 const GROUP_COLOR = '#3d9b84';
 
 type AdminSection = 'people' | 'groups' | 'server';
@@ -85,7 +63,7 @@ function scrollAdmin(node: HTMLElement | null) {
 const GROUP_ID = /^[0-9a-f-]{36}$/i;
 const DAY_MS = 24 * 60 * 60 * 1000;
 
-function MediaPurgeClock({ system }: { system: OwnerSystemMedia }) {
+function MediaPurgeClock({ system, t }: { system: OwnerSystemMedia; t: ReturnType<typeof useI18n>['t'] }) {
   const hours = Math.max(1, Math.round(system.mediaRetentionMs / 3_600_000));
   const intervalMs = system.purgeIntervalMs && system.purgeIntervalMs > 0 ? system.purgeIntervalMs : DAY_MS;
   const intervalHours = Math.max(1, Math.round(intervalMs / 3_600_000));
@@ -97,18 +75,17 @@ function MediaPurgeClock({ system }: { system: OwnerSystemMedia }) {
     return () => window.clearInterval(timer);
   }, [nextAt]);
   const remaining = nextAt == null ? null : Math.max(0, nextAt - now);
+  const whenLocale = dateLocale();
   return (
     <div className="owner-system-clock">
-      <p className="owner-system-hint">
-        تُحفظ الصور والملفات والفيديو على القرص <span dir="ltr">{hours}</span> ساعة من وقت حفظها. يحذفها الفحص التالي بعد هذه المدة. يعمل الفحص كل <span dir="ltr">{intervalHours}</span> ساعة في موعد ثابت، لذلك قد يبقى ملف حتى الفحص الذي يلي بلوغه المهلة. إعادة تشغيل الخادم لا تعيد هذا المؤقت.
-      </p>
+      <p className="owner-system-hint">{t('admin.purge.body', { hours, intervalHours })}</p>
       {remaining == null ? (
-        <p className="owner-system-hint">يبدأ المؤقت بعد أول فحص للخادم.</p>
+        <p className="owner-system-hint">{t('admin.purge.timerStart')}</p>
       ) : (
         <>
-          <p className="owner-system-clock-label">الوقت حتى الفحص التالي</p>
+          <p className="owner-system-clock-label">{t('admin.purge.nextCheck')}</p>
           <time className="owner-system-timer" dir="ltr" dateTime={new Date(nextAt!).toISOString()}>{formatPurgeCountdown(remaining)}</time>
-          <p className="owner-system-clock-when" dir="ltr">{new Date(nextAt!).toLocaleString('ar')}</p>
+          <p className="owner-system-clock-when" dir="ltr">{new Date(nextAt!).toLocaleString(whenLocale)}</p>
         </>
       )}
     </div>
@@ -134,14 +111,6 @@ function dropsMessage(message: Message, userId: string, choices: Record<ChoiceKe
   if (choices.images && message.type === 'image') return true;
   if (choices.files && message.type === 'file') return true;
   return choices.messages && message.type !== 'image' && message.type !== 'file';
-}
-
-function failureText(error: unknown, group = false) {
-  if (!(error instanceof AdminApiError)) return 'تعذر الحذف.';
-  if (error.code === 'offline') return 'تعذر الاتصال.';
-  if (error.code === 'not_found') return group ? 'المجموعة غير موجودة.' : 'الحساب غير موجود.';
-  if (error.code === 'forbidden') return 'غير مسموح.';
-  return 'تعذر الحذف.';
 }
 
 function memberChoices(picked: Record<string, boolean>): Record<ChoiceKey, boolean> {
@@ -274,6 +243,7 @@ function ChoiceSheet({
   options,
   lockKey,
   group,
+  t,
   onClose,
   onApply,
 }: {
@@ -283,6 +253,7 @@ function ChoiceSheet({
   options: Array<{ key: string; label: string; forced?: boolean }>;
   lockKey: string;
   group?: boolean;
+  t: ReturnType<typeof useI18n>['t'];
   onClose: () => void;
   onApply: (picked: Record<string, boolean>) => Promise<void>;
 }) {
@@ -326,7 +297,13 @@ function ChoiceSheet({
       if (alive.current) onClose();
     }).catch((error: unknown) => {
       if (!alive.current) return;
-      setNotice(failureText(error, group));
+      let message: string;
+      if (!(error instanceof AdminApiError)) message = t('admin.err.delete');
+      else if (error.code === 'offline') message = t('admin.err.offline');
+      else if (error.code === 'not_found') message = group ? t('admin.err.groupMissing') : t('admin.err.userMissing');
+      else if (error.code === 'forbidden') message = t('admin.err.forbidden');
+      else message = t('admin.err.delete');
+      setNotice(message);
       setBusy(false);
     });
   };
@@ -362,9 +339,9 @@ function ChoiceSheet({
         {locked ? <p className="owner-warn">{warning}</p> : null}
         {notice ? <p className="form-error">{notice}</p> : null}
         <div className="account-actions">
-          <button type="button" onClick={onClose} disabled={busy}>إلغاء</button>
+          <button type="button" onClick={onClose} disabled={busy}>{t('chat.cancel')}</button>
           <button type="button" className="danger" onClick={apply} disabled={!count || busy}>
-            {busy ? 'جارٍ الحذف' : count ? `حذف (${count})` : 'حذف'}
+            {busy ? t('admin.deleteBusy') : count ? t('admin.deleteWithCount', { count }) : t('admin.delete')}
           </button>
         </div>
       </div>
@@ -392,6 +369,29 @@ export default function PeopleAdminPage() {
   const [section, setSection] = useState<AdminSection>('people');
   const systemRequest = useRef(0);
   const shellRef = useRef<HTMLDivElement>(null);
+  const USER_OPTIONS = useMemo(
+    (): Array<{ key: ChoiceKey; label: string; forced?: boolean }> => [
+      { key: 'messages', label: t('admin.choice.messages'), forced: true },
+      { key: 'images', label: t('admin.choice.images'), forced: true },
+      { key: 'files', label: t('admin.choice.files'), forced: true },
+      { key: 'reactions', label: t('admin.choice.reactions'), forced: true },
+      { key: 'privateChats', label: t('admin.choice.privateChats') },
+      { key: 'profile', label: t('admin.choice.profile'), forced: true },
+      { key: 'membership', label: t('admin.choice.membership'), forced: true },
+      { key: 'account', label: t('admin.choice.account') },
+    ],
+    [t],
+  );
+  const GROUP_OPTIONS = useMemo(
+    (): Array<{ key: GroupChoiceKey; label: string; forced?: boolean }> => [
+      { key: 'messages', label: t('admin.choice.messages'), forced: true },
+      { key: 'images', label: t('admin.choice.images'), forced: true },
+      { key: 'files', label: t('admin.choice.files'), forced: true },
+      { key: 'reactions', label: t('admin.choice.reactions'), forced: true },
+      { key: 'group', label: t('admin.choice.groupDelete') },
+    ],
+    [t],
+  );
   const openSection = (next: AdminSection) => {
     if (next === section) return;
     setSection(next);
@@ -432,7 +432,7 @@ export default function PeopleAdminPage() {
       const media = payload && typeof payload === 'object' && 'media' in payload ? (payload as { media: OwnerSystemMedia }).media : null;
       if (!media) {
         setSystem(null);
-        setSystemError('تعذر قراءة حالة الخادم.');
+        setSystemError(t('admin.systemReadFailed'));
         return;
       }
       setSystem(media);
@@ -440,9 +440,9 @@ export default function PeopleAdminPage() {
     }).catch((error) => {
       if (!alive.current || request !== systemRequest.current) return;
       setSystem(null);
-      setSystemError(error instanceof AdminApiError ? 'تعذر قراءة حالة الخادم.' : 'تعذر الاتصال بالخادم.');
+      setSystemError(error instanceof AdminApiError ? t('admin.systemReadFailed') : t('admin.systemConnectFailed'));
     });
-  }, []);
+  }, [t]);
 
   useEffect(() => {
     if (access !== 'ready') return;
@@ -462,17 +462,17 @@ export default function PeopleAdminPage() {
       if (!alive.current) return;
       setWipeAsk(false);
       const media = payload && typeof payload === 'object' && 'media' in payload ? (payload as { media: OwnerSystemMedia | null }).media : null;
-      setDone('حُذفت وسائط الرسائل من القرص ومن قاعدة البيانات. الصور المحفوظة على أجهزة المستخدمين لا تُحذف.');
+      setDone(t('admin.wipeOk'));
       if (media) { setSystem(media); setSystemError(''); }
       else refreshSystem();
     } catch (error) {
       if (!alive.current) return;
-      if (error instanceof AdminApiError && error.code === 'offline') setDone('تعذر الاتصال.');
-      else setDone('تعذر حذف الملفات.');
+      if (error instanceof AdminApiError && error.code === 'offline') setDone(t('admin.wipeOffline'));
+      else setDone(t('admin.wipeFailed'));
     } finally {
       if (alive.current) setWiping(false);
     }
-  }, [refreshSystem]);
+  }, [refreshSystem, t]);
 
   const usersRef = useRef(users);
   const groupsRef = useRef(groups);
@@ -508,22 +508,22 @@ export default function PeopleAdminPage() {
             ? list.map((item) => (item.id === person.id ? { ...item, avatarUrl: undefined, bannerUrl: undefined } : item))
             : list
       ));
-      setDone('تم الحذف.');
+      setDone(t('admin.done'));
     }
     if (picked.messages || picked.images || picked.files || picked.reactions || picked.privateChats || picked.membership || picked.account) {
       void loadHome();
     }
-  }, [loadHome, removeUser, updateUser]);
+  }, [loadHome, removeUser, updateUser, t]);
   const eraseGroup = useCallback(async (room: OwnerGroup, raw: Record<string, boolean>) => {
     const picked = groupChoicesOf(raw);
     await adminFetch('/api/owner/groups/erase', { method: 'POST', body: { roomId: room.id, ...picked } });
     patchGroupMessages(room.id, picked);
     if (alive.current) {
       if (picked.group) setGroups((list) => list.filter((item) => item.id !== room.id));
-      setDone('تم الحذف.');
+      setDone(t('admin.done'));
     }
     if (picked.messages || picked.images || picked.files || picked.reactions || picked.group) void loadHome();
-  }, [loadHome]);
+  }, [loadHome, t]);
 
   if (access === 'denied') return <Navigate to="/home" replace />;
 
@@ -537,13 +537,13 @@ export default function PeopleAdminPage() {
         {access === 'pending' ? <PageSkeleton kind="settings" /> : null}
         {access === 'ready' ? (
           <div ref={shellRef} className="admin-frame">
-            <section className="admin-stats" aria-label="ملخص">
-              <p><strong>{users.length}</strong><span>الأعضاء</span></p>
-              <p><strong>{groups.length}</strong><span>المجموعات</span></p>
-              <p><strong dir="ltr">{system ? formatBytes(system.diskBytes) : '…'}</strong><span>الوسائط</span></p>
+            <section className="admin-stats" aria-label={t('admin.statsAria')}>
+              <p><strong>{users.length}</strong><span>{t('admin.people')}</span></p>
+              <p><strong>{groups.length}</strong><span>{t('admin.groups')}</span></p>
+              <p><strong dir="ltr">{system ? formatBytes(system.diskBytes) : '…'}</strong><span>{t('admin.mediaLabel')}</span></p>
             </section>
             {done ? <p className="owner-done" role="status">{done}</p> : null}
-            <div className="group-tabs is-three admin-tabs" role="tablist" aria-label="أقسام الإدارة">
+            <div className="group-tabs is-three admin-tabs" role="tablist" aria-label={t('admin.tabsAria')}>
               {adminSections.map((item) => (
                 <button
                   key={item.id}
@@ -561,7 +561,7 @@ export default function PeopleAdminPage() {
             </div>
             <div className="admin-panel" role="tabpanel" id={`admin-panel-${section}`} aria-labelledby={`admin-tab-${section}`}>
             {section === 'people' ? (
-              users.length === 0 ? <EmptyState title="لا يوجد أعضاء آخرون" /> : (
+              users.length === 0 ? <EmptyState title={t('admin.emptyOtherUsers')} /> : (
                 <div className="owner-list">
                   {users.map((user) => (
                     <OwnerRow
@@ -573,8 +573,8 @@ export default function PeopleAdminPage() {
                       photo={user.avatarUrl}
                       decoration={user.avatarDecoration}
                       status={user.status}
-                      badge={roleLabel(user.role) || 'عضو'}
-                      label={`حذف ${user.displayName}`}
+                      badge={roleLabel(user.role) || t('admin.badgeMember')}
+                      label={t('admin.deleteUserAria', { name: user.displayName })}
                       onOpen={openUser}
                     />
                   ))}
@@ -582,7 +582,7 @@ export default function PeopleAdminPage() {
               )
             ) : null}
             {section === 'groups' ? (
-              groups.length === 0 ? <EmptyState title="لا توجد مجموعات" /> : (
+              groups.length === 0 ? <EmptyState title={t('admin.emptyGroups')} /> : (
                 <div className="owner-list">
                   {groups.map((item) => (
                     <OwnerRow
@@ -591,8 +591,8 @@ export default function PeopleAdminPage() {
                       title={item.name}
                       detail=""
                       color={GROUP_COLOR}
-                      badge="مجموعة"
-                      label={`حذف ${item.name}`}
+                      badge={t('admin.badgeGroup')}
+                      label={t('admin.deleteGroupAria', { name: item.name })}
                       onOpen={openGroup}
                     />
                   ))}
@@ -602,43 +602,53 @@ export default function PeopleAdminPage() {
             {section === 'server' ? (
               <>
                 <section className="owner-system" aria-labelledby="owner-main-title">
-                  <h2 id="owner-main-title">المجموعة الرئيسية</h2>
-                  <p className="owner-system-hint">إخفاؤها يبقيها لمن هم داخلها فقط. إظهارها يعيد كل الحسابات إلى المجموعة.</p>
+                  <h2 id="owner-main-title">{t('admin.mainGroupTitle')}</h2>
+                  <p className="owner-system-hint">{t('admin.mainGroupHint')}</p>
                   <div className="account-actions">
-                    <button type="button" onClick={() => void setMainOpen(false).then((ok) => setDone(ok ? 'أُخفيت عن غير الأعضاء.' : 'تعذر إخفاء المجموعة.'))}>إخفاء عن غير الأعضاء</button>
-                    <button type="button" className="is-allow" onClick={() => void setMainOpen(true).then((ok) => setDone(ok ? 'ظهرت لكل الحسابات.' : 'تعذر إظهار المجموعة.'))}>إظهار للجميع</button>
+                    <button type="button" onClick={() => void setMainOpen(false).then((ok) => setDone(ok ? t('admin.doneHideMain') : t('admin.errHideMain')))}>{t('admin.hideMain')}</button>
+                    <button type="button" className="is-allow" onClick={() => void setMainOpen(true).then((ok) => setDone(ok ? t('admin.doneShowMain') : t('admin.errShowMain')))}>{t('admin.showMain')}</button>
                   </div>
                 </section>
                 <section className="owner-system" aria-labelledby="owner-system-title">
-                  <h2 id="owner-system-title">حذف الوسائط من القرص</h2>
+                  <h2 id="owner-system-title">{t('admin.diskWipeTitle')}</h2>
                   {systemError ? <p className="owner-system-alert" role="alert">{systemError}</p> : null}
-                  {system?.lastPurgeError ? <p className="owner-system-alert" role="alert">آخر تنظيف للوسائط فشل: {system.lastPurgeError}</p> : null}
+                  {system?.lastPurgeError ? <p className="owner-system-alert" role="alert">{t('admin.purgeFailed', { error: system.lastPurgeError })}</p> : null}
                   {system && (system.legacyImageRows > 0 || system.legacyFileRows > 0) ? (
-                    <p className="owner-system-alert" role="alert">ما زالت هناك وسائط قديمة داخل قاعدة البيانات. أعد تشغيل الخادم لإكمال النقل إلى القرص.</p>
+                    <p className="owner-system-alert" role="alert">{t('admin.legacyDb')}</p>
                   ) : null}
-                  {system ? <MediaPurgeClock system={system} /> : !systemError ? <p className="owner-system-hint">جارٍ قراءة حالة الوسائط…</p> : null}
+                  {system ? <MediaPurgeClock system={system} t={t} /> : !systemError ? <p className="owner-system-hint">{t('admin.mediaLoading')}</p> : null}
                   {system ? (
                     <ul className="owner-system-list">
-                      <li>على القرص الآن: <span dir="ltr">{system.diskImageFiles}</span> صورة · <span dir="ltr">{system.diskFileFiles}</span> ملف أو فيديو · {formatBytes(system.diskBytes)}</li>
-                      <li>في قاعدة البيانات: <span dir="ltr">{system.metadataImages}</span> صورة · <span dir="ltr">{system.metadataFiles}</span> ملف أو فيديو</li>
-                      <li>آخر فحص: {system.lastPurgeAt ? new Date(system.lastPurgeAt).toLocaleString('ar') : 'لم يُنفَّذ بعد'}</li>
+                      <li>{t('admin.diskNow', { images: system.diskImageFiles, files: system.diskFileFiles, bytes: formatBytes(system.diskBytes) })}</li>
+                      <li>{t('admin.dbMeta', { images: system.metadataImages, files: system.metadataFiles })}</li>
+                      <li>
+                        {system.lastPurgeAt
+                          ? t('admin.lastPurge', { when: new Date(system.lastPurgeAt).toLocaleString(dateLocale()) })
+                          : t('admin.lastPurgeNever')}
+                      </li>
                       {system.lastPurgeAt ? (
-                        <li>آخر حذف: <span dir="ltr">{system.lastExpiredImages}</span> صورة · <span dir="ltr">{system.lastExpiredFiles}</span> ملف أو فيديو · <span dir="ltr">{system.lastOrphans}</span> ملف بلا سجل</li>
+                        <li>
+                          {t('admin.lastDelete', {
+                            images: system.lastExpiredImages,
+                            files: system.lastExpiredFiles,
+                            orphans: system.lastOrphans,
+                          })}
+                        </li>
                       ) : null}
                     </ul>
                   ) : null}
                   {wipeAsk ? (
                     <div className="owner-system-confirm">
-                      <p className="owner-system-alert" role="alert">يُحذف الآن كل الصور والملفات والفيديو من القرص. الرسائل تبقى، ومؤقت الحذف التلقائي لا يعود إلى البداية.</p>
+                      <p className="owner-system-alert" role="alert">{t('admin.wipeConfirm')}</p>
                       <div className="owner-system-actions">
-                        <button type="button" onClick={() => setWipeAsk(false)} disabled={wiping}>إلغاء</button>
-                        <button type="button" className="danger" onClick={() => void wipeDisk()} disabled={wiping}>{wiping ? 'جارٍ الحذف' : 'حذف الآن'}</button>
+                        <button type="button" onClick={() => setWipeAsk(false)} disabled={wiping}>{t('chat.cancel')}</button>
+                        <button type="button" className="danger" onClick={() => void wipeDisk()} disabled={wiping}>{wiping ? t('admin.deleteBusy') : t('admin.wipeNow')}</button>
                       </div>
                     </div>
                   ) : (
                     <div className="owner-system-actions">
-                      <button type="button" onClick={refreshSystem} disabled={wiping}>تحديث الحالة</button>
-                      <button type="button" className="danger" onClick={() => { setDone(''); setWipeAsk(true); }} disabled={wiping}>حذف ملفات القرص</button>
+                      <button type="button" onClick={refreshSystem} disabled={wiping}>{t('admin.refreshState')}</button>
+                      <button type="button" className="danger" onClick={() => { setDone(''); setWipeAsk(true); }} disabled={wiping}>{t('admin.wipeDisk')}</button>
                     </div>
                   )}
                 </section>
@@ -653,10 +663,11 @@ export default function PeopleAdminPage() {
       {target ? (
         <ChoiceSheet
           titleId="owner-erase-title"
-          title={`حذف ${target.displayName}`}
-          warning="حذف الحساب يزيل رسائله وصوره وملفاته وتفاعلاته."
+          title={t('admin.deleteUserAria', { name: target.displayName })}
+          warning={t('admin.deleteUserWarn')}
           options={USER_OPTIONS}
           lockKey="account"
+          t={t}
           onClose={closeUser}
           onApply={(picked) => erase(target, picked)}
         />
@@ -664,11 +675,12 @@ export default function PeopleAdminPage() {
       {group ? (
         <ChoiceSheet
           titleId="owner-group-title"
-          title={`حذف ${group.name}`}
-          warning="حذف المجموعة يزيل رسائلها وصورها وملفاتها وأعضاءها."
+          title={t('admin.deleteGroupAria', { name: group.name })}
+          warning={t('admin.deleteGroupWarn')}
           options={GROUP_OPTIONS}
           lockKey="group"
           group
+          t={t}
           onClose={closeGroup}
           onApply={(picked) => eraseGroup(group, picked)}
         />

@@ -5,6 +5,7 @@ import NetworkStatusBanner from '../components/common/NetworkBanner';
 import PageNav from '../components/common/PageNav';
 import { adminFetch } from '../lib/adminApi';
 import { useAuthStore } from '../stores/authStore';
+import { connectionLost } from '../stores/networkStore';
 import AccountTabs from '../components/account/AccountTabs';
 import { createScrollHold } from '../lib/ionScrollHold';
 import ProfilePage from './ProfilePage';
@@ -31,15 +32,15 @@ export default function AccountPage() {
     let alive = true;
     void loadAccount().then((result) => {
       if (!alive) return;
-      if (result === 'no_server') setNotice('تعذر الاتصال بالخادم. راجع المسؤول.');
-      else if (result === 'offline') setNotice('تعذر الاتصال.');
-      else if (result === 'invalid') setNotice('تعذر تحميل الحساب.');
+      if (result === 'no_server') setNotice(t('account.loadNoServer'));
+      else if (result === 'offline') setNotice(connectionLost() ? t('account.loadOffline') : '');
+      else if (result === 'invalid') setNotice(t('account.loadInvalid'));
       else setNotice('');
     });
     return () => {
       alive = false;
     };
-  }, [loadAccount]);
+  }, [loadAccount, t]);
 
   useEffect(() => {
     let alive = true;

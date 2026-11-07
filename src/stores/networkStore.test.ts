@@ -19,9 +19,10 @@ it('recovers while the phone still claims to be online, without reopening the ap
   const stop = observeNetwork();
   try {
     reportNetworkFailure();
-    expect(useNetworkStore.getState().network).toBe('offline');
+    expect(useNetworkStore.getState().network).toBe('slow');
     await vi.advanceTimersByTimeAsync(1000);
     expect(request).toHaveBeenCalledTimes(1);
+    expect(useNetworkStore.getState().network).toBe('offline');
     await vi.advanceTimersByTimeAsync(5000);
     expect(request).toHaveBeenCalledTimes(2);
     expect(useNetworkStore.getState().network).toBe('online');
@@ -68,7 +69,7 @@ it('forgets a weak or lost connection caused by leaving the app', () => {
     expect(useNetworkStore.getState().network).toBe('online');
     vi.advanceTimersByTime(8000);
     reportNetworkFailure();
-    expect(useNetworkStore.getState().network).toBe('offline');
+    expect(useNetworkStore.getState().network).toBe('slow');
   } finally { stop(); }
 });
 

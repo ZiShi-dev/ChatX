@@ -1,7 +1,7 @@
-import { applyLocale } from './locale';
+import { useSettingsStore } from '../stores/settingsStore';
 import { translate } from './i18n';
 
-afterEach(() => applyLocale('ar'));
+afterEach(() => useSettingsStore.getState().setLocale('ar'));
 
 describe('translate', () => {
   it('keeps Arabic as the starting language and offers French and English', () => {
@@ -12,10 +12,10 @@ describe('translate', () => {
   });
 
   it('sets the page direction from the chosen language', () => {
-    applyLocale('en');
+    useSettingsStore.getState().setLocale('en');
     expect(document.documentElement.lang).toBe('en');
     expect(document.documentElement.dir).toBe('ltr');
-    applyLocale('ar');
+    useSettingsStore.getState().setLocale('ar');
     expect(document.documentElement.lang).toBe('ar');
     expect(document.documentElement.dir).toBe('rtl');
   });

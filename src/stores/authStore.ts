@@ -4,7 +4,7 @@ import { CURRENT_USER } from '../data/users';
 import { AdminApiError, adminFetch } from '../lib/adminApi';
 import { readDirectoryUser } from '../lib/directory';
 import { readGooglePreview, readGoogleReadyUser } from '../lib/googleAccount';
-import { clearStoredSession, rememberSession } from '../lib/sessionToken';
+import { clearStoredSession, currentSession, reloadSessionMemory, rememberSession } from '../lib/sessionToken';
 import { sanitizeMessageFont, sanitizeUserColor } from '../lib/userStyle';
 import type { MessageFontId, User } from '../types/user';
 import { useUserStore } from './userStore';
@@ -54,16 +54,32 @@ function asUser(saved?: Partial<User>): User | undefined {
   };
 }
 
+function withoutMedia(user?: Partial<User>) {
+  if (!user) return user;
+  const next = { ...user };
+  delete next.avatarUrl;
+  delete next.bannerUrl;
+  return next;
+}
+
 function writeAuth(state: Pick<AuthState, 'activated' | 'currentUser' | 'accounts'>) {
+  const payload: SavedAuth = {
+    activated: state.activated,
+    currentUser: state.currentUser,
+    accounts: state.accounts,
+  };
   try {
-    const payload: SavedAuth = {
-      activated: state.activated,
-      currentUser: state.currentUser,
-      accounts: state.accounts,
-    };
     localStorage.setItem(AUTH_KEY, JSON.stringify(payload));
   } catch {
-    // The session still works in memory when storage is full.
+    try {
+      localStorage.setItem(AUTH_KEY, JSON.stringify({
+        ...payload,
+        currentUser: withoutMedia(payload.currentUser),
+        accounts: payload.accounts?.map((account) => withoutMedia(account)!),
+      }));
+    } catch {
+      // The session still works in memory when storage is full.
+    }
   }
 }
 
@@ -311,9 +327,11 @@ export const useAuthStore = create<AuthState>((set, get) => ({
           ...(extra?.avatarDecoration ? { avatarDecoration: extra.avatarDecoration } : {}),
         },
       );
+      // The account already exists. Enter before the optional photo save, so a dropped request cannot sign them out.
+      commitSession(next);
       if (bio || avatarUrl || bannerUrl || extra?.color || extra?.messageFont || extra?.avatarDecoration) {
         try {
-          await adminFetch('/api/profile', {
+          const saved = readDirectoryUser((await adminFetch('/api/profile', {
             method: 'PATCH',
             body: {
               ...(bio ? { bio } : {}),
@@ -323,21 +341,12 @@ export const useAuthStore = create<AuthState>((set, get) => ({
               ...(extra?.messageFont ? { messageFont: extra.messageFont } : {}),
               ...(extra?.avatarDecoration ? { avatarDecoration: extra.avatarDecoration } : {}),
             },
-          });
-        } catch (error) {
-          const reason = inviteFailure(error);
-          return reason === 'offline' ? 'offline' : 'profile';
+          }) as { user?: unknown }).user);
+          if (saved) commitSession({ ...next, ...saved, status: 'online' });
+        } catch {
+          // The login is already stored. Profile details can be saved again from the account screen.
         }
       }
-      useUserStore.getState().addUser(next);
-      set((state) => ({
-        activated: true,
-        currentUser: next,
-        accounts: state.accounts.some((account) => account.id === next.id)
-          ? state.accounts.map((account) => (account.id === next.id ? next : account))
-          : [...state.accounts, next],
-      }));
-      writeAuth(get());
       return 'ok';
     } catch (error) {
       const reason = inviteFailure(error);
@@ -345,6 +354,58 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     }
   },
 }));
+
+function commitSession(user: User) {
+  const next = { ...user, status: 'online' as const };
+  const users = useUserStore.getState();
+  if (users.users.some((item) => item.id === next.id)) users.updateUser(next.id, next);
+  else users.addUser(next);
+  useAuthStore.setState((state) => ({
+    activated: true,
+    currentUser: next,
+    accounts: state.accounts.some((account) => account.id === next.id)
+      ? state.accounts.map((account) => (account.id === next.id ? next : account))
+      : [...state.accounts, next],
+  }));
+  writeAuth(useAuthStore.getState());
+}
+
+function adoptStoredAuth() {
+  reloadSessionMemory();
+  const saved = readAuth();
+  const user = asUser(saved.currentUser);
+  if (saved.activated !== true || !user || !SERVER_ID.test(user.id)) return;
+  if (useAuthStore.getState().activated && useAuthStore.getState().currentUser.id === user.id) return;
+  commitSession(user);
+}
+
+/** Opens a login that was saved on this phone even if the screen closed before the app could enter. */
+export async function resumeStoredSession() {
+  adoptStoredAuth();
+  const token = currentSession();
+  if (!token) return;
+  const state = useAuthStore.getState();
+  try {
+    const saved = readDirectoryUser((await adminFetch('/api/profile') as { user?: unknown }).user);
+    if (!saved) return;
+    const next = { ...state.currentUser, ...saved, status: 'online' as const };
+    if (!saved.avatarUrl) delete next.avatarUrl;
+    if (!saved.bannerUrl) delete next.bannerUrl;
+    commitSession(next);
+  } catch (error) {
+    if (!(error instanceof AdminApiError)) return;
+    if (error.status !== 401 && error.code !== 'invalid_credentials') return;
+    clearStoredSession();
+    if (state.activated && SERVER_ID.test(state.currentUser.id)) useAuthStore.getState().logout();
+  }
+}
+
+if (typeof window !== 'undefined') {
+  window.addEventListener('storage', (event) => {
+    if (event.key !== AUTH_KEY && event.key !== 'chatx.session') return;
+    adoptStoredAuth();
+  });
+}
 
 for (const account of [initialUser]) {
   const users = useUserStore.getState();

@@ -3,8 +3,11 @@ package app.chatx.mobile;
 import android.annotation.SuppressLint;
 import android.app.Dialog;
 import android.content.Context;
+import android.net.Uri;
 import android.os.Bundle;
 import android.os.Message;
+import android.view.KeyEvent;
+import android.view.View;
 import android.view.ViewGroup;
 import android.webkit.CookieManager;
 import android.webkit.WebChromeClient;
@@ -22,6 +25,7 @@ public class MainActivity extends BridgeActivity {
     static volatile boolean foreground = false;
     private int navigationExtraPx = 0;
     private int statusTopPx = 0;
+    private boolean loginWatchStarted = false;
 
     @Override
     public void onResume() {
@@ -124,8 +128,27 @@ public class MainActivity extends BridgeActivity {
 
     @SuppressLint("SetJavaScriptEnabled")
     private boolean openGoogleWindow(Message resultMsg) {
+        FrameLayout layout = new FrameLayout(this);
+        Dialog dialog = new Dialog(this, android.R.style.Theme_Black_NoTitleBar_Fullscreen);
+        dialog.setContentView(layout);
+        dialog.setOnKeyListener((view, keyCode, event) -> {
+            if (keyCode != KeyEvent.KEYCODE_BACK || event.getAction() != KeyEvent.ACTION_UP) return false;
+            retireGoogleDialog(dialog, layout, false);
+            return true;
+        });
+        WebView popup = createGooglePopup(layout, dialog);
+        dialog.show();
+        WebView.WebViewTransport transport = (WebView.WebViewTransport) resultMsg.obj;
+        transport.setWebView(popup);
+        resultMsg.sendToTarget();
+        return true;
+    }
+
+    @SuppressLint("SetJavaScriptEnabled")
+    private WebView createGooglePopup(FrameLayout layout, Dialog dialog) {
         WebView popup = new WebView(this);
         WebSettings settings = popup.getSettings();
+        WebSettings hostSettings = getBridge().getWebView().getSettings();
         settings.setJavaScriptEnabled(true);
         settings.setAllowFileAccess(false);
         settings.setAllowContentAccess(false);
@@ -133,39 +156,123 @@ public class MainActivity extends BridgeActivity {
         settings.setDomStorageEnabled(true);
         settings.setJavaScriptCanOpenWindowsAutomatically(true);
         settings.setSupportMultipleWindows(true);
+        settings.setUserAgentString(hostSettings.getUserAgentString());
         CookieManager.getInstance().setAcceptThirdPartyCookies(popup, true);
-
-        FrameLayout layout = new FrameLayout(this);
         layout.addView(popup, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
-        Dialog dialog = new Dialog(this, android.R.style.Theme_Black_NoTitleBar_Fullscreen);
-        dialog.setContentView(layout);
-        dialog.setOnDismissListener(unused -> {
-            // GIS delivers the credential to the opener as the popup closes.
-            // Detach now, but let queued cross-window messages finish before destruction.
-            layout.removeView(popup);
-            getBridge().getWebView().postDelayed(popup::destroy, 500);
-        });
-        dialog.show();
-
         popup.setWebChromeClient(new WebChromeClient() {
             @Override
             public void onCloseWindow(WebView window) {
-                if (dialog.isShowing()) dialog.dismiss();
+                // Google asks to close as soon as the account is chosen. The app may still be
+                // signing in inside this window, so keep it until the login is stored.
+                if (Boolean.TRUE.equals(window.getTag())) return;
+                if (isAppHost(window.getUrl()) || loginWatchStarted) {
+                    watchInstalledLogin(dialog, layout);
+                    return;
+                }
+                window.setTag(Boolean.TRUE);
+                getBridge().getWebView().postDelayed(() -> {
+                    if (loginWatchStarted || window.getParent() != layout) return;
+                    layout.removeView(window);
+                    window.destroy();
+                    if (layout.getChildCount() == 0 && dialog.isShowing()) dialog.dismiss();
+                }, 4000);
+            }
+
+            @Override
+            public boolean onCreateWindow(WebView view, boolean isDialog, boolean isUserGesture, Message resultMsg) {
+                WebView child = createGooglePopup(layout, dialog);
+                WebView.WebViewTransport transport = (WebView.WebViewTransport) resultMsg.obj;
+                transport.setWebView(child);
+                resultMsg.sendToTarget();
+                return true;
             }
         });
         popup.setWebViewClient(new WebViewClient() {
             @Override
             public boolean shouldOverrideUrlLoading(WebView window, WebResourceRequest request) {
-                String host = request.getUrl().getHost();
-                boolean allowed = "about:blank".equals(request.getUrl().toString()) || ("https".equals(request.getUrl().getScheme()) && host != null && (host.equals("localhost") || host.equals("accounts.google.com") || host.endsWith(".google.com") || host.endsWith(".gstatic.com") || host.endsWith(".googleusercontent.com")));
-                if (!allowed && dialog.isShowing()) dialog.dismiss();
-                return !allowed;
+                if (isAppHost(request.getUrl())) watchInstalledLogin(dialog, layout);
+                return !allowedGoogleUrl(request.getUrl());
             }
         });
+        return popup;
+    }
 
-        WebView.WebViewTransport transport = (WebView.WebViewTransport) resultMsg.obj;
-        transport.setWebView(popup);
-        resultMsg.sendToTarget();
-        return true;
+    private void retireGoogleDialog(Dialog dialog, FrameLayout layout, boolean delay) {
+        loginWatchStarted = false;
+        Runnable close = () -> {
+            try {
+                CookieManager.getInstance().flush();
+            } catch (RuntimeException ignored) {
+                // The login stored in the page remains.
+            }
+            if (dialog.isShowing()) dialog.dismiss();
+            for (int index = layout.getChildCount() - 1; index >= 0; index--) {
+                View child = layout.getChildAt(index);
+                child.setTag(Boolean.TRUE);
+                layout.removeViewAt(index);
+                if (child instanceof WebView web) web.destroy();
+            }
+        };
+        if (delay) getBridge().getWebView().postDelayed(close, 700);
+        else close.run();
+    }
+
+    private void watchInstalledLogin(Dialog dialog, FrameLayout layout) {
+        if (loginWatchStarted) return;
+        loginWatchStarted = true;
+        WebView host = getBridge().getWebView();
+        Runnable check = new Runnable() {
+            int tries = 0;
+
+            @Override
+            public void run() {
+                if (!dialog.isShowing()) return;
+                host.evaluateJavascript(
+                    "(function(){try{var raw=localStorage.getItem('chatx.auth')||'';if(raw.indexOf('\"activated\":true')<0)return 'wait';return (location.pathname==='/activation'||location.pathname==='/')?'reload':'close';}catch(e){return 'wait';}})()",
+                    value -> {
+                        if (!dialog.isShowing()) return;
+                        if (value != null && value.contains("reload")) {
+                            retireGoogleDialog(dialog, layout, false);
+                            host.reload();
+                            return;
+                        }
+                        if (value != null && value.contains("close")) {
+                            retireGoogleDialog(dialog, layout, false);
+                            return;
+                        }
+                        if (tries++ < 180) host.postDelayed(this, 1000);
+                        else retireGoogleDialog(dialog, layout, false);
+                    }
+                );
+            }
+        };
+        host.postDelayed(check, 500);
+    }
+
+    private static boolean isAppHost(Uri url) {
+        if (url == null) return false;
+        String host = url.getHost();
+        return "localhost".equals(host) || "127.0.0.1".equals(host);
+    }
+
+    private static boolean isAppHost(String url) {
+        if (url == null || url.isEmpty()) return false;
+        try {
+            return isAppHost(Uri.parse(url));
+        } catch (RuntimeException error) {
+            return false;
+        }
+    }
+
+    private static boolean allowedGoogleUrl(Uri url) {
+        if ("about:blank".equals(url.toString())) return true;
+        String host = url.getHost();
+        if (!"https".equals(url.getScheme()) || host == null) return false;
+        return host.equals("localhost")
+            || host.equals("accounts.google.com")
+            || host.endsWith(".google.com")
+            || host.endsWith(".gstatic.com")
+            || host.endsWith(".googleapis.com")
+            || host.endsWith(".googleusercontent.com");
     }
 }

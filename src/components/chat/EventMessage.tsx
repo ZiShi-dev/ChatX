@@ -3,8 +3,10 @@ import EmojiText from '../common/EmojiText';
 import { useChatStore } from '../../stores/chatStore';
 import type { Message } from '../../types/message';
 import './EventMessage.css';
+import { useI18n } from '../../lib/i18n';
 
 function EventMessage({ message, spotlight = false }: { message: Message; spotlight?: boolean }) {
+  const { t } = useI18n();
   const beginReply = useChatStore(state => state.beginReply);
   const root = useRef<HTMLDivElement>(null);
   const drag = useRef<{ x: number; y: number; id: number; locked: boolean } | null>(null);
@@ -32,7 +34,7 @@ function EventMessage({ message, spotlight = false }: { message: Message; spotli
     onPointerCancel={reset}
     onClickCapture={event => { if (suppressClick.current) { event.preventDefault(); event.stopPropagation(); suppressClick.current = false; } }}>
     <p><EmojiText text={message.text ?? ''} /></p>
-    {enabled && <button type="button" className="event-reply" aria-label="الرد على هذا التنبيه" onClick={() => beginReply(message.id)}>↩</button>}
+    {enabled && <button type="button" className="event-reply" aria-label={t('message.eventReply')} onClick={() => beginReply(message.id)}>↩</button>}
   </div>;
 }
 export default memo(EventMessage);

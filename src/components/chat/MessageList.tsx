@@ -1,9 +1,10 @@
-import { Fragment, memo, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { Fragment, memo, useEffect, useMemo, useState } from 'react';
 import { IonButton } from '@ionic/react';
 import { CHAT_VISIBLE_WINDOW, MESSAGE_PAGE_SIZE } from '../../constants/chat';
 import { formatMessageDay, unreadDividerLabel, unreadOnScreen, unreadStart } from '../../lib/conversation';
 import { facesOnMessage, type ReceiptRow } from '../../lib/readReceipts';
 import { useChatStore } from '../../stores/chatStore';
+import { useI18n } from '../../lib/i18n';
 import MessageBubble from './MessageBubble';
 import EventMessage from './EventMessage';
 import type { Message } from '../../types/message';
@@ -42,12 +43,9 @@ type MessageListProps = {
 };
 
 function MessageList({ messages, limit, showAuthor, group = false, direct = false, conversationId, memberIds, users, currentUserId, unreadCount = 0, resumeBack = 0, spotlightId = '', filtered = false, hasMore = false, onOpenProfile, onLoadOlder }: MessageListProps) {
+  const { t } = useI18n();
   const [loadingOlder, setLoadingOlder] = useState(false);
   const [back, setBack] = useState(resumeBack);
-  const previousMessages = useRef<{ room: string; ids: Set<string> } | null>(null);
-  useLayoutEffect(() => {
-    previousMessages.current = { room: conversationId, ids: new Set(messages.map(message => message.id)) };
-  }, [conversationId, messages]);
   const cursor = useChatStore((state) => state.readCursors[conversationId] ?? EMPTY_CURSOR);
   const readAt = useChatStore((state) => state.readTimes[conversationId] ?? EMPTY_CURSOR);
   const tail = useMemo(() => messages.slice(-Math.max(limit, MESSAGE_PAGE_SIZE)), [limit, messages]);
@@ -110,7 +108,7 @@ function MessageList({ messages, limit, showAuthor, group = false, direct = fals
     <>
       {!filtered && (messages.length > limit || hasMore) && (
         <IonButton fill="clear" size="small" expand="block" disabled={loadingOlder} onClick={() => void load()}>
-          {loadingOlder ? 'جارٍ التحميل' : 'تحميل رسائل أقدم'}
+          {loadingOlder ? t('messageList.loadingOlder') : t('messageList.loadOlder')}
         </IonButton>
       )}
       {!filtered && loadingOlder && <div className="skeleton-line" />}
@@ -133,7 +131,6 @@ function MessageList({ messages, limit, showAuthor, group = false, direct = fals
               <EventMessage message={message} spotlight={message.id === spotlightId} />
             ) : (
             <MessageBubble
-              animateArrival={Boolean(previousMessages.current?.room === conversationId && !previousMessages.current.ids.has(message.id) && Date.now() - Date.parse(message.createdAt) >= 0 && Date.now() - Date.parse(message.createdAt) < 10_000)}
               message={message}
               mine={message.senderId === currentUserId}
               showAuthor={showAuthor && !continued}

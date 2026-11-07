@@ -1,3 +1,5 @@
+import { useI18n } from '../../lib/i18n';
+
 export type SkeletonKind = 'home' | 'chat' | 'notices' | 'saved' | 'members' | 'people' | 'group' | 'account' | 'profile' | 'settings' | 'media';
 
 function Row() {
@@ -38,8 +40,9 @@ function Hero() {
 }
 
 export default function PageSkeleton({ kind }: { kind: SkeletonKind }) {
+  const { t } = useI18n();
   return (
-    <div className={`skeleton-list is-${kind}`} role="status" aria-label="جارٍ التحميل">
+    <div className={`skeleton-list is-${kind}`} role="status" aria-label={t('pageSkeleton.loading')}>
       {kind === 'home' && (
         <>
           <Chips />

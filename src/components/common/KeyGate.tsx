@@ -2,20 +2,22 @@ import { useEffect, useState, type ReactNode } from 'react';
 import { IonContent, IonPage } from '@ionic/react';
 import { AdminApiError } from '../../lib/adminApi';
 import { createKeys, keySetupState, localIdentity, restoreKeys, type KeySetup } from '../../lib/e2e';
+import { currentSession } from '../../lib/sessionToken';
 import { RECOVERY_CODE_MIN } from '../../lib/e2eCrypto';
 import { isServerId } from '../../lib/home';
 import { useAuthStore } from '../../stores/authStore';
+import { t } from '../../lib/i18n';
 import PageSkeleton from './PageSkeleton';
 
 type Phase = KeySetup | 'checking' | 'offline' | 'forgot';
 
 function failureText(error: unknown) {
-  if (!(error instanceof AdminApiError)) return 'تعذر تجهيز التشفير على هذا الجهاز. افتح ChatX من التطبيق أو من عنوان آمن (https) ثم أعد المحاولة.';
-  if (error.code === 'rate_limited') return 'محاولات كثيرة. انتظر قليلًا ثم أعد المحاولة.';
-  if (error.code === 'offline') return 'تعذر الاتصال بالخادم. تحقق من الشبكة ثم أعد المحاولة.';
-  if (error.code === 'invalid_credentials' || error.code === 'account_changed') return 'انتهت الجلسة. سجّل الخروج ثم ادخل من جديد.';
-  if (error.status >= 500) return 'حدث خطأ في الخادم أثناء حفظ المفتاح. أعد المحاولة بعد قليل.';
-  return 'تعذر حفظ المفتاح. أعد المحاولة.';
+  if (!(error instanceof AdminApiError)) return t('keyGate.errPrepare');
+  if (error.code === 'rate_limited') return t('keyGate.errRate');
+  if (error.code === 'offline') return t('keyGate.errOffline');
+  if (error.code === 'invalid_credentials' || error.code === 'account_changed') return t('keyGate.errSession');
+  if (error.status >= 500) return t('keyGate.errServer');
+  return t('keyGate.errSaveKey');
 }
 
 /** WebCrypto only exists on https, localhost and inside the Android app. */
@@ -51,6 +53,11 @@ export default function KeyGate({ children }: { children: ReactNode }) {
           return;
         }
         // First login has no key on this phone. A failed check must still open the code form.
+        if (error instanceof AdminApiError && error.code === 'invalid_credentials' && error.status === 401 && !currentSession()) {
+          // The account exists, but this install has no login token. A password form cannot open it.
+          logout();
+          return;
+        }
         if (error instanceof AdminApiError && (error.code === 'invalid_credentials' || error.code === 'account_changed' || error.code === 'rate_limited')) {
           setError(failureText(error));
         }
@@ -87,19 +94,19 @@ export default function KeyGate({ children }: { children: ReactNode }) {
   const submit = async () => {
     if (busy) return;
     if (!cryptoAvailable()) { setError(failureText(null)); return; }
-    if (code.length < RECOVERY_CODE_MIN) { setError(`رمز الاسترداد ${RECOVERY_CODE_MIN} حرفًا على الأقل.`); return; }
-    if (creating && code !== confirm) { setError('الرمزان غير متطابقين.'); return; }
+    if (code.length < RECOVERY_CODE_MIN) { setError(t('keyGate.recoveryMin', { min: RECOVERY_CODE_MIN })); return; }
+    if (creating && code !== confirm) { setError(t('keyGate.recoveryMismatch')); return; }
     setBusy(true);
     setError('');
     try {
       if (creating) {
         const result = await createKeys(owner, code, current === 'forgot');
-        if (result === 'exists') go('restore', 'هذا الحساب لديه رمز استرداد. أدخله لفتح رسائلك.');
+        if (result === 'exists') go('restore', t('keyGate.recoveryExists'));
         else go('ready');
         return;
       }
       const result = await restoreKeys(owner, code);
-      if (result === 'wrong') setError('رمز الاسترداد غير صحيح.');
+      if (result === 'wrong') setError(t('keyGate.recoveryWrong'));
       else go(result === 'missing' ? 'create' : 'ready');
     } catch (failure) {
       setError(failureText(failure));
@@ -115,22 +122,22 @@ export default function KeyGate({ children }: { children: ReactNode }) {
           <div className="gate-card key-gate">
             {current === 'offline' ? (
               <>
-                <h1>تشفير الرسائل</h1>
-                <p className="muted">{error || 'يحتاج إعداد التشفير على هذا الجهاز إلى اتصال بالإنترنت مرة واحدة.'}</p>
-                <button type="button" className="gate-go" onClick={() => setAttempt((value) => value + 1)}>إعادة المحاولة</button>
+                <h1>{t('keyGate.titleCrypto')}</h1>
+                <p className="muted">{error || t('keyGate.offlineHint')}</p>
+                <button type="button" className="gate-go" onClick={() => setAttempt((value) => value + 1)}>{t('keyGate.retry')}</button>
               </>
             ) : (
               <form onSubmit={(event) => { event.preventDefault(); void submit(); }}>
-                <h1>{current === 'restore' ? 'فتح رسائلك' : current === 'forgot' ? 'رمز جديد' : 'حماية رسائلك'}</h1>
-                {current === 'restore' && <p className="muted">أدخل رمز الاسترداد الذي اخترته لفتح رسائلك المشفرة على هذا الجهاز.</p>}
+                <h1>{current === 'restore' ? t('keyGate.titleOpen') : current === 'forgot' ? t('keyGate.titleNew') : t('keyGate.titleProtect')}</h1>
+                {current === 'restore' && <p className="muted">{t('keyGate.restoreLead')}</p>}
                 {current === 'create' && (
-                  <p className="muted">تُشفَّر رسائلك الجديدة على هاتفك، ولا يستطيع الخادم قراءتها. اختر رمز استرداد تحفظه جيدًا: ستحتاجه على أي جهاز جديد، ولا يمكن لأحد استرجاعه إن نسيته.</p>
+                  <p className="muted">{t('keyGate.createLead')}</p>
                 )}
                 {current === 'forgot' && (
-                  <p className="key-warn">سيُنشأ مفتاح جديد لحسابك. قد لا تُفتح الرسائل المشفرة السابقة إلى أن يفتح الأعضاء الآخرون المحادثات من أجهزتهم.</p>
+                  <p className="key-warn">{t('keyGate.forgotWarn')}</p>
                 )}
                 <label className="gate-field">
-                  <span>رمز الاسترداد</span>
+                  <span>{t('keyGate.recoveryLabel')}</span>
                   <input
                     type="password"
                     dir="auto"
@@ -144,7 +151,7 @@ export default function KeyGate({ children }: { children: ReactNode }) {
                 </label>
                 {creating && (
                   <label className="gate-field">
-                    <span>تأكيد الرمز</span>
+                    <span>{t('keyGate.confirmLabel')}</span>
                     <input
                       type="password"
                       dir="auto"
@@ -158,17 +165,17 @@ export default function KeyGate({ children }: { children: ReactNode }) {
                 )}
                 {error && <p className="form-error" role="alert">{error}</p>}
                 <button type="submit" className="gate-go" disabled={busy} aria-busy={busy}>
-                  {busy ? 'جارٍ التجهيز…' : current === 'restore' ? 'فتح الرسائل' : 'تفعيل التشفير'}
+                  {busy ? t('keyGate.busy') : current === 'restore' ? t('keyGate.openMessages') : t('keyGate.enableCrypto')}
                 </button>
                 {current === 'restore' && (
-                  <button type="button" className="setup-back" disabled={busy} onClick={() => go('forgot')}>نسيت الرمز</button>
+                  <button type="button" className="setup-back" disabled={busy} onClick={() => go('forgot')}>{t('keyGate.forgot')}</button>
                 )}
                 {current === 'forgot' && (
-                  <button type="button" className="setup-back" disabled={busy} onClick={() => go('restore')}>رجوع</button>
+                  <button type="button" className="setup-back" disabled={busy} onClick={() => go('restore')}>{t('keyGate.back')}</button>
                 )}
               </form>
             )}
-            <button type="button" className="setup-back" disabled={busy} onClick={logout}>تسجيل الخروج</button>
+            <button type="button" className="setup-back" disabled={busy} onClick={logout}>{t('profile.logOut')}</button>
           </div>
         </div>
       </IonContent>

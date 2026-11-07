@@ -9,18 +9,19 @@ import {
   type ChatNotificationPermission,
 } from '../../lib/notifications';
 import { useAuthStore } from '../../stores/authStore';
+import { useI18n, t as translateT } from '../../lib/i18n';
 
 type NotificationPermissionProps = {
   compact?: boolean;
 };
 
-const copy: Record<ChatNotificationPermission, string> = {
-  prompt: 'اسمح لأندرويد بعرض إشعارات المجموعات والمحادثات الخاصة.',
-  granted: 'مفعّلة للمجموعات والمحادثات الخاصة.',
-  denied: 'مرفوضة. فعّلها من إعدادات أندرويد لهذا التطبيق.',
-};
-
 export default function NotificationPermissionCard({ compact = false }: NotificationPermissionProps) {
+  const { t } = useI18n();
+  const copy: Record<ChatNotificationPermission, string> = {
+    prompt: t('notifyPerm.prompt'),
+    granted: t('notifyPerm.granted'),
+    denied: t('notifyPerm.denied'),
+  };
   const [permission, setPermission] = useState<ChatNotificationPermission | null>(null);
   const [ask, setAsk] = useState(false);
 
@@ -34,18 +35,19 @@ export default function NotificationPermissionCard({ compact = false }: Notifica
 
   return (
     <article className={compact ? 'notice-banner' : 'setting-card column'}>
-      {!compact && <strong>إشعارات الرسائل</strong>}
+      {!compact && <strong>{t('notifyPerm.title')}</strong>}
       <p>{copy[permission]}</p>
       {permission !== 'granted' && (
         <button type="button" className="setting-allow" onClick={() => setAsk(true)}>
-          السماح بالإشعارات
+          {t('notifyPerm.allow')}
         </button>
       )}
       {ask && (
         <PermissionDialog
-          title="الإشعارات"
+          title={t('notifyPerm.dialogTitle')}
           body={copy[permission]}
-          allowLabel="السماح بالإشعارات"
+          allowLabel={t('notifyPerm.allow')}
+          laterLabel={t('permission.later')}
           onAllow={() => {
             setAsk(false);
             void requestChatNotificationPermission();
@@ -113,6 +115,12 @@ export function NotificationPermissionDialog() {
 
   if (!activated || !open || !permission || permission === 'granted') return null;
 
+  const copy: Record<ChatNotificationPermission, string> = {
+    prompt: translateT('notifyPerm.prompt'),
+    granted: translateT('notifyPerm.granted'),
+    denied: translateT('notifyPerm.denied'),
+  };
+
   const later = () => {
     skipped.current = true;
     setOpen(false);
@@ -125,9 +133,10 @@ export function NotificationPermissionDialog() {
 
   return (
     <PermissionDialog
-      title="الإشعارات"
+      title={translateT('notifyPerm.dialogTitle')}
       body={copy[permission]}
-      allowLabel="السماح بالإشعارات"
+      allowLabel={translateT('notifyPerm.allow')}
+      laterLabel={translateT('permission.later')}
       onAllow={allow}
       onLater={later}
     />

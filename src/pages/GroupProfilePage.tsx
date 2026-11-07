@@ -23,20 +23,15 @@ import { useSettingsStore } from '../stores/settingsStore';
 import RoomNotifyPanel from '../components/conversations/RoomNotifyPanel';
 import { useUserStore } from '../stores/userStore';
 import type { User } from '../types/user';
+import { useI18n, type MessageKey } from '../lib/i18n';
 
 type GroupTab = 'members' | 'notify' | 'photos' | 'videos' | 'links';
-
-function memberCountLabel(count: number) {
-  if (count <= 1) return 'عضو واحد';
-  if (count === 2) return 'عضوان';
-  if (count <= 10) return `${count} أعضاء`;
-  return `${count} عضو`;
-}
 
 export default function GroupProfilePage() {
   const { id = '' } = useParams();
   const navigate = useNavigate();
   const location = useLocation();
+  const { t, locale } = useI18n();
   const currentUser = useAuthStore((state) => state.currentUser);
   const accent = useSettingsStore((state) => state.appearance.accent);
   const users = useUserStore((state) => state.users);
@@ -124,7 +119,9 @@ export default function GroupProfilePage() {
     ? canTakeGroupTurn(currentUser.id, conversation, now)
     : Boolean(conversation && isRoom && canEditRoom(currentUser, conversation));
   const onlineCount = members.filter((user) => user.status === 'online').length;
-  const groupName = conversation?.name ?? 'مجموعة';
+  const groupName = conversation?.name ?? t('group.defaultName');
+  const memberCountLabel =
+    members.length <= 1 ? t('members.one') : members.length === 2 ? t('members.two') : t('members.many', { count: members.length });
   const turnHolder = members.find((user) => user.id === conversation?.turnUserId);
   const showTurn = Boolean(serverRoom && conversation && conversation.participantIds.length > 1 && conversation.turnUserId);
 
@@ -156,11 +153,11 @@ export default function GroupProfilePage() {
     <IonPage>
       <IonHeader>
         <NetworkStatusBanner />
-        <PageNav title="ملف المجموعة" fallback={id ? `/chat/${id}` : '/home'} />
+        <PageNav title={t('group.profileTitle')} fallback={id ? `/chat/${id}` : '/home'} />
       </IonHeader>
       <IonContent className="profile-page group-profile-scroll">
         {!isRoom || !conversation ? (
-          <EmptyState title="المجموعة غير موجودة" />
+          <EmptyState title={t('group.notFound')} />
         ) : (
           <div className="profile-frame">
             <section className="profile-hero">
@@ -168,13 +165,13 @@ export default function GroupProfilePage() {
                 {conversation.bannerUrl ? <img src={conversation.bannerUrl} alt="" /> : null}
                 {canEdit && (
                   <div className="banner-actions">
-                    <button type="button" className="banner-pick" aria-label="تغيير الغلاف" onClick={() => bannerRef.current?.click()}>
+                    <button type="button" className="banner-pick" aria-label={t('group.changeBanner')} onClick={() => bannerRef.current?.click()}>
                       <IonIcon icon={cameraOutline} />
-                      <span>الغلاف</span>
+                      <span>{t('group.banner')}</span>
                     </button>
                     {conversation.bannerUrl && (
-                      <button type="button" className="banner-pick" aria-label="إزالة الغلاف" onClick={() => void updateGroup(conversation.id, { bannerUrl: null })}>
-                        إزالة
+                      <button type="button" className="banner-pick" aria-label={t('group.removeBanner')} onClick={() => void updateGroup(conversation.id, { bannerUrl: null })}>
+                        {t('group.remove')}
                       </button>
                     )}
                   </div>
@@ -191,7 +188,7 @@ export default function GroupProfilePage() {
                 />
               </div>
               {canEdit ? (
-                <button type="button" className="photo-pick profile-photo" aria-label="تغيير صورة المجموعة" onClick={() => photoRef.current?.click()}>
+                <button type="button" className="photo-pick profile-photo" aria-label={t('group.changeGroupPhoto')} onClick={() => photoRef.current?.click()}>
                   <Avatar name={groupName} color={accent} size={96} src={conversation.avatarUrl} />
                   <span className="photo-badge">
                     <IonIcon icon={cameraOutline} />
@@ -214,40 +211,40 @@ export default function GroupProfilePage() {
               />
               <h1>{groupName}</h1>
               {showTurn && conversation && (
-                <p className="group-turn">{groupTurnStatus(turnHolder?.displayName ?? 'عضو', conversation.turnUserId === currentUser.id, now, conversation.turnOpensAt, turnRefresh)}</p>
+                <p className="group-turn">{groupTurnStatus(locale, turnHolder?.displayName ?? t('chat.unknownMember'), conversation.turnUserId === currentUser.id, now, conversation.turnOpensAt, turnRefresh)}</p>
               )}
               {showTurn && conversation?.turnOpensAt && now >= Date.parse(conversation.turnOpensAt) + 7 * 24 * 60 * 60 * 1000 && turnRefresh !== 'loading' && (
-                <button type="button" className="group-edit" onClick={() => void refreshTurn()}>إعادة المحاولة</button>
+                <button type="button" className="group-edit" onClick={() => void refreshTurn()}>{t('group.retryTurn')}</button>
               )}
               {conversation.bio ? (
                 <p className="group-bio">{conversation.bio}</p>
               ) : (
                 canEdit && (
                   <button type="button" className="group-bio-add" onClick={openEditor}>
-                    أضف وصفاً
+                    {t('group.addDescription')}
                   </button>
                 )
               )}
               {canEdit && (
                 <button type="button" className="group-edit" onClick={openEditor}>
                   <IonIcon icon={pencilOutline} />
-                  <span>تعديل</span>
+                  <span>{t('group.edit')}</span>
                 </button>
               )}
               <p className="profile-status">
                 <i className={onlineCount > 0 ? 'on' : ''} />
-                {memberCountLabel(members.length)}
-                {onlineCount > 0 ? ` · ${onlineCount} متصل` : ''}
+                {memberCountLabel}
+                {onlineCount > 0 ? t('group.onlineCount', { count: onlineCount }) : ''}
               </p>
             </section>
-            <div className="group-tabs is-scroll" role="tablist" aria-label="ملف المجموعة">
+            <div className="group-tabs is-scroll" role="tablist" aria-label={t('group.tabsAria')}>
               {(
                 [
-                  { id: 'members', label: 'الأعضاء' },
-                  { id: 'notify', label: 'الإشعارات' },
-                  { id: 'photos', label: 'الصور', count: media.photos.length },
-                  { id: 'videos', label: 'الفيديو', count: media.videos.length },
-                  { id: 'links', label: 'الروابط', count: media.links.length },
+                  { id: 'members', labelKey: 'group.tabMembers' as MessageKey },
+                  { id: 'notify', labelKey: 'group.tabNotify' as MessageKey },
+                  { id: 'photos', labelKey: 'group.tabPhotos' as MessageKey, count: media.photos.length },
+                  { id: 'videos', labelKey: 'group.tabVideos' as MessageKey, count: media.videos.length },
+                  { id: 'links', labelKey: 'group.tabLinks' as MessageKey, count: media.links.length },
                 ] as const
               ).map((item) => (
                 <button
@@ -258,7 +255,7 @@ export default function GroupProfilePage() {
                   className={tab === item.id ? 'is-on' : undefined}
                   onClick={() => setTab(item.id)}
                 >
-                  <span>{item.label}</span>
+                  <span>{t(item.labelKey)}</span>
                   {'count' in item && item.count > 0 && <em>{item.count}</em>}
                 </button>
               ))}
@@ -270,7 +267,7 @@ export default function GroupProfilePage() {
             )}
             {(tab === 'photos' || tab === 'videos' || tab === 'links') && (
               <section className="group-block" role="tabpanel">
-                <MediaPanel conversationId={conversation.id} kind={tab} scope="المجموعة" />
+                <MediaPanel conversationId={conversation.id} kind={tab} scope="group" />
               </section>
             )}
             {tab === 'members' && (
@@ -284,12 +281,12 @@ export default function GroupProfilePage() {
                         setOutsiders(people);
                         setAdding(true);
                       });
-                    }}>إضافة عضو</button>
+                    }}>{t('group.addMember')}</button>
                     {conversation.type === 'global' && (
                       <button type="button" className="group-edit" onClick={() => {
                         const open = conversation.closed === true;
-                        void setMainOpen(open).then((ok) => setManageNote(ok ? (open ? 'ظهرت لكل الحسابات.' : 'أُخفيت عن غير الأعضاء.') : 'تعذر تعديل الظهور.'));
-                      }}>{conversation.closed ? 'إظهار للجميع' : 'إخفاء عن غير الأعضاء'}</button>
+                        void setMainOpen(open).then((ok) => setManageNote(ok ? (open ? t('group.noteVisibleAll') : t('group.noteHiddenNonMembers')) : t('group.noteVisibilityFailed')));
+                      }}>{conversation.closed ? t('group.showToAll') : t('group.hideFromNonMembers')}</button>
                     )}
                   </div>
                 )}
@@ -301,16 +298,16 @@ export default function GroupProfilePage() {
                       <button
                         type="button"
                         className="group-profile-open"
-                        aria-label={self ? 'رسائلك' : `محادثة مع ${user.displayName}`}
+                        aria-label={self ? t('group.yourMessages') : t('group.chatWith', { name: user.displayName })}
                         onClick={() => messageUser(user.id)}
                       >
                         <Avatar name={user.displayName} color={user.color} size={48} src={user.avatarUrl} decoration={user.avatarDecoration} />
                         <span className="group-profile-copy">
                           <strong>
                             <span className="group-profile-name" dir="auto">{user.displayName}</span>
-                            {self && <span className="role-badge">أنت</span>}
+                            {self && <span className="role-badge">{t('member.you')}</span>}
                             {roleLabel(user.role) && <span className="role-badge">{roleLabel(user.role)}</span>}
-                            {user.role === 'member' && user.id === conversation.adminId && <span className="role-badge">مشرف</span>}
+                            {user.role === 'member' && user.id === conversation.adminId && <span className="role-badge">{t('group.badgeMod')}</span>}
                           </strong>
                           <span className="group-profile-meta">
                             <small dir="auto">@{user.username}</small>
@@ -323,18 +320,18 @@ export default function GroupProfilePage() {
                         <button
                           type="button"
                           className="member-remove"
-                          aria-label={`إزالة ${user.displayName}`}
+                          aria-label={t('group.removeMemberAria', { name: user.displayName })}
                           onClick={() => {
-                            void setRoomMember(conversation.id, user.id, false).then((ok) => setManageNote(ok ? 'تمت الإزالة.' : 'تعذرت الإزالة.'));
+                            void setRoomMember(conversation.id, user.id, false).then((ok) => setManageNote(ok ? t('group.removedOk') : t('group.removeFailed')));
                           }}
-                        >إزالة</button>
+                        >{t('group.remove')}</button>
                       )}
                     </div>
                   );
                 })}
                 {canDeleteGroup && (
                   <div className="group-manage">
-                    <button type="button" className="group-edit is-danger" onClick={() => setConfirmDelete(true)}>حذف المجموعة</button>
+                    <button type="button" className="group-edit is-danger" onClick={() => setConfirmDelete(true)}>{t('group.deleteGroup')}</button>
                   </div>
                 )}
               </section>
@@ -347,25 +344,25 @@ export default function GroupProfilePage() {
           <div className="app-scrim sheet" onClick={() => setEditing(false)}>
             <div className="app-sheet profile-pop" role="dialog" aria-labelledby="group-edit-title" onClick={(event) => event.stopPropagation()}>
               <span className="app-handle" />
-              <h2 id="group-edit-title">تعديل المجموعة</h2>
-              <button type="button" className="photo-pick profile-photo sheet-photo" aria-label="تغيير صورة المجموعة" onClick={() => photoRef.current?.click()}>
+              <h2 id="group-edit-title">{t('group.editTitle')}</h2>
+              <button type="button" className="photo-pick profile-photo sheet-photo" aria-label={t('group.changeGroupPhoto')} onClick={() => photoRef.current?.click()}>
                 <Avatar name={draftName || groupName} color={accent} size={96} src={conversation?.avatarUrl} />
                 <span className="photo-badge">
                   <IonIcon icon={cameraOutline} />
                 </span>
               </button>
-              <p className="sheet-photo-hint">تغيير الصورة</p>
+              <p className="sheet-photo-hint">{t('group.photoHint')}</p>
               <label className="group-name">
-                <span>اسم المجموعة</span>
+                <span>{t('group.nameLabel')}</span>
                 <input dir="auto" value={draftName} onChange={(event) => setDraftName(event.target.value)} />
               </label>
               <label className="group-name">
-                <span>الوصف</span>
+                <span>{t('group.descriptionLabel')}</span>
                 <textarea dir="auto" maxLength={160} rows={3} value={draftBio} onChange={(event) => setDraftBio(event.target.value)} />
               </label>
               <div className="account-actions">
-                <button type="button" onClick={() => setEditing(false)}>إلغاء</button>
-                <button type="button" className="profile-save" onClick={saveProfile}>حفظ</button>
+                <button type="button" onClick={() => setEditing(false)}>{t('profile.cancel')}</button>
+                <button type="button" className="profile-save" onClick={saveProfile}>{t('profile.save')}</button>
               </div>
             </div>
           </div>,
@@ -376,15 +373,15 @@ export default function GroupProfilePage() {
           <div className="app-scrim sheet" onClick={() => setAdding(false)}>
             <div className="app-sheet profile-pop" role="dialog" aria-labelledby="group-add-title" onClick={(event) => event.stopPropagation()}>
               <span className="app-handle" />
-              <h2 id="group-add-title">إضافة عضو</h2>
-              {outsiders.length === 0 ? <p className="owner-system-hint">لا يوجد حساب خارج المجموعة.</p> : outsiders.map((user) => (
+              <h2 id="group-add-title">{t('group.addMemberTitle')}</h2>
+              {outsiders.length === 0 ? <p className="owner-system-hint">{t('group.noOutsiders')}</p> : outsiders.map((user) => (
                 <button
                   key={user.id}
                   type="button"
                   className="group-profile-card group-add-person"
                   onClick={() => {
                     void setRoomMember(id, user.id, true).then((ok) => {
-                      setManageNote(ok ? 'تمت الإضافة.' : 'تعذرت الإضافة.');
+                      setManageNote(ok ? t('group.addedOk') : t('group.addFailed'));
                       if (ok) setOutsiders((list) => list.filter((item) => item.id !== user.id));
                     });
                   }}
@@ -397,7 +394,7 @@ export default function GroupProfilePage() {
                 </button>
               ))}
               <div className="account-actions">
-                <button type="button" onClick={() => setAdding(false)}>إغلاق</button>
+                <button type="button" onClick={() => setAdding(false)}>{t('member.close')}</button>
               </div>
             </div>
           </div>,
@@ -408,17 +405,17 @@ export default function GroupProfilePage() {
           <div className="app-scrim sheet" onClick={() => setConfirmDelete(false)}>
             <div className="app-sheet profile-pop" role="dialog" aria-labelledby="group-delete-title" onClick={(event) => event.stopPropagation()}>
               <span className="app-handle" />
-              <h2 id="group-delete-title">حذف المجموعة</h2>
-              <p className="owner-system-hint">تختفي المجموعة ورسائلها عن كل الأعضاء. المجموعة الرئيسية لا تُحذف.</p>
+              <h2 id="group-delete-title">{t('group.deleteTitle')}</h2>
+              <p className="owner-system-hint">{t('group.deleteBody')}</p>
               <div className="account-actions">
-                <button type="button" onClick={() => setConfirmDelete(false)}>إلغاء</button>
+                <button type="button" onClick={() => setConfirmDelete(false)}>{t('profile.cancel')}</button>
                 <button type="button" className="danger" onClick={() => {
                   void deleteGroup(id).then((ok) => {
                     if (ok) navigate('/home', { replace: true });
-                    else setManageNote('تعذر حذف المجموعة.');
+                    else setManageNote(t('group.deleteFailed'));
                     setConfirmDelete(false);
                   });
-                }}>حذف</button>
+                }}>{t('group.delete')}</button>
               </div>
             </div>
           </div>,

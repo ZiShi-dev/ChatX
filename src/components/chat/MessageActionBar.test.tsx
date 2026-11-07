@@ -6,9 +6,9 @@ afterEach(cleanup);
 it('keeps primary actions in the navigation and reveals other actions only on request', () => {
   const reply = vi.fn();
   render(<MessageActionBar onClose={vi.fn()}>
-    <button role="menuitem" onClick={reply}><span>رد</span></button>
-    <button role="menuitem"><span>تعديل</span></button>
-    <button role="menuitem"><span>معلومات</span></button>
+    <button type="button" role="menuitem" data-msg-action="reply" onClick={reply}><span>رد</span></button>
+    <button type="button" role="menuitem" data-msg-action="edit"><span>تعديل</span></button>
+    <button type="button" role="menuitem"><span>معلومات</span></button>
   </MessageActionBar>);
   expect(screen.getByRole('toolbar')).toBeTruthy();
   expect(screen.getByRole('button', { name: 'تعديل' })).toBeTruthy();
@@ -20,7 +20,7 @@ it('keeps primary actions in the navigation and reveals other actions only on re
 });
 it('closes selection on Escape, outside touch and selecting another message', () => {
   const close = vi.fn();
-  render(<MessageActionBar onClose={close}><button role="menuitem"><span>رد</span></button></MessageActionBar>);
+  render(<MessageActionBar onClose={close}><button type="button" role="menuitem" data-msg-action="reply"><span>رد</span></button></MessageActionBar>);
   fireEvent.keyDown(document, { key: 'Escape' });
   fireEvent.pointerDown(document.body);
   window.dispatchEvent(new Event('chatx-message-selection'));

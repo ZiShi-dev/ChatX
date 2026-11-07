@@ -1,5 +1,5 @@
 import { MAX_NOTIFICATION_PREVIEW_LENGTH, MESSAGE_PAGE_SIZE, NOTIFICATION_GROUP_WINDOW_MS } from '../constants/chat';
-import { t } from './i18n';
+import { isSignalMessageText, t } from './i18n';
 import { unreadStart } from './conversation';
 import { messagePreview } from './media';
 import { mentionTone } from './mention';
@@ -116,7 +116,7 @@ export function inboxKind(message: Message, messages: Message[], userId: string,
     const parent = messages.find((item) => item.id === message.replyToId);
     if (parent?.senderId === userId) return 'reply';
   }
-  if (message.text?.startsWith('تنبيه')) return 'signal';
+  if (message.text && isSignalMessageText(message.text)) return 'signal';
   return 'message';
 }
 

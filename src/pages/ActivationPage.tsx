@@ -14,11 +14,12 @@ import { displayNameFontClass, displayNameStyleForUser, MESSAGE_FONT_OPTIONS, no
 import type { MessageFontId } from '../types/user';
 import { useAuthStore } from '../stores/authStore';
 import { useSettingsStore } from '../stores/settingsStore';
+import { type Locale } from '../lib/locale';
 
 type GoogleButton = {
   accounts: {
     id: {
-      initialize: (config: { client_id: string; callback: (response: { credential?: string }) => void; auto_select?: boolean }) => void;
+      initialize: (config: { client_id: string; callback: (response: { credential?: string }) => void; auto_select?: boolean; use_fedcm_for_button?: boolean; itp_support?: boolean }) => void;
       renderButton: (parent: HTMLElement, options: Record<string, string | number>) => void;
       cancel: () => void;
     };
@@ -40,16 +41,20 @@ const CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID?.trim() ?? '';
 const PROFILE_PARTS = ['details', 'look', 'effects'] as const;
 type ProfilePart = (typeof PROFILE_PARTS)[number];
 
-function connectionError(reason: string) {
-  if (reason === 'offline') return 'تعذر الاتصال. تحقق من الشبكة ثم أعد المحاولة.';
-  if (reason === 'rate_limited') return 'محاولات كثيرة. انتظر قليلًا ثم أعد المحاولة.';
+function connectionError(reason: string, t: (key: MessageKey) => string) {
+  if (reason === 'offline') return t('activation.errOffline');
+  if (reason === 'rate_limited') return t('activation.errRateLimited');
   return '';
 }
 
-function imageProblem(error: unknown, kind: 'photo' | 'banner') {
+function imageProblem(error: unknown, kind: 'photo' | 'banner', t: (key: MessageKey) => string) {
   const tooBig = error instanceof Error && error.message === 'image_too_large';
-  if (kind === 'photo') return tooBig ? 'الصورة كبيرة جدًا. اختر صورة أصغر.' : 'تعذرت قراءة الصورة. جرّب صورة أخرى.';
-  return tooBig ? 'الغلاف كبير جدًا. اختر صورة أصغر.' : 'تعذرت قراءة الغلاف. جرّب صورة أخرى.';
+  if (kind === 'photo') return tooBig ? t('activation.errPhotoTooBig') : t('activation.errPhotoRead');
+  return tooBig ? t('activation.errBannerTooBig') : t('activation.errBannerRead');
+}
+
+function googleButtonLocale(locale: Locale) {
+  return locale === 'ar' ? 'ar' : locale === 'fr' ? 'fr' : 'en';
 }
 
 export default function ActivationPage() {
@@ -84,6 +89,7 @@ export default function ActivationPage() {
   const remotePreview = photo.startsWith('https://');
   const brandTitle = useSettingsStore((state) => state.appearance.name);
   const brandLogo = useSettingsStore((state) => state.appearance.logo);
+  const uiLocale = useSettingsStore((state) => state.locale);
 
   onCredential.current = (token: string) => {
     if (googlePending.current) return;
@@ -94,7 +100,7 @@ export default function ActivationPage() {
       try {
       const result = await signInWithGoogle(token);
       if (!result.ok) {
-        setError(connectionError(result.reason) || 'تعذر التحقق من حساب Google. أعد المحاولة.');
+        setError(connectionError(result.reason, t) || t('activation.errGoogleVerify'));
         return;
       }
       if (result.step === 'ready') {
@@ -108,7 +114,7 @@ export default function ActivationPage() {
       setError('');
       setStep('profile');
       } catch {
-        setError('تعذر الاتصال. تحقق من الشبكة ثم أعد المحاولة.');
+        setError(t('activation.errOffline'));
       } finally {
         googlePending.current = false;
         setConnecting(false);
@@ -124,6 +130,8 @@ export default function ActivationPage() {
       window.google.accounts.id.initialize({
         client_id: CLIENT_ID,
         auto_select: false,
+        use_fedcm_for_button: false,
+        itp_support: true,
         callback: (response) => {
           if (response.credential) onCredential.current(response.credential);
         },
@@ -135,7 +143,7 @@ export default function ActivationPage() {
         size: 'large',
         shape: 'rectangular',
         text: 'continue_with',
-        locale: 'ar',
+        locale: googleButtonLocale(uiLocale),
         width,
       });
     };
@@ -158,7 +166,7 @@ export default function ActivationPage() {
       googleRef.current?.replaceChildren();
       clearGoogleButton();
     };
-  }, [step]);
+  }, [step, uiLocale]);
 
   useEffect(() => {
     if (step !== 'profile') return;
@@ -176,7 +184,7 @@ export default function ActivationPage() {
       setPhoto(await readPhoto(file));
       setError('');
     } catch (problem) {
-      setError(imageProblem(problem, 'photo'));
+      setError(imageProblem(problem, 'photo', t));
     }
   };
 
@@ -186,7 +194,7 @@ export default function ActivationPage() {
       setBanner(await readBanner(file));
       setError('');
     } catch (problem) {
-      setError(imageProblem(problem, 'banner'));
+      setError(imageProblem(problem, 'banner', t));
     }
   };
 
@@ -209,7 +217,7 @@ export default function ActivationPage() {
       return;
     }
     if (!colorValid) {
-      setError('اكتب لونًا من ستة أحرف، مثل #3d9b84.');
+      setError(t('activation.errColorFormat'));
       return;
     }
     setError('');
@@ -232,7 +240,7 @@ export default function ActivationPage() {
     }
     if (!colorValid) {
       setPart('look');
-      setError('اكتب لونًا من ستة أحرف، مثل #3d9b84.');
+      setError(t('activation.errColorFormat'));
       return;
     }
     setSaving(true);
@@ -246,7 +254,7 @@ export default function ActivationPage() {
     });
     setSaving(false);
     if (result !== 'ok') {
-      const connected = connectionError(result);
+      const connected = connectionError(result, t);
       if (connected) setError(connected);
       else if (result === 'username_taken') {
         setPart('details');
@@ -292,18 +300,18 @@ export default function ActivationPage() {
                     </button>
                     <div ref={googleRef} className="google-slot" />
                   </div>
-                ) : <p className="form-error">تسجيل الدخول بحساب Google غير مُعد.</p>}
-                {connecting ? <p className="muted" role="status">جارٍ تسجيل الدخول…</p> : null}
+                ) : <p className="form-error">{t('activation.googleNotConfigured')}</p>}
+                {connecting ? <p className="muted" role="status">{t('activation.signingIn')}</p> : null}
                 {error ? <p className="form-error" role="alert">{error}</p> : null}
               </div>
             ) : (
               <div key="profile-step" className="account-setup">
                 <h1>{part === 'details' ? t('activation.account') : part === 'look' ? t('activation.look') : t('activation.effects')}</h1>
-                <p className="muted">{part === 'details' ? 'أكّد اسمك، ثم أضف صورة وغلافًا ونبذة إن شئت.' : part === 'look' ? 'اللون والخط يظهران لاسمك في المجموعات.' : 'اختر زينة الصورة. يمكن تغييرها لاحقًا.'}</p>
+                <p className="muted">{part === 'details' ? t('activation.leadDetails') : part === 'look' ? t('activation.leadLook') : t('activation.leadEffects')}</p>
                 <div className="account-hero">
                   {part === 'details' ? (
-                    <button type="button" className={banner ? 'account-cover is-photo' : 'account-cover'} style={{ '--banner': color } as CSSProperties} aria-label="اختيار الغلاف" onClick={() => bannerRef.current?.click()}>
-                      {banner ? <img src={banner} alt="" /> : <span>إضافة غلاف</span>}
+                    <button type="button" className={banner ? 'account-cover is-photo' : 'account-cover'} style={{ '--banner': color } as CSSProperties} aria-label={t('activation.pickBanner')} onClick={() => bannerRef.current?.click()}>
+                      {banner ? <img src={banner} alt="" /> : <span>{t('activation.addBanner')}</span>}
                     </button>
                   ) : (
                     <div className={banner ? 'account-cover is-photo' : 'account-cover'} style={{ '--banner': color } as CSSProperties}>
@@ -311,12 +319,12 @@ export default function ActivationPage() {
                     </div>
                   )}
                   {part === 'details' && banner ? (
-                    <button type="button" className="account-cover-clear" aria-label="إزالة الغلاف" onClick={() => setBanner('')}>
-                      إزالة
+                    <button type="button" className="account-cover-clear" aria-label={t('activation.removeBanner')} onClick={() => setBanner('')}>
+                      {t('settings.remove')}
                     </button>
                   ) : null}
                   {part === 'details' ? (
-                    <button type="button" className="photo-pick account-avatar" aria-label="صورة الملف" onClick={() => photoRef.current?.click()}>
+                    <button type="button" className="photo-pick account-avatar" aria-label={t('activation.avatarPhoto')} onClick={() => photoRef.current?.click()}>
                       <Avatar name={name || '؟'} color={color} size={88} src={photo || undefined} decoration={decoration} animate={animate} />
                       <span className="photo-badge"><IonIcon icon={cameraOutline} /></span>
                     </button>
@@ -326,14 +334,14 @@ export default function ActivationPage() {
                     </div>
                   )}
                 </div>
-                {part !== 'details' ? <strong className={displayNameStyleForUser(color, font).className} style={displayNameStyleForUser(color, font).style} dir="auto">{name.trim() || 'اسمك'}</strong> : null}
+                {part !== 'details' ? <strong className={displayNameStyleForUser(color, font).className} style={displayNameStyleForUser(color, font).style} dir="auto">{name.trim() || t('activation.previewName')}</strong> : null}
                 <input ref={bannerRef} className="photo-file" type="file" accept="image/*" onChange={(event) => { void pickBanner(event.target.files?.[0]); event.target.value = ''; }} />
                 <input ref={photoRef} className="photo-file" type="file" accept="image/*" onChange={(event) => { void pickPhoto(event.target.files?.[0]); event.target.value = ''; }} />
                 <div key={part} className={animate ? 'account-setup-pane is-motion' : 'account-setup-pane'}>
                 {part === 'details' ? (
                   <>
-                    {remotePreview ? <p className="profile-style-hint">صورة Google للمعاينة فقط. لحفظ صورة في ChatX، اختر واحدة من جهازك.</p> : null}
-                    {dataSaver && !photo ? <p className="profile-style-hint">وضع التوفير لا يجلب صورة Google. يمكنك اختيار صورة من جهازك.</p> : null}
+                    {remotePreview ? <p className="profile-style-hint">{t('activation.googlePhotoHint')}</p> : null}
+                    {dataSaver && !photo ? <p className="profile-style-hint">{t('activation.dataSaverPhotoHint')}</p> : null}
                     <label className="gate-field">
                       <span className="field-line"><span>{t('activation.name')}</span><b>{name.trim().length}/40</b></span>
                       <input
@@ -341,7 +349,7 @@ export default function ActivationPage() {
                         value={name}
                         dir="auto"
                         maxLength={40}
-                        placeholder="اسمك"
+                        placeholder={t('activation.namePlaceholder')}
                         autoFocus
                         aria-label={t('activation.name')}
                         aria-invalid={name.trim().length > 0 && name.trim().length < 2}
@@ -351,8 +359,8 @@ export default function ActivationPage() {
                     </label>
                     <p id="setup-name-hint" className="profile-style-hint">{t('activation.nameHint')}</p>
                     <label className="gate-field">
-                      <span className="field-line"><span>النبذة</span><b>{bio.length}/160</b></span>
-                      <textarea value={bio} dir="auto" maxLength={160} aria-label="النبذة" placeholder="اكتب نبذة قصيرة" onChange={(event) => { setBio(event.target.value); setError(''); }} />
+                      <span className="field-line"><span>{t('activation.bioLabel')}</span><b>{bio.length}/160</b></span>
+                      <textarea value={bio} dir="auto" maxLength={160} aria-label={t('activation.bioLabel')} placeholder={t('activation.bioPlaceholder')} onChange={(event) => { setBio(event.target.value); setError(''); }} />
                     </label>
                   </>
                 ) : null}
@@ -361,14 +369,14 @@ export default function ActivationPage() {
                     <span className="profile-style-title">{t('activation.colorLabel')}</span>
                     <div className="look-colors profile-name-colors">
                       <label className="look-color">
-                        لونك
+                        {t('activation.color')}
                         <span className="look-chip" style={{ background: colorValid ? color : '#3d9b84' }}>
                           <input type="color" aria-label={t('activation.colorLabel')} value={colorValid ? color : '#3d9b84'} onChange={(event) => chooseColor(event.target.value.toLowerCase())} />
                         </span>
                       </label>
                       <label className="gate-field profile-hex">
-                        <span>رمز اللون</span>
-                        <input dir="ltr" maxLength={7} value={colorInput} aria-invalid={!colorValid} aria-label="رمز اللون" onChange={(event) => { setColorInput(event.target.value); setColor(normalizeUserColorInput(event.target.value, color)); setError(''); }} />
+                        <span>{t('activation.colorCode')}</span>
+                        <input dir="ltr" maxLength={7} value={colorInput} aria-invalid={!colorValid} aria-label={t('activation.colorCode')} onChange={(event) => { setColorInput(event.target.value); setColor(normalizeUserColorInput(event.target.value, color)); setError(''); }} />
                       </label>
                     </div>
                     <span className="profile-style-title">{t('activation.font')}</span>

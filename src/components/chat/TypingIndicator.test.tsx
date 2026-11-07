@@ -1,15 +1,19 @@
 import { render, screen } from '@testing-library/react';
 import { expect, it } from 'vitest';
+import { useSettingsStore } from '../../stores/settingsStore';
+import { translate } from '../../lib/i18n';
 import TypingIndicator from './TypingIndicator';
 
 it('shows a tiny avatar and dots, without the name, when someone types', () => {
+  useSettingsStore.getState().setLocale('ar');
+  const label = translate('ar', 'typing.one', { name: 'Alice' });
   const { container, rerender } = render(
     <TypingIndicator
       names={['Alice']}
       typists={[{ id: 'alice', displayName: 'Alice', color: '#3d9b84' }]}
     />,
   );
-  expect(screen.getByRole('status').getAttribute('aria-label')).toBe('Alice يكتب…');
+  expect(screen.getByRole('status').getAttribute('aria-label')).toBe(label);
   expect(screen.queryByText('Alice')).toBeNull();
   const face = container.querySelector('.avatar');
   expect(face).toBeTruthy();

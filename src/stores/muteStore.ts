@@ -8,12 +8,6 @@ export type RoomKind = 'message' | 'mention' | 'reply' | 'everyone' | 'signal' |
 
 export const ROOM_KINDS: RoomKind[] = ['message', 'mention', 'reply', 'everyone', 'signal', 'reaction'];
 
-export const ROOM_NOTIFY_LEVELS: Array<{ id: NotifyLevel; label: string; hint: string }> = [
-  { id: 'all', label: 'كل الرسائل', hint: 'كل رسالة جديدة' },
-  { id: 'mentions', label: 'الإشارات والردود فقط', hint: 'عندما يُذكر اسمك أو يرد أحد على رسالتك' },
-  { id: 'none', label: 'مكتوم', hint: 'تبقى ظاهرة في الإشعارات، بدون تنبيه' },
-];
-
 export type ChatMute = {
   conversationId: string;
   level: Exclude<NotifyLevel, 'all'>;

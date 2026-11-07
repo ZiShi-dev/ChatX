@@ -1,4 +1,5 @@
 import { Component, type ErrorInfo, type ReactNode } from 'react';
+import { t } from '../../lib/i18n';
 
 type AppErrorBoundaryProps = {
   children: ReactNode;
@@ -23,9 +24,9 @@ export default class AppErrorBoundary extends Component<AppErrorBoundaryProps, A
     if (!this.state.failed) return this.props.children;
     return (
       <div className="app-crash" role="alert">
-        <h1>حدث خطأ غير متوقع.</h1>
+        <h1>{t('crash.title')}</h1>
         <button type="button" onClick={() => this.setState({ failed: false })}>
-          إعادة المحاولة
+          {t('crash.retry')}
         </button>
       </div>
     );

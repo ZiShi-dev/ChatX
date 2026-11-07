@@ -4,8 +4,10 @@ import { PushNotifications } from '@capacitor/push-notifications';
 import { hasFcmToken, onPushTokenReady, refreshPushRegistration } from '../../lib/pushRegister';
 import { fcmEnabled } from '../../lib/fcmEnabled';
 import { useAuthStore } from '../../stores/authStore';
+import { useI18n } from '../../lib/i18n';
 
 export default function PushConnectionCard() {
+  const { t } = useI18n();
   const ready = useSyncExternalStore(onPushTokenReady, hasFcmToken, () => false);
   const userId = useAuthStore(state => state.currentUser.id);
   const [muted, setMuted] = useState(false);
@@ -21,14 +23,14 @@ export default function PushConnectionCard() {
   }, [ready, busy]);
   if (!Capacitor.isNativePlatform()) return null;
   return <article className="setting-card column">
-    <strong>الإشعارات الفورية</strong>
-    <p>{!fcmEnabled() ? 'هذه النسخة لا تفعّل Firebase. ثبّت النسخة الحديثة.' : ready ? 'Firebase: الهاتف مسجل لدى الخادم لاستقبال الإشعارات الفورية.' : 'Firebase: التسجيل لم يكتمل. التحقق الدوري البديل قد يؤخر الإشعارات.'}</p>
-    {muted && <p className="form-error">قناة الرسائل مكتومة في إعدادات أندرويد. فعّلها من التطبيقات ← ChatX ← الإشعارات.</p>}
+    <strong>{t('push.title')}</strong>
+    <p>{!fcmEnabled() ? t('push.noFcm') : ready ? t('push.ready') : t('push.pending')}</p>
+    {muted && <p className="form-error">{t('push.channelMuted')}</p>}
     <button type="button" className="setting-allow" disabled={busy || !fcmEnabled()} onClick={async () => {
       setBusy(true); setError('');
-      try { await refreshPushRegistration(userId); } catch { setError('تعذر إعادة الاتصال. تأكد من الشبكة وإذن الإشعارات، ثم أعد المحاولة.'); }
+      try { await refreshPushRegistration(userId); } catch { setError(t('push.refreshError')); }
       finally { setBusy(false); }
-    }}>{busy ? 'جارٍ إعادة الاتصال…' : 'إعادة ربط الإشعارات'}</button>
+    }}>{busy ? t('push.refreshBusy') : t('push.refresh')}</button>
     {error && <p className="form-error">{error}</p>}
   </article>;
 }

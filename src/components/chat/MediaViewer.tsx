@@ -11,9 +11,11 @@ import { conversationTitle, formatNotificationTime } from '../../lib/conversatio
 import { formatBytes } from '../../lib/media';
 import { toSavedEntry } from '../../lib/saved';
 import { mediaFile, exportMedia } from '../../lib/mediaExport';
+import { useI18n } from '../../lib/i18n';
 import './MediaViewer.css';
 
 export default function MediaViewer({ messageId, conversationId, onClose }: { messageId:string; conversationId:string; onClose:()=>void }) {
+  const { t } = useI18n();
   const messages = useChatStore((state) => state.messages);
   const users = useUserStore((state) => state.users);
   const me = useAuthStore((state) => state.currentUser.id);
@@ -48,7 +50,7 @@ export default function MediaViewer({ messageId, conversationId, onClose }: { me
   const root = useRef<HTMLDivElement>(null);
   const points = useRef(new Map<number,{x:number;y:number}>());
   const gesture = useRef({x:0,y:0,moved:false,pinched:false});
-  const sender = users.find((user) => user.id === current?.senderId)?.displayName ?? 'عضو';
+  const sender = users.find((user) => user.id === current?.senderId)?.displayName ?? t('media.memberFallback');
   const reset = () => { setScale(1);setPosition({x:0,y:0}); };
   const move = (step:number) => { const next = items[index+step]; if (next) setCurrentId(next.id); };
   const zoom = (value:number) => { setScale(Math.max(1,Math.min(5,value)));if(value<=1)setPosition({x:0,y:0}); };
@@ -56,10 +58,10 @@ export default function MediaViewer({ messageId, conversationId, onClose }: { me
   useEffect(() => {
     reset();setRotation(0);setInfo(false);setNotice('');setChrome(true);setFile(null);setFailed(false);setSpeed(1);points.current.clear();
     let alive = true;
-    if(current && ready && (image || playable)) void mediaFile(current).then((value)=>{if(alive)setFile(value);}).catch(()=>{if(alive)setNotice('تعذر تجهيز الملف. حاول إعادة تحميله.');});
+    if(current && ready && (image || playable)) void mediaFile(current).then((value)=>{if(alive)setFile(value);}).catch(()=>{if(alive)setNotice(t('media.prepareFailed'));});
     const player = video.current;
     return () => {alive=false;player?.pause();};
-  },[currentId,source,ready]);
+  },[currentId,source,ready,t]);
   useEffect(() => {
     if(!current)onClose();
   },[!!current,onClose]);
@@ -111,8 +113,8 @@ export default function MediaViewer({ messageId, conversationId, onClose }: { me
   const action = async (share=false) => {
     if(!file || busy)return;
     setBusy(true);setNotice('');
-    try{ const result=await exportMedia(file,share);if(result==='saved')setNotice(Capacitor.getPlatform()==='android'?'تم الحفظ على الهاتف. اختر المجلد في النافذة التالية إن ظهرت.':'بدأ تنزيل الملف على هذا المتصفح.'); }
-    catch(error){if(!(error instanceof Error && error.name==='AbortError'))setNotice(share?'تعذر مشاركة الملف. يمكنك تنزيله بدلًا من ذلك.':'تعذر حفظ الملف. تحقق من المساحة المتاحة ثم أعد المحاولة.');}
+    try{ const result=await exportMedia(file,share);if(result==='saved')setNotice(Capacitor.getPlatform()==='android'?t('media.savedAndroid'):t('media.downloadStarted')); }
+    catch(error){if(!(error instanceof Error && error.name==='AbortError'))setNotice(share?t('media.shareFailed'):t('media.saveFailed'));}
     finally{setBusy(false);}
   };
   const keep = () => {
@@ -122,11 +124,11 @@ export default function MediaViewer({ messageId, conversationId, onClose }: { me
   };
   const fullscreen = async () => {
     try{if(document.fullscreenElement)await document.exitFullscreen();else await root.current?.requestFullscreen();}
-    catch{setNotice('ملء الشاشة غير متاح في هذا المتصفح.');}
+    catch{setNotice(t('media.fullscreenUnavailable'));}
   };
   const pictureInPicture = async () => {
     try { if(document.pictureInPictureElement)await document.exitPictureInPicture();else await video.current?.requestPictureInPicture(); }
-    catch {setNotice('تعذر فتح الفيديو في نافذة عائمة.');}
+    catch {setNotice(t('media.pipFailed'));}
   };
   const end = useCallback(() => {
     video.current?.pause();
@@ -144,42 +146,42 @@ export default function MediaViewer({ messageId, conversationId, onClose }: { me
   return <IonModal isOpen canDismiss className="media-viewer-modal" onDidDismiss={() => {
     if (window.history.state?.chatxOverlay) dismissOverlayHistory();
     else end();
-  }} aria-label="عارض الوسائط">
+  }} aria-label={t('media.viewerTitle')}>
     <div ref={root} className={`media-viewer ${chrome?'':'hide-chrome'}`} onPointerDown={(event)=>event.stopPropagation()} onPointerMove={(event)=>event.stopPropagation()} onPointerUp={(event)=>event.stopPropagation()} onClick={(event)=>event.stopPropagation()} onContextMenu={(event)=>event.stopPropagation()}>
       <header className="mv-header">
-        <button type="button" onClick={close} aria-label="إغلاق العارض"><IonIcon icon={closeOutline}/></button>
+        <button type="button" onClick={close} aria-label={t('media.closeViewer')}><IonIcon icon={closeOutline}/></button>
         <div className="mv-author"><strong>{sender}</strong><time>{formatNotificationTime(current.createdAt)}</time></div>
         <div className="mv-actions">
-          <button type="button" disabled={!file||busy} onClick={()=>void action()} aria-label="حفظ على الهاتف"><IonIcon icon={downloadOutline}/></button>
-          {canShare&&<button type="button" disabled={busy} onClick={()=>void action(true)} aria-label="مشاركة الملف"><IonIcon icon={shareSocialOutline}/></button>}
-          <button type="button" onClick={keep} aria-label={isSaved?'إزالة من المحفوظات':'حفظ لي فقط'} aria-pressed={isSaved}><IonIcon icon={isSaved?bookmark:bookmarkOutline}/></button>
-          <button type="button" onClick={()=>{useChatStore.getState().beginReply(currentId);close();}} aria-label="الرد على الرسالة"><IonIcon icon={arrowUndoOutline}/></button>
-          <button type="button" onClick={()=>setInfo(!info)} aria-label="معلومات الملف" aria-expanded={info}><IonIcon icon={informationCircleOutline}/></button>
+          <button type="button" disabled={!file||busy} onClick={()=>void action()} aria-label={t('media.saveToPhone')}><IonIcon icon={downloadOutline}/></button>
+          {canShare&&<button type="button" disabled={busy} onClick={()=>void action(true)} aria-label={t('media.shareFile')}><IonIcon icon={shareSocialOutline}/></button>}
+          <button type="button" onClick={keep} aria-label={isSaved?t('media.unsaveLocal'):t('media.saveLocalOnly')} aria-pressed={isSaved}><IonIcon icon={isSaved?bookmark:bookmarkOutline}/></button>
+          <button type="button" onClick={()=>{useChatStore.getState().beginReply(currentId);close();}} aria-label={t('media.replyToMessage')}><IonIcon icon={arrowUndoOutline}/></button>
+          <button type="button" onClick={()=>setInfo(!info)} aria-label={t('media.fileMeta')} aria-expanded={info}><IonIcon icon={informationCircleOutline}/></button>
         </div>
       </header>
       <div ref={stageRef} className={`mv-stage ${image?'is-image':''} ${scale>1?'is-zoomed':''}`} onPointerDown={pointerDown} onPointerMove={pointerMove} onPointerUp={pointerUp} onPointerCancel={pointerUp}
         onDoubleClick={()=>{if(image)zoom(scale>1?1:2);}}
         onClick={(event)=>{if(event.target instanceof HTMLImageElement&&!gesture.current.moved&&!gesture.current.pinched)setChrome((value)=>!value);}}
         onWheel={(event)=>{if(image&&ready){zoom(scale+(event.deltaY<0?.25:-.25));}}}>
-        {ready&&!failed ? image ? <img draggable={false} src={source} alt={current.text||'الصورة في المحادثة'} onError={()=>setFailed(true)} style={{width:rotation%180?size.height:undefined,height:rotation%180?size.width:undefined,maxWidth:rotation%180?'none':undefined,maxHeight:rotation%180?'none':undefined,flexShrink:0,transform:`translate(${position.x}px,${position.y}px) rotate(${rotation}deg) scale(${scale})`}}/> : playable ? <video ref={video} key={currentId} src={source} controls playsInline preload="metadata" onError={()=>setFailed(true)}/> : <p className="mv-placeholder">لا يوجد ملف فيديو قابل للتشغيل لهذا المقطع.</p> : <div className="mv-placeholder">
-          <p>{failed?'تعذر عرض الملف.':current.mediaExpired?'انتهت صلاحية الملف على الخادم.':current.downloadFailed?'تعذر تنزيل الملف.':'هذا الملف لم يُحمّل على الجهاز.'}</p>
-          {current.media?.state==='downloading'?<p role="status">جارٍ التنزيل… {current.downloadProgress??0}%</p>:<button type="button" onClick={()=>{setFailed(false);useChatStore.getState().downloadMedia(currentId);}}>تنزيل {formatBytes(current.media?.fileSize??0)}</button>}
+        {ready&&!failed ? image ? <img draggable={false} src={source} alt={current.text||t('media.imageAlt')} onError={()=>setFailed(true)} style={{width:rotation%180?size.height:undefined,height:rotation%180?size.width:undefined,maxWidth:rotation%180?'none':undefined,maxHeight:rotation%180?'none':undefined,flexShrink:0,transform:`translate(${position.x}px,${position.y}px) rotate(${rotation}deg) scale(${scale})`}}/> : playable ? <video ref={video} key={currentId} src={source} controls playsInline preload="metadata" onError={()=>setFailed(true)}/> : <p className="mv-placeholder">{t('media.noPlayableVideo')}</p> : <div className="mv-placeholder">
+          <p>{failed?t('media.errDisplay'):current.mediaExpired?t('media.errExpired'):current.downloadFailed?t('media.errDownload'):t('media.notLoadedYet')}</p>
+          {current.media?.state==='downloading'?<p role="status">{t('media.downloading')} {current.downloadProgress??0}%</p>:<button type="button" onClick={()=>{setFailed(false);useChatStore.getState().downloadMedia(currentId);}}>{t('media.downloadBytes')} {formatBytes(current.media?.fileSize??0)}</button>}
         </div>}
       </div>
-      {index>0&&<button type="button" className="mv-prev mv-nav" onClick={()=>move(-1)} aria-label="الوسيط السابق"><IonIcon icon={chevronBackOutline}/></button>}
-      {index<items.length-1&&<button type="button" className="mv-next mv-nav" onClick={()=>move(1)} aria-label="الوسيط التالي"><IonIcon icon={chevronForwardOutline}/></button>}
-      {info&&<aside className="mv-info"><strong>معلومات الملف</strong><span>{current.media?.fileName|| (image?'صورة':'فيديو')}</span><span dir="ltr">{formatBytes(current.media?.fileSize??0)}{current.media?.width&&current.media?.height?` · ${current.media.width} × ${current.media.height}`:''}</span><span>من {sender}</span><time>{formatNotificationTime(current.createdAt)}</time><small>«حفظ لي فقط» يضيف الرسالة إلى محفوظاتك داخل ChatX. «حفظ على الهاتف» ينسخ الصورة أو الفيديو أو أي ملف (PDF، Word، ZIP…) إلى ملفاتك ويبقى بعد حذف التطبيق إن اخترت مجلدًا دائمًا.</small></aside>}
+      {index>0&&<button type="button" className="mv-prev mv-nav" onClick={()=>move(-1)} aria-label={t('media.prevMedia')}><IonIcon icon={chevronBackOutline}/></button>}
+      {index<items.length-1&&<button type="button" className="mv-next mv-nav" onClick={()=>move(1)} aria-label={t('media.nextMedia')}><IonIcon icon={chevronForwardOutline}/></button>}
+      {info&&<aside className="mv-info"><strong>{t('media.metaTitle')}</strong><span>{current.media?.fileName|| (image?t('media.imageNoun'):t('media.videoNoun'))}</span><span dir="ltr">{formatBytes(current.media?.fileSize??0)}{current.media?.width&&current.media?.height?` · ${current.media.width} × ${current.media.height}`:''}</span><span>{t('media.fromSender')} {sender}</span><time>{formatNotificationTime(current.createdAt)}</time><small>{t('media.saveHintLong')}</small></aside>}
       <footer className="mv-footer">
         {notice&&<p className="mv-notice" role="status">{notice}</p>}
         {current.text&&<p className="mv-caption">{current.text}</p>}
         <div className="mv-tools">
-          {image&&ready&&<><button type="button" aria-label="تصغير" disabled={scale<=1} onClick={()=>zoom(scale-.5)}><IonIcon icon={removeOutline}/></button><button type="button" onClick={reset} aria-label="إعادة ضبط التكبير">{Math.round(scale*100)}%</button><button type="button" aria-label="تكبير" disabled={scale>=5} onClick={()=>zoom(scale+.5)}><IonIcon icon={addOutline}/></button><button type="button" aria-label="تدوير الصورة" onClick={()=>{setRotation((value)=>(value+90)%360);reset();}}><IonIcon icon={refreshOutline}/></button></>}
-          {playable&&<select aria-label="سرعة الفيديو" value={speed} onChange={(event)=>{const value=Number(event.target.value);setSpeed(value);if(video.current)video.current.playbackRate=value;}}>{[.5,1,1.5,2].map((value)=><option key={value} value={value}>{value}×</option>)}</select>}
-          {playable&&document.pictureInPictureEnabled&&<button type="button" onClick={()=>void pictureInPicture()} aria-label="نافذة فيديو عائمة"><IonIcon icon={albumsOutline}/></button>}
-          {typeof document.documentElement.requestFullscreen==='function'&&<button type="button" onClick={()=>void fullscreen()} aria-label="ملء الشاشة"><IonIcon icon={expandOutline}/></button>}
+          {image&&ready&&<><button type="button" aria-label={t('media.zoomOut')} disabled={scale<=1} onClick={()=>zoom(scale-.5)}><IonIcon icon={removeOutline}/></button><button type="button" onClick={reset} aria-label={t('media.resetZoom')}>{Math.round(scale*100)}%</button><button type="button" aria-label={t('media.zoomIn')} disabled={scale>=5} onClick={()=>zoom(scale+.5)}><IonIcon icon={addOutline}/></button><button type="button" aria-label={t('media.rotateImage')} onClick={()=>{setRotation((value)=>(value+90)%360);reset();}}><IonIcon icon={refreshOutline}/></button></>}
+          {playable&&<select aria-label={t('media.videoSpeed')} value={speed} onChange={(event)=>{const value=Number(event.target.value);setSpeed(value);if(video.current)video.current.playbackRate=value;}}>{[.5,1,1.5,2].map((value)=><option key={value} value={value}>{value}×</option>)}</select>}
+          {playable&&document.pictureInPictureEnabled&&<button type="button" onClick={()=>void pictureInPicture()} aria-label={t('media.pictureInPicture')}><IonIcon icon={albumsOutline}/></button>}
+          {typeof document.documentElement.requestFullscreen==='function'&&<button type="button" onClick={()=>void fullscreen()} aria-label={t('media.fullscreen')}><IonIcon icon={expandOutline}/></button>}
           <span className="mv-count" dir="ltr">{index+1} / {items.length}</span>
         </div>
-        {items.length>1&&<div className="mv-filmstrip" dir="ltr" aria-label="وسائط المحادثة">{items.map((item)=><button type="button" key={item.id} aria-label={item.type==='image'?'عرض الصورة':'عرض الفيديو'} aria-current={item.id===currentId?'true':undefined} onClick={()=>setCurrentId(item.id)}>{item.type==='image'&&item.media?.state==='cached'&&item.media.localPreviewUrl?<img src={item.media.localPreviewUrl} alt="" loading="lazy"/>:<span>{item.type==='video'?'▶':'▧'}</span>}</button>)}</div>}
+        {items.length>1&&<div className="mv-filmstrip" dir="ltr" aria-label={t('media.filmstrip')}>{items.map((item)=><button type="button" key={item.id} aria-label={item.type==='image'?t('media.viewImageThumb'):t('media.viewVideoThumb')} aria-current={item.id===currentId?'true':undefined} onClick={()=>setCurrentId(item.id)}>{item.type==='image'&&item.media?.state==='cached'&&item.media.localPreviewUrl?<img src={item.media.localPreviewUrl} alt="" loading="lazy"/>:<span>{item.type==='video'?'▶':'▧'}</span>}</button>)}</div>}
       </footer>
     </div>
   </IonModal>;

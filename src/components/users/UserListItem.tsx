@@ -4,6 +4,7 @@ import Avatar from '../common/Avatar';
 import { connectionLabel } from '../../lib/presence';
 import { useAuthStore } from '../../stores/authStore';
 import { roleLabel } from '../../lib/roles';
+import { useI18n } from '../../lib/i18n';
 import type { User } from '../../types/user';
 
 type UserListItemProps = {
@@ -14,6 +15,7 @@ type UserListItemProps = {
 };
 
 export default function UserListItem({ user, onClick, onDelete, badge }: UserListItemProps) {
+  const { t } = useI18n();
   const self = useAuthStore((state) => state.currentUser.id) === user.id;
   return (
     <IonItem button={!onDelete} detail={false} className="member-row" onClick={onClick}>
@@ -33,7 +35,7 @@ export default function UserListItem({ user, onClick, onDelete, badge }: UserLis
           slot="end"
           type="button"
           className="account-delete"
-          aria-label="حذف الحساب"
+          aria-label={t('user.deleteAccountAria')}
           onClick={(event) => {
             event.stopPropagation();
             onDelete();

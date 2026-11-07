@@ -5,6 +5,7 @@ import { useNavigate } from 'react-router-dom';
 import { firstUrl, siteHost } from '../../lib/link';
 import { formatDuration } from '../../lib/media';
 import { isSafeExternalUrl } from '../../lib/url';
+import { useI18n, type MessageKey } from '../../lib/i18n';
 import { useChatStore } from '../../stores/chatStore';
 import type { Message } from '../../types/message';
 
@@ -26,21 +27,27 @@ export function collectMedia(messages: Message[], conversationId: string) {
 type MediaPanelProps = {
   conversationId: string;
   kind: MediaKind;
-  scope: string;
+  scope: 'group' | 'chat';
 };
 
 export function MediaPanel({ conversationId, kind, scope }: MediaPanelProps) {
   const navigate = useNavigate();
+  const { t } = useI18n();
   const messages = useChatStore((state) => state.messages);
   const media = useMemo(() => collectMedia(messages, conversationId), [conversationId, messages]);
   const openMessage = (messageId: string) => navigate(`/chat/${conversationId}?at=${messageId}`);
+  const emptyKey: Record<MediaKind, MessageKey> = {
+    photos: scope === 'group' ? 'mediaLibrary.emptyPhotosGroup' : 'mediaLibrary.emptyPhotosChat',
+    videos: scope === 'group' ? 'mediaLibrary.emptyVideosGroup' : 'mediaLibrary.emptyVideosChat',
+    links: scope === 'group' ? 'mediaLibrary.emptyLinksGroup' : 'mediaLibrary.emptyLinksChat',
+  };
 
   if (kind === 'photos') {
-    if (media.photos.length === 0) return <p className="group-empty">لا توجد صور في هذه {scope}.</p>;
+    if (media.photos.length === 0) return <p className="group-empty">{t(emptyKey.photos)}</p>;
     return (
       <div className="group-photo-grid">
         {media.photos.map((message) => (
-          <button key={message.id} type="button" className="group-tile" aria-label="فتح الصورة في المحادثة" onClick={() => openMessage(message.id)}>
+          <button key={message.id} type="button" className="group-tile" aria-label={t('mediaLibrary.openPhotoInChat')} onClick={() => openMessage(message.id)}>
             {message.media?.localPreviewUrl ? <img src={message.media.localPreviewUrl} alt="" /> : <IonIcon icon={imageOutline} />}
           </button>
         ))}
@@ -49,11 +56,11 @@ export function MediaPanel({ conversationId, kind, scope }: MediaPanelProps) {
   }
 
   if (kind === 'videos') {
-    if (media.videos.length === 0) return <p className="group-empty">لا توجد فيديوهات في هذه {scope}.</p>;
+    if (media.videos.length === 0) return <p className="group-empty">{t(emptyKey.videos)}</p>;
     return (
       <div className="group-photo-grid">
         {media.videos.map((message) => (
-          <button key={message.id} type="button" className="group-tile" aria-label="فتح الفيديو في المحادثة" onClick={() => openMessage(message.id)}>
+          <button key={message.id} type="button" className="group-tile" aria-label={t('mediaLibrary.openVideoInChat')} onClick={() => openMessage(message.id)}>
             {message.media?.localPreviewUrl ? <img src={message.media.localPreviewUrl} alt="" /> : <IonIcon icon={videocamOutline} />}
             <span className="group-tile-play">
               <IonIcon icon={play} />
@@ -65,7 +72,7 @@ export function MediaPanel({ conversationId, kind, scope }: MediaPanelProps) {
     );
   }
 
-  if (media.links.length === 0) return <p className="group-empty">لا توجد روابط في هذه {scope}.</p>;
+  if (media.links.length === 0) return <p className="group-empty">{t(emptyKey.links)}</p>;
   return (
     <div className="group-links">
       {media.links.map((item) => (
@@ -85,20 +92,21 @@ type DirectTab = 'notify' | MediaKind;
 
 type MediaTabsProps = {
   conversationId: string;
-  scope: string;
+  scope: 'group' | 'chat';
   label: string;
   notify?: ReactNode;
 };
 
 export default function MediaTabs({ conversationId, scope, label, notify }: MediaTabsProps) {
+  const { t } = useI18n();
   const messages = useChatStore((state) => state.messages);
   const media = useMemo(() => collectMedia(messages, conversationId), [conversationId, messages]);
   const [kind, setKind] = useState<DirectTab>(notify ? 'notify' : 'photos');
-  const tabs: Array<{ id: DirectTab; label: string; count: number }> = [
-    ...(notify ? [{ id: 'notify' as const, label: 'الإشعارات', count: 0 }] : []),
-    { id: 'photos', label: 'الصور', count: media.photos.length },
-    { id: 'videos', label: 'الفيديو', count: media.videos.length },
-    { id: 'links', label: 'الروابط', count: media.links.length },
+  const tabs: Array<{ id: DirectTab; label: MessageKey; count: number }> = [
+    ...(notify ? [{ id: 'notify' as const, label: 'group.tabNotify' as const, count: 0 }] : []),
+    { id: 'photos', label: 'group.tabPhotos', count: media.photos.length },
+    { id: 'videos', label: 'group.tabVideos', count: media.videos.length },
+    { id: 'links', label: 'group.tabLinks', count: media.links.length },
   ];
 
   return (
@@ -113,7 +121,7 @@ export default function MediaTabs({ conversationId, scope, label, notify }: Medi
             className={kind === item.id ? 'is-on' : undefined}
             onClick={() => setKind(item.id)}
           >
-            <span>{item.label}</span>
+            <span>{t(item.label)}</span>
             {item.count > 0 && <em>{item.count}</em>}
           </button>
         ))}

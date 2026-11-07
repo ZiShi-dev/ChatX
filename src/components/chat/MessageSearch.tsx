@@ -1,4 +1,5 @@
 import { useEffect, useRef } from 'react';
+import { useI18n } from '../../lib/i18n';
 import SearchBar from '../common/SearchBar';
 
 type MessageSearchProps = {
@@ -7,6 +8,7 @@ type MessageSearchProps = {
 };
 
 export default function MessageSearch({ value, onChange }: MessageSearchProps) {
+  const { t } = useI18n();
   const rootRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -23,7 +25,7 @@ export default function MessageSearch({ value, onChange }: MessageSearchProps) {
 
   return (
     <div className="message-search" ref={rootRef}>
-      <SearchBar value={value} placeholder="ابحث في الرسائل" onChange={onChange} />
+      <SearchBar value={value} placeholder={t('search.messagesPlaceholder')} onChange={onChange} />
     </div>
   );
 }
