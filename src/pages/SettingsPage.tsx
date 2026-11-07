@@ -2,6 +2,7 @@ import { useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import { IonContent, IonHeader, IonPage, IonToggle } from '@ionic/react';
+import ApkUpdateCard from '../components/common/ApkUpdateCard';
 import NetworkStatusBanner from '../components/common/NetworkBanner';
 import NotificationPermissionCard from '../components/common/NotificationPermission';
 import PushConnectionCard from '../components/common/PushConnectionCard';
@@ -360,6 +361,7 @@ export default function SettingsPage({ embedded = false }: SettingsPageProps) {
 
   const body = (
     <div ref={shellRef} className="settings-shell profile-frame">
+        <ApkUpdateCard />
         <LanguagePicker />
         <div className="group-tabs is-scroll settings-tabs" role="tablist" aria-label={t('settings.sections')}>
           {settingsSections.map((item) => (

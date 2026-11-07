@@ -281,6 +281,47 @@ export function startAppUpdates(onNative: (offer: NativeOffer | null) => void) {
   };
 }
 
+export type NativeUpdateLookup =
+  | { kind: 'android' }
+  | { kind: 'none' }
+  | { kind: 'current' }
+  | { kind: 'failed' }
+  | { kind: 'offer'; offer: NativeOffer };
+
+/** Manual settings check. Ignores a postponed prompt and compares the installed build directly. */
+export async function lookupNativeUpdate(): Promise<NativeUpdateLookup> {
+  if (Capacitor.getPlatform() !== 'android') return { kind: 'android' };
+  const origin = getApiOrigin();
+  if (!isValidApiOrigin(origin)) return { kind: 'failed' };
+  const controller = new AbortController();
+  const timer = window.setTimeout(() => controller.abort(), 8000);
+  try {
+    const response = await fetch(`${origin}/api/app/release`, { cache: 'no-store', signal: controller.signal });
+    if (!response.ok) return { kind: 'failed' };
+    const native = readCatalog(await response.json()).native;
+    if (!native) return { kind: 'none' };
+    if (!await signatureMatches(apkCanonical(native), native.manifestSignature)) return { kind: 'failed' };
+    const info = await App.getInfo();
+    const installed = Number(info.build);
+    if (!Number.isInteger(installed) || installed <= 0) return { kind: 'failed' };
+    if (native.versionCode <= installed) return { kind: 'current' };
+    return {
+      kind: 'offer',
+      offer: {
+        versionCode: native.versionCode,
+        versionName: native.versionName,
+        url: `${origin.replace(/\/$/, '')}${native.path}`,
+        sha256: native.sha256,
+        signature: native.signature,
+      },
+    };
+  } catch {
+    return { kind: 'failed' };
+  } finally {
+    window.clearTimeout(timer);
+  }
+}
+
 export async function installNativeRelease(offer: NativeOffer) {
   const { AppRelease } = await import('./appReleasePlugin');
   const source = await AppRelease.installedFromPlay().catch(() => ({ play: false }));

@@ -702,6 +702,30 @@ ion-page > ion-content.inbox-page {
   font-weight: 700;
 }
 
+.settings-update-button {
+  min-height: 44px;
+  border: 0;
+  border-radius: 12px;
+  background: var(--chatx-accent);
+  color: var(--chatx-on-accent);
+  font: inherit;
+  font-weight: 800;
+}
+
+.settings-update-button:disabled {
+  opacity: 0.72;
+}
+
+.setting-card .settings-update-status {
+  color: var(--chatx-text);
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.setting-card .form-error {
+  color: #ff8a80;
+}
+
 .notice-banner {
   margin: 12px 12px 0;
   padding: 12px;
